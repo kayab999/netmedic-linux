@@ -1,0 +1,5 @@
+#!/bin/bash
+export GDK_BACKEND=x11,wayland
+export NO_AT_BRIDGE=1
+# Ejecutar el binario
+"/home/carlos/netmedic_linux/dist/netmedic_bundle/netmedic" "$@"

@@ -1,0 +1,14 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=NetMedic
+Comment=Linux Network Diagnostics & Repair (v1.0.0-rc1 Stable)
+Exec=/home/carlos/netmedic_linux/netmedic_run
+Icon=netmedic
+Path=/home/carlos/netmedic_linux
+Terminal=false
+Categories=System;Network;Utility;
+StartupNotify=true
+StartupWMClass=netmedic
+Keywords=network;repair;vpn;wifi;dns;
+X-GNOME-Autostart-enabled=true
