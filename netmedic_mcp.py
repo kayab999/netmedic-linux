@@ -1,16 +1,16 @@
 #!/home/carlos/ockhamRazr/.venv/bin/python3
+import sys
+import os
+# Add netmedic to path so we can import it BEFORE from netmedic import ...
+sys.path.append(os.path.join(os.path.dirname(__file__), "netmedic"))
+
 import logging
 from fastmcp import FastMCP
 from netmedic.network import NetworkMedic
 from netmedic.operators.wifi import WifiOperator
-import sys
-import os
-
-# Add netmedic to path so we can import it
-sys.path.append(os.path.join(os.path.dirname(__file__), "netmedic"))
 
 # Initialize MCP Server
-mcp = FastMCP("NetMedic", description="AI-driven Network Diagnostics and Repair for Linux")
+mcp = FastMCP("NetMedic")
 medic = NetworkMedic()
 wifi_op = WifiOperator()
 
