@@ -36,6 +36,18 @@ class MainWindow(Gtk.Window):
         header.set_show_close_button(True)
         self.set_titlebar(header)
 
+        # Donation Button (Buy Me a Coffee)
+        btn_donate = Gtk.Button()
+        btn_donate_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        btn_donate_icon = Gtk.Image.new_from_icon_name("emblem-favorite-symbolic", Gtk.IconSize.BUTTON)
+        btn_donate_label = Gtk.Label(label="Donate")
+        btn_donate_box.pack_start(btn_donate_icon, False, False, 0)
+        btn_donate_box.pack_start(btn_donate_label, False, False, 0)
+        btn_donate.add(btn_donate_box)
+        btn_donate.set_tooltip_text("Support development via Buy Me a Coffee")
+        btn_donate.connect("clicked", self.on_donate)
+        header.pack_end(btn_donate)
+
         # 2. Notebook for Tabs (Hierarchical UI)
         notebook = Gtk.Notebook()
         main_box.pack_start(notebook, True, True, 0)
@@ -286,3 +298,11 @@ class MainWindow(Gtk.Window):
     def on_toggle_firewall(self, _): 
         if self.ask_confirmation("Toggle Firewall?", "Changing firewall rules may expose your system or block connections."):
             self.run_async_task(self.medic.toggle_firewall, "Toggling Firewall...")
+
+    def on_donate(self, _):
+        import subprocess
+        donate_url = "https://buymeacoffee.com/kayab999"
+        try:
+            subprocess.Popen(["xdg-open", donate_url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except Exception as e:
+            logging.error(f"Failed to open donation URL: {e}")
