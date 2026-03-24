@@ -8,11 +8,48 @@ import logging
 from fastmcp import FastMCP
 from netmedic.network import NetworkMedic
 from netmedic.operators.wifi import WifiOperator
+from netmedic.operators.vpn.angristan import AngristanOperator
 
 # Initialize MCP Server
 mcp = FastMCP("NetMedic")
 medic = NetworkMedic()
 wifi_op = WifiOperator()
+vpn_op = AngristanOperator()
+
+@mcp.tool()
+def get_vpn_status() -> str:
+    """Check if the VPN server (OpenVPN) is installed and running."""
+    res = vpn_op.check_status()
+    return f"Status: {res.message} | Details: {res.details or 'None'}"
+
+@mcp.tool()
+def list_vpn_clients() -> str:
+    """List all configured VPN clients and their active status."""
+    res = vpn_op.list_clients()
+    if not res.success:
+        return f"Error: {res.message} ({res.details})"
+    
+    clients = res.data
+    if not clients:
+        return "No VPN clients found."
+    
+    output = ["Current VPN Clients:"]
+    for c in clients:
+        status = "✅ Active" if c.active else "❌ Revoked"
+        output.append(f"- {c.name}: {status}")
+    return "\n".join(output)
+
+@mcp.tool()
+def create_vpn_client(name: str) -> str:
+    """Create a new VPN client profile (requires sudo)."""
+    res = vpn_op.add_client(name)
+    return f"Result: {'✅' if res.success else '❌'} {res.message}"
+
+@mcp.tool()
+def revoke_vpn_client(name: str) -> str:
+    """Revoke an existing VPN client profile (requires sudo)."""
+    res = vpn_op.revoke_client(name)
+    return f"Result: {'✅' if res.success else '❌'} {res.message}"
 
 @mcp.tool()
 def get_network_status() -> str:
