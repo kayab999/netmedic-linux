@@ -2,10 +2,12 @@ import logging
 import random
 import threading
 import shutil
+import json
 from typing import Set, List, Optional
 
 from netmedic.models import NetResult, CommandResult
 from netmedic.system import CommandRunner
+from netmedic.config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -23,17 +25,46 @@ class NetworkMedic:
     def __init__(self):
         if self._initialized: return
         self._state_lock = threading.Lock()
+        self._state_file = Config.get_state_dir() / "created_ifaces.json"
         self._created_ifaces: Set[str] = set()
+        
+        # Cargar estado previo y limpiar si hubo crash
+        self._load_state()
+        if self._created_ifaces:
+            logger.info(f"Detectadas interfaces residuales de sesión previa: {self._created_ifaces}. Limpiando...")
+            self.cleanup()
+
         self._initialized = True
+
+    def _save_state(self):
+        """Guarda la lista de interfaces creadas en disco."""
+        try:
+            with open(self._state_file, "w") as f:
+                json.dump(list(self._created_ifaces), f)
+        except Exception as e:
+            logger.error(f"Error guardando estado de interfaces: {e}")
+
+    def _load_state(self):
+        """Carga la lista de interfaces creadas desde el disco."""
+        if not self._state_file.exists():
+            return
+        try:
+            with open(self._state_file, "r") as f:
+                ifaces = json.load(f)
+                self._created_ifaces = set(ifaces)
+        except Exception as e:
+            logger.error(f"Error cargando estado de interfaces: {e}")
 
     def get_default_interface(self) -> Optional[str]:
         """
         Detecta la interfaz de red activa por defecto.
+        Si no hay ruta por defecto (offline), intenta detectar una interfaz física disponible.
         
         Riesgo: Bajo (Solo lectura).
         Tiempo: < 1s.
         Reversibilidad: N/A.
         """
+        # Intento 1: Ruta por defecto (Rápido y preciso si hay conexión)
         res = CommandRunner.run(["ip", "route", "show", "default"])
         if res.success and res.stdout:
             parts = res.stdout.split()
@@ -42,6 +73,23 @@ class NetworkMedic:
                 return parts[dev_idx + 1]
             except (ValueError, IndexError):
                 pass
+
+        # Intento 2: Fallback - Buscar interfaz física que esté levantada (UP)
+        # Filtramos loopback (lo) y interfaces virtuales comunes (docker, br-, vnet, etc)
+        res = CommandRunner.run(["ip", "-o", "link", "show", "up"])
+        if res.success and res.stdout:
+            for line in res.stdout.splitlines():
+                parts = line.split(':')
+                if len(parts) < 2: continue
+                iface = parts[1].strip()
+                
+                # Ignorar loopback y virtuales obvias
+                if iface == "lo" or any(x in iface for x in ["docker", "br-", "veth", "vnet", "virbr"]):
+                    continue
+                
+                # Si llegamos aquí, es una interfaz física probable (eth0, wlan0, enp3s0, etc)
+                return iface
+
         return None
 
     def get_gateway_ip(self) -> Optional[str]:
@@ -81,6 +129,9 @@ class NetworkMedic:
             if not res.success:
                 failed.append(iface)
                 with self._state_lock: self._created_ifaces.add(iface)
+
+        # Actualizar persistencia tras limpieza
+        self._save_state()
 
         return NetResult("Cleanup", len(failed) == 0, 
                          "Limpieza completada" if not failed else f"Falló en: {failed}")
@@ -151,7 +202,14 @@ class NetworkMedic:
         CommandRunner.run(["dhclient", "-r", iface], require_root=True, timeout=10)
         res = CommandRunner.run(["dhclient", iface], require_root=True, timeout=15)
         
-        return NetResult("Renew IP", res.success, f"IP renovada en {iface}" if res.success else "Error en DHCP")
+        if not res.success:
+            logger.error(f"Fallo crítico en DHCP para {iface}. Intentando rollback (NetworkManager restart)...")
+            # Rollback: Si dhclient falló, el sistema podría estar sin IP. 
+            # Reiniciar NM suele ser la forma más segura de recuperar el estado transaccional.
+            self.reset_tcp_ip_stack()
+            return NetResult("Renew IP", False, f"Error en DHCP en {iface}. Se activó recuperación automática.")
+
+        return NetResult("Renew IP", True, f"IP renovada en {iface}")
 
     def reset_tcp_ip_stack(self) -> NetResult:
         """
@@ -200,7 +258,15 @@ class NetworkMedic:
         current = self.get_firewall_status()
         action = "enable" if current == "OFF" else "disable"
         res = CommandRunner.run(["ufw", action], require_root=True)
-        return NetResult("Firewall", res.success, f"Firewall ahora: {'ON' if action == 'enable' else 'OFF'}")
+        
+        # Validación post-operación: No confiar solo en el exit code
+        final_status = self.get_firewall_status()
+        expected = "ON" if action == "enable" else "OFF"
+        
+        if final_status == expected:
+            return NetResult("Firewall", True, f"Firewall ahora: {final_status}")
+        else:
+            return NetResult("Firewall", False, f"Error al cambiar firewall. Estado actual: {final_status}")
 
     def create_virtual_adapter(self) -> NetResult:
         """
@@ -213,6 +279,8 @@ class NetworkMedic:
         iface = f"medic{random.randint(10,99)}"
         res = CommandRunner.run(["ip", "link", "add", iface, "type", "dummy"], require_root=True)
         if res.success:
-            with self._state_lock: self._created_ifaces.add(iface)
+            with self._state_lock: 
+                self._created_ifaces.add(iface)
+                self._save_state()
             return NetResult("Virtual Adapter", True, f"Creado: {iface}")
         return NetResult("Virtual Adapter", False, res.stderr)

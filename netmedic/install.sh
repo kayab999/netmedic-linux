@@ -51,6 +51,26 @@ pip install PyGObject
 # Instala el paquete actual en modo editable
 pip install -e .
 
+# Preguntar si desea instalar el módulo de IA
+echo -e "${BLUE}¿Deseas instalar el módulo de IA (Piloto Automático)? [y/N]${NC}"
+read -r install_ai
+if [[ "$install_ai" =~ ^([yY][eE][sS]|[yY])$ ]]; then
+    echo -e "${BLUE}Detectando soporte de aceleración de hardware...${NC}"
+    
+    # Detección simple: Vulkan o CUDA
+    if command -v nvidia-smi &> /dev/null; then
+        echo "CUDA detectado. Compilando con soporte NVIDIA."
+        export CMAKE_ARGS="-DLLAMA_CUBLAS=on"
+    elif [ -d "/usr/include/vulkan" ] || command -v vulkaninfo &> /dev/null; then
+        echo "Vulkan detectado. Compilando con soporte Vulkan."
+        export CMAKE_ARGS="-DLLAMA_VULKAN=on"
+    else
+        echo "No se detectó GPU. Compilando solo para CPU."
+    fi
+    
+    pip install -e .[ai]
+fi
+
 # 4. Integración de Escritorio (.desktop)
 echo -e "${BLUE}[4/5] Creando lanzador de escritorio...${NC}"
 INSTALL_DIR=$(pwd)

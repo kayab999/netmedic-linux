@@ -40,6 +40,18 @@ git clone https://github.com/user/netmedic_linux.git && cd netmedic_linux
 ./venv/bin/python -m netmedic.app
 ```
 
+## Arquitectura de Piloto Automático (NetMedic AI)
+
+NetMedic AI integra un 'Piloto Automático' basado en Nandi Mini (LLM 150M) que gestiona configuraciones de red mediante intenciones.
+
+### Seguridad y Hardening
+- **Comunicación IPC:** La comunicación entre el Core de NetMedic y el Sidecar AI ocurre exclusivamente vía Socket UNIX (`~/.local/state/netmedic/ipc.sock`).
+- **Permisos Estrictos:** El socket opera con permisos `0o600`, asegurando que solo el usuario propietario pueda interactuar con el bus de comandos.
+- **Trazabilidad:** Todas las acciones ejecutadas por el Piloto Automático se registran en `netmedic.log` bajo el prefijo `[AI_PILOT]`, permitiendo auditoría completa de decisiones.
+
+### Consideraciones Técnicas
+- **Contexto DNS:** En sistemas con `systemd-resolved`, el sensor de red leerá `127.0.0.53`. La arquitectura está preparada para auditar el estado real de la resolución mediante `resolvectl` si el entorno lo requiere.
+
 ## 📖 Documentación Adicional
 - [Manual de Usuario Detallado](docs/MANUAL.md)
 - [Notas de Versión (RC1)](RELEASE_NOTES.md)

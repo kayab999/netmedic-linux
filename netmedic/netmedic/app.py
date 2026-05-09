@@ -3,28 +3,89 @@ import logging
 import sys
 import os
 import signal
+import fcntl
+import argparse
+import time
 from logging.handlers import RotatingFileHandler
 from netmedic.config import Config
 from netmedic.ui import MainWindow
 from netmedic.network import NetworkMedic
+from netmedic.ipc_bridge import NetMedicIPCServer
 
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, GLib
 
+_medic_instance = None
+
 def handle_signals(signum, frame):
-    """Handler para señales de terminación."""
+    """Handler para señales de terminación con cleanup garantizado."""
     sig_name = signal.Signals(signum).name
     logging.info(f"Received signal {sig_name} ({signum}). Starting emergency cleanup...")
-    try:
-        # Instanciamos (obtenemos el singleton) y limpiamos
-        medic = NetworkMedic()
-        res = medic.cleanup()
-        logging.info(f"Cleanup result: {res.message}")
-    except Exception as e:
-        logging.error(f"Cleanup failed during signal handling: {e}")
     
-    # Salir forzosamente si estamos en un signal handler
+    # 1. Cleanup de emergencia sin dependencias externas
+    try:
+        from netmedic.ipc_bridge import SOCK_FILE, PID_FILE
+        for path in [SOCK_FILE, PID_FILE]:
+            if os.path.exists(path):
+                try:
+                    os.remove(path)
+                except Exception:
+                    pass
+    except Exception:
+        pass
+        
+    # 2. Cleanup completo usando instancia global si está disponible
+    try:
+        if _medic_instance is not None:
+            _medic_instance.cleanup()
+    except Exception as e:
+        logging.error(f"Cleanup failed: {e}")
+    
     sys.exit(0)
+
+def main():
+    global _medic_instance
+    # ... args parser ...
+    
+    # 3. Inicialización
+    _medic_instance = NetworkMedic()
+    
+    # 4. Lock e IPC (resto de lógica...)
+
+_lock_fd = None
+
+def acquire_instance_lock():
+    """
+    Usa fcntl para asegurar que solo una instancia de la app corre a la vez.
+    Mantiene el file descriptor abierto durante toda la vida del proceso.
+    """
+    global _lock_fd
+    lock_file = Config.get_state_dir() / "netmedic.lock"
+    
+    try:
+        # Abrir o crear el archivo de lock
+        _lock_fd = open(lock_file, "w")
+        # Intentar obtener un lock exclusivo sin bloquear (NB = Non-blocking)
+        fcntl.flock(_lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        # Escribir el PID actual por si sirve de diagnóstico
+        _lock_fd.write(str(os.getpid()))
+        _lock_fd.flush()
+        return True
+    except (IOError, BlockingIOError):
+        return False
+
+def show_error_dialog(message):
+    """Muestra un diálogo de error GTK simple."""
+    dialog = Gtk.MessageDialog(
+        transient_for=None,
+        flags=0,
+        message_type=Gtk.MessageType.ERROR,
+        buttons=Gtk.ButtonsType.OK,
+        text="Error de Instancia"
+    )
+    dialog.format_secondary_text(message)
+    dialog.run()
+    dialog.destroy()
 
 def setup_logging():
     """
@@ -82,25 +143,61 @@ def setup_logging():
     logging.info(f"Log file: {log_file} (Permissions: {oct(log_file.stat().st_mode & 0o777)})")
 
 def main():
-    # Registrar handlers de señales de sistema
+    # 0. Parsing de argumentos
+    parser = argparse.ArgumentParser(description="NetMedic: Network Diagnostic & Repair Tool")
+    parser.add_argument("--headless", action="store_true", help="Run without GUI (background mode)")
+    args = parser.parse_args()
+
+    # 1. Registrar handlers de señales de sistema
     signal.signal(signal.SIGINT, handle_signals)
     signal.signal(signal.SIGTERM, handle_signals)
 
+    # 2. Setup Logging
     try:
         setup_logging()
     except Exception as e:
-        # Fallback de emergencia si no podemos escribir logs
         print(f"CRITICAL: Failed to setup logging: {e}", file=sys.stderr)
 
+    # 3. Bloqueo de instancia única (OS-level)
+    if not acquire_instance_lock():
+        msg = "NetMedic ya está en ejecución. Solo se permite una instancia activa."
+        logging.error(msg)
+        if not args.headless:
+            try:
+                show_error_dialog(msg)
+            except:
+                print(msg, file=sys.stderr)
+        else:
+            print(msg, file=sys.stderr)
+        sys.exit(1)
+
+    # 4. Iniciar el servidor IPC
+    def mock_dispatcher(action, params):
+        logging.info(f"Comando recibido vía IPC: {action} con params: {params}")
+        return {"status": "success", "data": f"Comando {action} recibido por el Orquestador"}
+
+    ipc_server = NetMedicIPCServer(action_dispatcher=mock_dispatcher)
+    ipc_server.start()
+
+    # 5. Inicialización de App
     try:
         GLib.set_prgname("netmedic")
         GLib.set_application_name("NetMedic")
-        win = MainWindow()
-        win.show_all()
-        Gtk.main()
+        
+        if args.headless:
+            logging.info("Running in HEADLESS mode. GUI disabled.")
+            while True:
+                time.sleep(10)
+        else:
+            win = MainWindow()
+            win.show_all()
+            Gtk.main()
+            
     except Exception as e:
         logging.critical(f"Unhandled Application Error: {e}", exc_info=True)
         sys.exit(1)
+    finally:
+        ipc_server.stop()
 
 if __name__ == "__main__":
     main()

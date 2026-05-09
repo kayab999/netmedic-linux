@@ -17,3 +17,8 @@ dependencies = [
 
 [project.scripts]
 netmedic = "netmedic.app:main"
+
+[project.optional-dependencies]
+ai = [
+    "llama-cpp-python>=0.2.57"
+]

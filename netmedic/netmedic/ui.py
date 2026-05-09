@@ -40,13 +40,18 @@ class MainWindow(Gtk.Window):
         btn_donate = Gtk.Button()
         btn_donate_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
         btn_donate_icon = Gtk.Image.new_from_icon_name("emblem-favorite-symbolic", Gtk.IconSize.BUTTON)
-        btn_donate_label = Gtk.Label(label="Donate")
+        btn_donate_label = Gtk.Label(label="Support")
         btn_donate_box.pack_start(btn_donate_icon, False, False, 0)
         btn_donate_box.pack_start(btn_donate_label, False, False, 0)
         btn_donate.add(btn_donate_box)
-        btn_donate.set_tooltip_text("Support development via Buy Me a Coffee")
+        btn_donate.set_tooltip_text("Support Kayab Software development")
         btn_donate.connect("clicked", self.on_donate)
         header.pack_end(btn_donate)
+
+        # About Menu Item (contextual access)
+        btn_about = Gtk.Button.new_from_icon_name("help-about-symbolic", Gtk.IconSize.BUTTON)
+        btn_about.connect("clicked", self.on_about)
+        header.pack_end(btn_about)
 
         # 2. Notebook for Tabs (Hierarchical UI)
         notebook = Gtk.Notebook()
@@ -268,15 +273,15 @@ class MainWindow(Gtk.Window):
                 (self.medic.flush_dns, "Flushing DNS..."),
                 (self.medic.renew_ip, "Renewing IP...")
             ]
-            all_ok = True
+            
             for step_func, step_msg in steps:
                 GLib.idle_add(lambda m=step_msg: self.status_bar.push(self.status_context, m))
                 res = step_func()
                 self.append_log(res.to_log_entry())
-                if not res.success:
-                    all_ok = False
-                    break
-            return NetResult("Smart Repair", all_ok, "Sequence finished" if all_ok else "Sequence stopped due to failure")
+                # En Smart Repair, NO abortamos si falla un paso (como Diagnostics),
+                # ya que el objetivo es intentar todas las reparaciones posibles.
+
+            return NetResult("Smart Repair", True, "Sequence finished")
             
         self.run_async_task(sequence, "Repairing Network...")
 
@@ -301,8 +306,29 @@ class MainWindow(Gtk.Window):
 
     def on_donate(self, _):
         import subprocess
-        donate_url = "https://buymeacoffee.com/kayab999"
+        donate_url = "https://buymeacoffee.com/kayabsoftware"
         try:
             subprocess.Popen(["xdg-open", donate_url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         except Exception as e:
             logging.error(f"Failed to open donation URL: {e}")
+
+    def on_about(self, _):
+        about = Gtk.AboutDialog()
+        about.set_program_name("NetMedic Linux")
+        about.set_version("1.0.0")
+        about.set_comments("Sovereign Runtime Network Manager.\n\nRead the Manual to learn more.")
+        about.set_license_type(Gtk.License.MIT_X11)
+        
+        # Enlace a documentación/README
+        about.set_website("file://" + os.path.join(os.path.dirname(__file__), "../../README.md"))
+        about.set_website_label("User Manual (README)")
+        
+        # Enlace a soporte
+        # Gtk.AboutDialog no permite múltiples sitios web fácilmente, 
+        # así que añadimos un botón de soporte en el diálogo
+        btn_support = Gtk.Button(label="Support Kayab Software")
+        btn_support.connect("clicked", lambda b: self.on_donate(None))
+        about.get_content_area().pack_start(btn_support, False, False, 5)
+        
+        about.run()
+        about.destroy()

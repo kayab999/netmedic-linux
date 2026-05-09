@@ -221,10 +221,17 @@ class AngristanOperator(VPNOperator):
         
         res = CommandRunner.run(cmd, require_root=True, timeout=60)
         
-        if res.success:
-            return NetResult(self.name, True, f"Client '{name}' created")
-        else:
-            return NetResult(self.name, False, "Failed to create client", details=res.stderr)
+        if not res.success:
+            return NetResult(self.name, False, "Failed to execute add-client script", details=res.stderr)
+
+        # Validación post-operación: Verificar que el cliente aparezca en el índice
+        verify_res = self.list_clients()
+        if verify_res.success and verify_res.data:
+            for c in verify_res.data:
+                if c.name == name and c.active:
+                    return NetResult(self.name, True, f"Client '{name}' created and verified")
+        
+        return NetResult(self.name, False, f"Script reported success but client '{name}' was not found in PKI index")
 
     def revoke_client(self, name: str) -> NetResult:
         # Verificación de integridad antes de manipulación
