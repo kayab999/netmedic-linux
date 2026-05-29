@@ -50,3 +50,11 @@ class BaseOperator(ABC):
         Debe ser idempotente y seguro.
         """
         pass
+
+    @abstractmethod
+    def stop(self) -> None:
+        """
+        Detiene ordenadamente el componente y libera recursos (procesos, sockets).
+        Debe ser seguro ante fallos.
+        """
+        pass

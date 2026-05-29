@@ -22,9 +22,16 @@ class CommandRunner:
         redacted = []
         it = iter(command)
         for arg in it:
-            # Si el argumento actual parece una clave (ej: --password)
-            # redactamos el SIGUIENTE argumento si no empieza por '-'
-            if any(re.search(p, arg) for p in CommandRunner.SENSITIVE_PATTERNS):
+            # Prioridad: argumentos con '=' (ej: --token=xyz)
+            if "=" in arg:
+                parts = arg.split("=", 1)
+                key = parts[0]
+                if any(re.search(p, key) for p in CommandRunner.SENSITIVE_PATTERNS):
+                    redacted.append(f"{key}=<REDACTED>")
+                else:
+                    redacted.append(arg)
+            # Luego: argumentos flag (ej: --password)
+            elif any(re.search(p, arg) for p in CommandRunner.SENSITIVE_PATTERNS):
                 redacted.append(arg)
                 try:
                     val = next(it)
@@ -34,15 +41,6 @@ class CommandRunner:
                          redacted.append("<REDACTED>")
                 except StopIteration:
                     break
-            # O si el argumento contiene '=' (ej: --token=xyz)
-            elif "=" in arg:
-                if "=" in arg:
-                    parts = arg.split("=", 1)
-                    key = parts[0]
-                    if any(re.search(p, key) for p in CommandRunner.SENSITIVE_PATTERNS):
-                        redacted.append(f"{key}=<REDACTED>")
-                    else:
-                        redacted.append(arg)
             else:
                 redacted.append(arg)
         return " ".join(redacted)

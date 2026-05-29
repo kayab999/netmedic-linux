@@ -1,4 +1,5 @@
 import pytest
+import subprocess
 from unittest.mock import patch, MagicMock
 from netmedic.system import CommandRunner
 from netmedic.models import CommandResult
@@ -25,7 +26,6 @@ def test_command_runner_failure(mock_run):
     assert res.stderr == "error"
 
 @patch('subprocess.run')
-import subprocess
 def test_command_runner_timeout(mock_run):
     mock_run.side_effect = subprocess.TimeoutExpired(cmd="sleep 10", timeout=5)
     

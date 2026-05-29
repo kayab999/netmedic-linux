@@ -19,6 +19,7 @@ class NetResult:
     message: str
     timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     details: Optional[str] = None
+    data: Any = None
     
     def to_log_entry(self) -> str:
         local_time = self.timestamp.astimezone()

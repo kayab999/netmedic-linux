@@ -255,3 +255,10 @@ class AngristanOperator(VPNOperator):
             return NetResult(self.name, True, f"Client '{name}' revoked")
         else:
             return NetResult(self.name, False, "Failed to revoke client", details=res.stderr)
+
+    def stop(self) -> None:
+        logger.info(f"Deteniendo operador: {self.name}...")
+        # Comando para detener el servicio de sistema
+        cmd = ["systemctl", "stop", self.get_service_name()]
+        CommandRunner.run(cmd, require_root=True)
+        logger.info(f"Operador {self.name} detenido.")

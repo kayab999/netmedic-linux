@@ -23,8 +23,7 @@ def test_operator_integrity_failure(mock_dir, tmp_path):
     
     # Crear un script falso
     script_file = tmp_path / "openvpn-install.sh"
-    script_file.write_text("#!/bin/bash
-echo 'I am malicious'")
+    script_file.write_text("#!/bin/bash\necho 'I am malicious'")
     
     # El hash real de este texto no coincidirá con EXPECTED_SHA256
     assert op._verify_integrity() is False
@@ -44,7 +43,7 @@ def test_operator_integrity_success(tmp_path, monkeypatch):
     
     # Mockear el hash esperado para que coincida con un contenido conocido
     content = b"correct content"
-    expected_hash = "ed962e21051939109044d4f8f41121df0c90435905d8f370f1a233b49c719e06" # sha256 of 'correct content'
+    expected_hash = "55d731f2fe4bc2dc72f0288f5bc9a594dc3069d1949735fa3f50fde6580012f9" # sha256 of 'correct content'
     monkeypatch.setattr(op, "EXPECTED_SHA256", expected_hash)
     
     script_file.write_bytes(content)

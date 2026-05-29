@@ -24,6 +24,11 @@ class VPNPanel(Gtk.Box):
         self.status_label.get_style_context().add_class("header-text")
         
         self.action_btn = Gtk.Button(label="Action")
+        # A11Y: Header Action
+        a11y_action = self.action_btn.get_accessible()
+        a11y_action.set_name("VPN Main Action")
+        a11y_action.set_description("Performs main action, e.g., Install VPN or Check Status")
+        
         self.action_btn.connect("clicked", self.on_main_action)
         self.action_btn.set_sensitive(False) # Disabled until check
         

@@ -2,25 +2,42 @@ import logging
 from typing import Dict
 from netmedic.models import NetResult
 from netmedic.system import CommandRunner
+from netmedic.operators.base import BaseOperator, OperatorStatus
 
 logger = logging.getLogger(__name__)
 
-class WifiOperator:
+class WifiOperator(BaseOperator):
     @property
     def name(self) -> str:
         return "Wi-Fi Diagnostics"
+
+    @property
+    def slug(self) -> str:
+        return "wifi-diagnostics"
+
+    @property
+    def description(self) -> str:
+        return "Escaneo y análisis de congestión de redes Wi-Fi."
+
+    def check_status(self) -> NetResult:
+        # Chequeo rápido de disponibilidad
+        status = CommandRunner.run(["nmcli", "general", "status"])
+        if not status.success:
+            return NetResult(self.name, False, OperatorStatus.ERROR.value)
+        return NetResult(self.name, True, OperatorStatus.RUNNING.value)
+
+    def install(self) -> NetResult:
+        return NetResult(self.name, True, "Operador listo.")
+
+    def stop(self) -> None:
+        logger.info("WifiOperator detenido.")
 
     def scan_congestion(self) -> NetResult:
         """
         Escanea las redes Wi-Fi cercanas usando nmcli y determina
         la congestión de los canales.
         """
-        # Chequeo rápido de disponibilidad
-        status = CommandRunner.run(["nmcli", "general", "status"])
-        if not status.success:
-            return NetResult(self.name, False, "NetworkManager (nmcli) no está disponible.")
-
-        # -t = tabular, -f campos
+        # ... (rest of implementation unchanged)
         res = CommandRunner.run(["nmcli", "-t", "-f", "SSID,CHAN,SIGNAL", "device", "wifi", "list"])
         
         if not res.success:

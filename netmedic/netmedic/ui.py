@@ -44,12 +44,24 @@ class MainWindow(Gtk.Window):
         btn_donate_box.pack_start(btn_donate_icon, False, False, 0)
         btn_donate_box.pack_start(btn_donate_label, False, False, 0)
         btn_donate.add(btn_donate_box)
+        
+        # A11Y: Donate
+        a11y_donate = btn_donate.get_accessible()
+        a11y_donate.set_name("Support Kayab Software")
+        a11y_donate.set_description("Opens a browser to support Kayab Software development")
+        
         btn_donate.set_tooltip_text("Support Kayab Software development")
         btn_donate.connect("clicked", self.on_donate)
         header.pack_end(btn_donate)
 
         # About Menu Item (contextual access)
         btn_about = Gtk.Button.new_from_icon_name("help-about-symbolic", Gtk.IconSize.BUTTON)
+        
+        # A11Y: About
+        a11y_about = btn_about.get_accessible()
+        a11y_about.set_name("About NetMedic")
+        a11y_about.set_description("Shows information about this application")
+        
         btn_about.connect("clicked", self.on_about)
         header.pack_end(btn_about)
 
@@ -65,6 +77,12 @@ class MainWindow(Gtk.Window):
         repair_btn = Gtk.Button()
         repair_btn.set_label("SMART REPAIR (Safe)")
         repair_btn.get_style_context().add_class("primary-action")
+        
+        # A11Y: Smart Repair
+        a11y_repair = repair_btn.get_accessible()
+        a11y_repair.set_name("Run Smart Repair")
+        a11y_repair.set_description("Executes non-destructive network diagnostics, DNS flush and IP renewal automatically")
+        
         repair_btn.connect("clicked", self.on_smart_repair)
         basic_box.pack_start(repair_btn, False, False, 0)
         
@@ -75,10 +93,10 @@ class MainWindow(Gtk.Window):
         grid = Gtk.Grid(column_spacing=10, row_spacing=10)
         grid.set_halign(Gtk.Align.CENTER)
         
-        self.btn_diag = self.create_btn("Check Connectivity", self.on_diagnostics)
-        self.btn_dns = self.create_btn("Flush DNS", self.on_flush_dns)
-        self.btn_ip = self.create_btn("Renew IP Address", self.on_renew_ip, True)
-        self.btn_wifi = self.create_btn("Scan Wi-Fi Congestion", self.on_scan_wifi)
+        self.btn_diag = self.create_btn("Check Connectivity", self.on_diagnostics, accessible_description="Test internet connectivity")
+        self.btn_dns = self.create_btn("Flush DNS", self.on_flush_dns, accessible_description="Clear local DNS cache")
+        self.btn_ip = self.create_btn("Renew IP Address", self.on_renew_ip, True, accessible_description="Request new IP from DHCP server")
+        self.btn_wifi = self.create_btn("Scan Wi-Fi Congestion", self.on_scan_wifi, accessible_description="Analyze local Wi-Fi channel congestion")
         
         grid.attach(self.btn_diag, 0, 0, 1, 1)
         grid.attach(self.btn_dns, 1, 0, 1, 1)
@@ -148,12 +166,19 @@ class MainWindow(Gtk.Window):
         
         main_box.pack_end(footer_box, False, False, 0)
 
-    def create_btn(self, label, handler, destructive=False):
+    def create_btn(self, label, handler, destructive=False, accessible_name=None, accessible_description=None):
         btn = Gtk.Button(label=label)
         if destructive:
             btn.get_style_context().add_class("destructive-action")
         else:
             btn.get_style_context().add_class("secondary-action")
+        
+        # A11Y support
+        a11y = btn.get_accessible()
+        a11y.set_name(accessible_name or label)
+        if accessible_description:
+            a11y.set_description(accessible_description)
+            
         btn.connect("clicked", handler)
         return btn
 
