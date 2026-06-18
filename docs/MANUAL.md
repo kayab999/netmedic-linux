@@ -1,37 +1,74 @@
-# Manual de Usuario - NetMedic Linux 🛡️
+# NetMedic Linux — User Manual
 
-Esta guía proporciona instrucciones detalladas para el uso profesional y seguro de **NetMedic**.
+## Introduction
 
-## 1. Introducción
-NetMedic es una herramienta diseñada para usuarios que necesitan diagnosticar y reparar problemas de red comunes en Linux, además de gestionar servidores VPN de forma automatizada y segura.
+NetMedic diagnoses and repairs common Linux network issues. It provides safe automated repairs, privileged infrastructure controls, VPN server management, and an optional AI command palette.
 
-## 2. Operaciones de Reparación Básica (Tab 1)
-Estas acciones son **no destructivas** y seguras para la mayoría de los casos.
+## Launching
 
-- **Check Connectivity**: Realiza pings de prueba al gateway y a servicios de internet (Google DNS/Cloudflare) para determinar el origen de un fallo de conexión.
-- **Flush DNS**: Limpia la caché del servicio `systemd-resolved`. Útil cuando puedes navegar por IP pero no por nombre de dominio.
-- **Renew IP Address**: Fuerza la renovación del contrato DHCP de la interfaz de red activa.
+- **GUI:** Run `netmedic` from your application menu, or:
+  ```bash
+  ./venv/bin/python -m netmedic
+  ```
+- **AI Palette:** Press **Ctrl+Space** to open the command palette (requires AI module).
 
-## 3. Operaciones de Infraestructura (Tab 2)
-**Atención**: Estas acciones requieren privilegios de administrador (`pkexec`) y pueden causar desconexiones momentáneas.
+## Tab 1 — Basic Repair (Safe)
 
-- **Reset TCP/IP Stack**: Reinicia el servicio **NetworkManager**. Esto reinicia todas las conexiones de red del sistema.
-- **Toggle Firewall (UFW)**: Activa o desactiva el firewall del sistema. Asegúrate de conocer tus reglas de entrada antes de activarlo.
-- **Gestión de VPN (Angristan)**:
-  - **Instalar**: Descarga y configura un servidor OpenVPN. El sistema verificará el hash SHA256 antes de instalar para garantizar tu seguridad.
-  - **Add Client**: Crea un nuevo certificado para un usuario/dispositivo.
-  - **Revoke Client**: Invalida un certificado existente para denegar el acceso al servidor.
+These operations are non-destructive and safe for most situations.
 
-## 4. Seguridad y Logs
-NetMedic registra todas sus acciones en un archivo de log rotativo:
-`~/.local/state/netmedic/netmedic.log`
+| Action | Description |
+|--------|-------------|
+| **Smart Repair** | Runs diagnostics → DNS flush → IP renewal in sequence |
+| **Check Connectivity** | Pings gateway, tests DNS resolution and internet access |
+| **Flush DNS** | Clears `systemd-resolved` cache |
+| **Renew IP** | Renews DHCP lease on the active interface |
+| **Scan Wi-Fi** | Analyzes nearby networks and recommends less congested channels |
 
-- **Redacción de Logs**: Por seguridad, NetMedic ocultará automáticamente cualquier contraseña o token que aparezca en los argumentos de los comandos ejecutados.
-- **Limpieza de Sistema**: Al cerrar la aplicación, NetMedic eliminará automáticamente cualquier interfaz virtual creada para pruebas (`medicXX`).
+## Tab 2 — Infrastructure (Privileged)
 
-## 5. Solución de Problemas
-- **pkexec Error (126/127)**: Significa que cancelaste el diálogo de autenticación. NetMedic reactivará los botones para que puedas reintentar.
-- **SHA256 Mismatch**: Si el script de VPN falla en la verificación de integridad, NetMedic detendrá la operación. Esto protege tu sistema de ataques remotos o archivos corruptos.
+These require administrator authentication via `pkexec` and may cause brief disconnections.
+
+| Action | Description |
+|--------|-------------|
+| **Reset TCP/IP Stack** | Restarts NetworkManager |
+| **Cycle Network Adapter** | Brings default interface down and up |
+| **Toggle Firewall** | Enables or disables UFW |
+| **VPN Panel** | Install and manage OpenVPN server (Angristan script) |
+
+### VPN Management
+
+1. **Install OpenVPN** — Downloads and verifies the Angristan installer (SHA256 pinned).
+2. **Add Client** — Creates a new VPN client certificate.
+3. **Revoke Client** — Revokes access; verified against the PKI index.
+
+## AI Command Palette (Optional)
+
+With the AI module installed:
+
+1. Press **Ctrl+Space** to open the palette.
+2. Type a natural-language request (e.g., "check network status").
+3. Review the AI proposal in the preview card.
+4. Click **Autorizar y Ejecutar** to confirm, or **Ignorar** to dismiss.
+
+The AI can only propose actions registered in its security whitelist.
+
+## Security & Logs
+
+**Log location:** `~/.local/state/netmedic/netmedic.log` (permissions: 600)
+
+- Passwords and tokens in commands are automatically redacted.
+- VPN install scripts are verified against a pinned SHA256 hash before execution.
+- Virtual test interfaces (`medicXX`) are cleaned up on exit.
+
+## Troubleshooting
+
+| Symptom | Solution |
+|---------|----------|
+| **pkexec error 126/127** | Authentication was cancelled. Retry the action. |
+| **SHA256 mismatch (VPN)** | Script integrity check failed. Do not proceed; re-download. |
+| **"Already running"** | Another NetMedic instance is active. Close it or remove stale lock at `~/.local/state/netmedic/netmedic.lock` if the process crashed. |
+| **AI unavailable** | Install with `pip install -e "netmedic_ai[runtime]"` and place the GGUF model (see [DEVELOPMENT.md](DEVELOPMENT.md)). |
 
 ---
-**NetMedic Team** - 2026.
+
+*NetMedic Team — 2026*

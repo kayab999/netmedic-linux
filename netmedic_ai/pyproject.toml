@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "netmedic-ai"
+version = "1.1.0"
+description = "AI pilot for NetMedic network orchestration"
+requires-python = ">=3.8"
+dependencies = []
+
+[project.optional-dependencies]
+runtime = [
+    "llama-cpp-python>=0.2.57",
+]
+
+[tool.setuptools]
+package-dir = {"netmedic_ai" = "."}
+packages = ["netmedic_ai"]

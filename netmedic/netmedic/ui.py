@@ -1,8 +1,8 @@
 import gi
 import logging
+import os
 import threading
 import concurrent.futures
-import traceback
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, GLib
 from concurrent.futures import ThreadPoolExecutor
@@ -12,6 +12,8 @@ from netmedic.operators.wifi import WifiOperator
 from netmedic.models import NetResult, TaskResult
 from netmedic.ui_vpn import VPNPanel  # Nuevo panel modular
 from netmedic.theme import apply_theme
+from netmedic.ai_console import AIConsoleController
+from netmedic.integration import shutdown_operators
 
 class MainWindow(Gtk.Window):
     def __init__(self):
@@ -28,8 +30,11 @@ class MainWindow(Gtk.Window):
         self.set_border_width(10)
         self.connect("destroy", self.on_destroy)
 
+        self._root_overlay = Gtk.Overlay()
+        self.add(self._root_overlay)
+
         main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
-        self.add(main_box)
+        self._root_overlay.add(main_box)
 
         # 1. Header
         header = Gtk.HeaderBar(title="NetMedic", subtitle="Network Repair Tool")
@@ -166,6 +171,9 @@ class MainWindow(Gtk.Window):
         
         main_box.pack_end(footer_box, False, False, 0)
 
+        self.ai_console = AIConsoleController(self)
+        self.ai_console.mount(self._root_overlay)
+
     def create_btn(self, label, handler, destructive=False, accessible_name=None, accessible_description=None):
         btn = Gtk.Button(label=label)
         if destructive:
@@ -216,14 +224,15 @@ class MainWindow(Gtk.Window):
         logging.info("Closing application. Running final cleanup...")
         self.is_destroyed = True
         self.executor.shutdown(wait=True, cancel_futures=True)
-        
+
+        shutdown_operators([self.wifi_op, self.vpn_panel.operator])
+
         try:
-            # Al ser singleton, recuperamos la instancia con las interfaces creadas
             res = self.medic.cleanup()
             logging.info(f"Final cleanup: {res.message}")
         except Exception as e:
             logging.error(f"Error in final cleanup: {e}")
-        
+
         Gtk.main_quit()
 
     def append_log(self, text):
@@ -345,8 +354,9 @@ class MainWindow(Gtk.Window):
         about.set_license_type(Gtk.License.MIT_X11)
         
         # Enlace a documentación/README
-        about.set_website("file://" + os.path.join(os.path.dirname(__file__), "../../README.md"))
-        about.set_website_label("User Manual (README)")
+        manual = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../docs/MANUAL.md"))
+        about.set_website("file://" + manual)
+        about.set_website_label("User Manual")
         
         # Enlace a soporte
         # Gtk.AboutDialog no permite múltiples sitios web fácilmente, 

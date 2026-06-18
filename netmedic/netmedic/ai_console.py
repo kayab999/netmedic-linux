@@ -1,5 +1,5 @@
 import json
-from gi.repository import Gtk, GLib, Gdk
+from gi.repository import Gtk
 from .ipc_client import PilotClient
 from .sensors import get_network_snapshot
 import logging
@@ -13,9 +13,9 @@ class AIConsoleController:
         self.entry = None
         self.preview_box = None
 
-    def setup_ui(self, parent_box):
-        self.overlay = Gtk.Overlay()
-        parent_box.pack_start(self.overlay, True, True, 0)
+    def mount(self, overlay: Gtk.Overlay):
+        """Attaches the AI command palette as an overlay on the main window."""
+        self.overlay = overlay
 
         self.revealer = Gtk.Revealer(transition_type=Gtk.RevealerTransitionType.CROSSFADE, transition_duration=200)
         self.overlay.add_overlay(self.revealer)
@@ -140,4 +140,14 @@ class AIConsoleController:
 
     def _confirm_and_execute(self, action, params):
         self.revealer.set_reveal_child(False)
-        self.client.ask(action, params, lambda r: logging.info(f"Resultado final: {r}"))
+
+        def on_result(result):
+            logging.info("Resultado final: %s", result)
+            if hasattr(self.main_window, "append_log"):
+                if result.get("status") == "error":
+                    self.main_window.append_log(f"❌ AI [{action}]: {result.get('message', 'Error')}")
+                else:
+                    msg = result.get("message") or result.get("data") or "Completado"
+                    self.main_window.append_log(f"🤖 AI [{action}]: {msg}")
+
+        self.client.ask(action, params, on_result, confirmed=True)

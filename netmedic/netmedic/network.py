@@ -1,11 +1,17 @@
 import logging
+import os
+import re
 import random
 import threading
 import shutil
 import json
-from typing import Set, List, Optional
+from typing import Set, Optional
 
-from netmedic.models import NetResult, CommandResult
+_DNS_IP_RE = re.compile(
+    r"^(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)$"
+)
+
+from netmedic.models import NetResult
 from netmedic.system import CommandRunner
 from netmedic.config import Config
 
@@ -23,7 +29,8 @@ class NetworkMedic:
             return cls._instance
 
     def __init__(self):
-        if self._initialized: return
+        if self._initialized:
+            return
         self._state_lock = threading.Lock()
         self._state_file = Config.get_state_dir() / "created_ifaces.json"
         self._created_ifaces: Set[str] = set()
@@ -41,6 +48,7 @@ class NetworkMedic:
         try:
             with open(self._state_file, "w") as f:
                 json.dump(list(self._created_ifaces), f)
+            os.chmod(self._state_file, 0o600)
         except Exception as e:
             logger.error(f"Error guardando estado de interfaces: {e}")
 
@@ -80,7 +88,8 @@ class NetworkMedic:
         if res.success and res.stdout:
             for line in res.stdout.splitlines():
                 parts = line.split(':')
-                if len(parts) < 2: continue
+                if len(parts) < 2:
+                    continue
                 iface = parts[1].strip()
                 
                 # Ignorar loopback y virtuales obvias
@@ -128,7 +137,8 @@ class NetworkMedic:
             res = CommandRunner.run(["ip", "link", "del", iface], require_root=True)
             if not res.success:
                 failed.append(iface)
-                with self._state_lock: self._created_ifaces.add(iface)
+                with self._state_lock:
+                    self._created_ifaces.add(iface)
 
         # Actualizar persistencia tras limpieza
         self._save_state()
@@ -182,6 +192,42 @@ class NetworkMedic:
         
         return NetResult("Flush DNS", False, "El servicio systemd-resolved no está activo")
 
+    def change_dns(self, server: str = "1.1.1.1") -> NetResult:
+        """
+        Configura el DNS IPv4 de la conexión NetworkManager activa.
+
+        Riesgo: Medio (Modifica resolución de nombres).
+        Tiempo: 2s - 5s.
+        Reversibilidad: Sí (Restaurar DHCP o valores previos).
+        """
+        if not _DNS_IP_RE.match(server):
+            return NetResult("Change DNS", False, f"DNS inválido: {server}")
+
+        if not self._check_requirement("nmcli"):
+            return NetResult("Change DNS", False, "NetworkManager (nmcli) no disponible")
+
+        res = CommandRunner.run(["nmcli", "-t", "-f", "NAME", "con", "show", "--active"])
+        if not res.success or not res.stdout.strip():
+            return NetResult("Change DNS", False, "No hay conexión activa de NetworkManager")
+
+        conn_name = res.stdout.strip().splitlines()[0]
+        mod_res = CommandRunner.run(
+            [
+                "nmcli", "con", "mod", conn_name,
+                "ipv4.dns", server,
+                "ipv4.ignore-auto-dns", "yes",
+            ],
+            require_root=True,
+        )
+        if not mod_res.success:
+            return NetResult("Change DNS", False, mod_res.stderr)
+
+        up_res = CommandRunner.run(["nmcli", "con", "up", conn_name], require_root=True)
+        if not up_res.success:
+            return NetResult("Change DNS", False, up_res.stderr)
+
+        return NetResult("Change DNS", True, f"DNS cambiado a {server} en {conn_name}")
+
     def renew_ip(self) -> NetResult:
         """
         Solicita una nueva IP al servidor DHCP.
@@ -191,7 +237,8 @@ class NetworkMedic:
         Reversibilidad: Sí (Se puede reasignar estáticamente o reintentar).
         """
         iface = self.get_default_interface()
-        if not iface: return NetResult("Renew IP", False, "No se detectó interfaz")
+        if not iface:
+            return NetResult("Renew IP", False, "No se detectó interfaz")
         
         # Modern NetworkManager fallback
         if shutil.which("nmcli"):
@@ -231,7 +278,8 @@ class NetworkMedic:
         Reversibilidad: Sí (Subir manualmente con 'ip link set UP').
         """
         iface = self.get_default_interface()
-        if not iface: return NetResult("Restart Adapter", False, "No se detectó interfaz")
+        if not iface:
+            return NetResult("Restart Adapter", False, "No se detectó interfaz")
         
         CommandRunner.run(["ip", "link", "set", iface, "down"], require_root=True)
         res = CommandRunner.run(["ip", "link", "set", iface, "up"], require_root=True)
@@ -243,8 +291,10 @@ class NetworkMedic:
         Consulta el estado actual de UFW.
         """
         res = CommandRunner.run(["ufw", "status"])
-        if "inactive" in res.stdout.lower(): return "OFF"
-        if "active" in res.stdout.lower(): return "ON"
+        if "inactive" in res.stdout.lower():
+            return "OFF"
+        if "active" in res.stdout.lower():
+            return "ON"
         return "Unknown"
 
     def toggle_firewall(self) -> NetResult:
@@ -257,8 +307,8 @@ class NetworkMedic:
         """
         current = self.get_firewall_status()
         action = "enable" if current == "OFF" else "disable"
-        res = CommandRunner.run(["ufw", action], require_root=True)
-        
+        CommandRunner.run(["ufw", action], require_root=True)
+
         # Validación post-operación: No confiar solo en el exit code
         final_status = self.get_firewall_status()
         expected = "ON" if action == "enable" else "OFF"
@@ -279,7 +329,7 @@ class NetworkMedic:
         iface = f"medic{random.randint(10,99)}"
         res = CommandRunner.run(["ip", "link", "add", iface, "type", "dummy"], require_root=True)
         if res.success:
-            with self._state_lock: 
+            with self._state_lock:
                 self._created_ifaces.add(iface)
                 self._save_state()
             return NetResult("Virtual Adapter", True, f"Creado: {iface}")

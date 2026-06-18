@@ -1,8 +1,6 @@
-import pytest
 from unittest.mock import patch, MagicMock
 from netmedic.operators.wifi import WifiOperator
 from netmedic.operators.vpn.angristan import AngristanOperator
-from netmedic.models import NetResult
 
 @patch('netmedic.system.CommandRunner.run')
 def test_wifi_scan_congestion(mock_run):

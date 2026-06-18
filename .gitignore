@@ -1,12 +1,44 @@
+# Python
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+*.egg
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Virtual environments
 venv/
+.venv/
+env/
+
+# Environment & IDE
 .env
+.env.*
 .idea/
 .vscode/
-*.gguf
-*.sum
-netmedic.log
+*.swp
+.DS_Store
+
+# Build & distribution artifacts
+build/
+dist/
+*.spec.bak
+NetMedic.AppDir/
+NetMedic-*.AppImage
+netmedic_run
+
+# Runtime state (local dev)
+*.log
 *.pid
 *.sock
-.DS_Store
+netmedic.log
+
+# AI model weights (download separately — see docs/DEVELOPMENT.md)
+*.gguf
+*.sum
+
+# Local packaging caches
+localpycs/

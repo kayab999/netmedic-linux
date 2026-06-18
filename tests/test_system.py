@@ -1,8 +1,6 @@
-import pytest
 import subprocess
 from unittest.mock import patch, MagicMock
 from netmedic.system import CommandRunner
-from netmedic.models import CommandResult
 
 @patch('subprocess.run')
 def test_command_runner_success(mock_run):

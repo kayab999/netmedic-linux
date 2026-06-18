@@ -3,7 +3,7 @@ import shutil
 import logging
 import os
 import re
-from typing import List
+from typing import List, Optional
 from netmedic.models import CommandResult
 from netmedic.config import Config
 
@@ -46,7 +46,7 @@ class CommandRunner:
         return " ".join(redacted)
 
     @staticmethod
-    def run(command: List[str], require_root: bool = False, timeout: int = None) -> CommandResult:
+    def run(command: List[str], require_root: bool = False, timeout: Optional[int] = None) -> CommandResult:
         """
         Ejecuta comandos con timeout, manejo de elevación y logging sanitizado.
         """

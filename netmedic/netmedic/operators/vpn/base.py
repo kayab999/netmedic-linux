@@ -1,5 +1,5 @@
 from abc import abstractmethod
-from typing import List, Optional
+from typing import Optional
 from dataclasses import dataclass
 from netmedic.models import NetResult
 from netmedic.operators.base import BaseOperator

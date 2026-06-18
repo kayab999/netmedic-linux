@@ -149,8 +149,9 @@ class VPNPanel(Gtk.Box):
                         ))
                 else:
                     GLib.idle_add(lambda: self.log(f"❌ VPN Error: {res.error}"))
-            except Exception as e:
-                GLib.idle_add(lambda: self.log(f"❌ Critical: {e}"))
+            except Exception as exc:
+                err_msg = str(exc)
+                GLib.idle_add(lambda: self.log(f"❌ Critical: {err_msg}"))
                 
         future.add_done_callback(on_done)
 

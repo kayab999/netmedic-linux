@@ -1,8 +1,6 @@
-import pytest
 from netmedic.system import CommandRunner
 from netmedic.operators.vpn.angristan import AngristanOperator
-from unittest.mock import MagicMock, patch
-from pathlib import Path
+from unittest.mock import patch
 
 def test_command_redaction():
     """Verifica que los secretos no se logueen en texto plano."""

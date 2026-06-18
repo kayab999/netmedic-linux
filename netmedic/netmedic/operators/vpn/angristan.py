@@ -1,8 +1,7 @@
 import logging
 import re
 import hashlib
-from typing import List, Optional
-from netmedic.models import NetResult, CommandResult
+from netmedic.models import NetResult
 from netmedic.operators.vpn.base import VPNOperator, VPNClient
 from netmedic.operators.base import OperatorStatus
 from netmedic.config import Config
@@ -249,16 +248,25 @@ class AngristanOperator(VPNOperator):
         logger.info(f"Revoking VPN client: {name}")
         
         res = CommandRunner.run(cmd, require_root=True, timeout=60)
-        
-        if res.success:
-            # Por ahora confiamos en el script
-            return NetResult(self.name, True, f"Client '{name}' revoked")
-        else:
+
+        if not res.success:
             return NetResult(self.name, False, "Failed to revoke client", details=res.stderr)
 
+        verify_res = self.list_clients()
+        if verify_res.success and verify_res.data:
+            for client in verify_res.data:
+                if client.name == name and not client.active:
+                    return NetResult(self.name, True, f"Client '{name}' revoked and verified")
+
+        return NetResult(
+            self.name,
+            False,
+            f"Script reported success but client '{name}' was not marked revoked in PKI index",
+        )
+
     def stop(self) -> None:
-        logger.info(f"Deteniendo operador: {self.name}...")
-        # Comando para detener el servicio de sistema
-        cmd = ["systemctl", "stop", self.get_service_name()]
-        CommandRunner.run(cmd, require_root=True)
-        logger.info(f"Operador {self.name} detenido.")
+        """Releases operator resources without stopping the system VPN service."""
+        logger.info(
+            "Operador %s liberado (servicio VPN del sistema permanece activo).",
+            self.name,
+        )

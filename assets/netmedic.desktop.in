@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=NetMedic
+Comment=Linux Network Diagnostics & Repair Tool
+Exec=@INSTALL_DIR@/venv/bin/python -m netmedic
+Icon=@INSTALL_DIR@/assets/netmedic.png
+Path=@INSTALL_DIR@
+Terminal=false
+Categories=System;Network;

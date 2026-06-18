@@ -29,7 +29,7 @@ def get_network_snapshot():
             for line in f:
                 if line.startswith("nameserver"):
                     snapshot["dns"].append(line.split()[1])
-    except:
+    except OSError:
         pass
 
     # 3. Latencia (ping rápido)
@@ -41,7 +41,7 @@ def get_network_snapshot():
             output = ping_res.stdout.decode()
             time_part = output.split("time=")[1].split(" ms")[0]
             snapshot["latency_ms"] = float(time_part)
-    except:
+    except (subprocess.SubprocessError, ValueError, IndexError, OSError):
         pass
 
     return snapshot

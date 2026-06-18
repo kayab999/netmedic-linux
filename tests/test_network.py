@@ -1,7 +1,5 @@
-import pytest
 from unittest.mock import patch, MagicMock
 from netmedic.network import NetworkMedic
-from netmedic.models import NetResult
 
 @patch('netmedic.system.CommandRunner.run')
 def test_diagnostics_success(mock_run):
