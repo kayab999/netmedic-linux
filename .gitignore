@@ -41,4 +41,4 @@ netmedic.log
 *.sum
 
 # Local packaging caches
-localpycs/
+localpycs/netmedic_run
