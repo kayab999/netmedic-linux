@@ -5,6 +5,7 @@ import time
 import logging
 
 from netmedic.config import Config
+from netmedic.ipc_framing import encode_message, recv_message, parse_message
 
 logger = logging.getLogger(__name__)
 
@@ -62,33 +63,15 @@ class PilotClient:
 
     def _request_sync(self, action, params):
         with self._sock_lock:
-            sock = self.sock
-        if sock is None:
-            return {"status": "error", "message": "Sin conexión al orquestador"}
-        try:
-            payload = json.dumps({"action": action, "params": params})
-            sock.sendall(payload.encode("utf-8"))
-            data = self._recv_message(sock)
-            return json.loads(data.decode("utf-8").strip())
-        except (BrokenPipeError, ConnectionResetError, OSError, json.JSONDecodeError) as exc:
-            logger.warning("IPC sync request failed: %s", exc)
-            return {"status": "error", "message": str(exc)}
-
-    def _recv_message(self, sock: socket.socket) -> bytes:
-        chunks = []
-        total = 0
-        while total < 65_536:
-            chunk = sock.recv(4096)
-            if not chunk:
-                break
-            chunks.append(chunk)
-            total += len(chunk)
+            if self.sock is None:
+                return {"status": "error", "message": "Sin conexión al orquestador"}
             try:
-                json.loads(b"".join(chunks).decode("utf-8").strip())
-                return b"".join(chunks)
-            except json.JSONDecodeError:
-                continue
-        raise ValueError("IPC response incomplete")
+                self.sock.sendall(encode_message({"action": action, "params": params}))
+                data = recv_message(self.sock)
+                return parse_message(data)
+            except (BrokenPipeError, ConnectionResetError, OSError, json.JSONDecodeError, ValueError) as exc:
+                logger.warning("IPC sync request failed: %s", exc)
+                return {"status": "error", "message": str(exc)}
 
     def ask(self, action, params, callback, *, confirmed: bool = False):
         def _task():
@@ -103,20 +86,20 @@ class PilotClient:
                     self._refresh_session_token()
                     request_params["session_token"] = self._session_token
 
+            reconnect = False
             with self._sock_lock:
-                sock = self.sock
+                if self.sock is None:
+                    GLib.idle_add(callback, {"status": "error", "message": "Sin conexión al orquestador"})
+                    return
+                try:
+                    self.sock.sendall(encode_message({"action": action, "params": request_params}))
+                    data = recv_message(self.sock)
+                    result = parse_message(data)
+                    GLib.idle_add(callback, result)
+                except (BrokenPipeError, ConnectionResetError, OSError, ValueError, json.JSONDecodeError):
+                    reconnect = True
 
-            if sock is None:
-                GLib.idle_add(callback, {"status": "error", "message": "Sin conexión al orquestador"})
-                return
-
-            try:
-                payload = json.dumps({"action": action, "params": request_params})
-                sock.sendall(payload.encode("utf-8"))
-                data = self._recv_message(sock)
-                result = json.loads(data.decode("utf-8").strip())
-                GLib.idle_add(callback, result)
-            except (BrokenPipeError, ConnectionResetError, OSError, ValueError):
+            if reconnect:
                 self._connect()
                 GLib.idle_add(callback, {"status": "error", "message": "Conexión perdida, reintentando..."})
 

@@ -15,10 +15,14 @@ echo "Packaging ${APP_NAME} AppImage..."
 rm -rf "$BUILD_DIR"
 mkdir -p "$BUILD_DIR/usr/bin"
 mkdir -p "$BUILD_DIR/usr/share/applications"
+mkdir -p "$BUILD_DIR/usr/share/icons/hicolor/256x256/apps"
 mkdir -p "$BUILD_DIR/usr/share/icons/hicolor/scalable/apps"
 
 cp dist/netmedic "$BUILD_DIR/usr/bin/netmedic"
-sed "s|@INSTALL_DIR@|/usr|g" assets/netmedic.desktop.in > "$BUILD_DIR/netmedic.desktop"
+sed -e "s|@INSTALL_DIR@|${REPO_ROOT}|g" \
+    -e "s|@EXEC@|netmedic|g" \
+    assets/netmedic.desktop.in > "$BUILD_DIR/usr/share/applications/netmedic.desktop"
+cp assets/netmedic.png "$BUILD_DIR/usr/share/icons/hicolor/256x256/apps/netmedic.png"
 cp assets/netmedic.png "$BUILD_DIR/usr/share/icons/hicolor/scalable/apps/netmedic.png"
 
 cat > "$BUILD_DIR/AppRun" <<'EOF'

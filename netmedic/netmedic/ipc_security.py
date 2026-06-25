@@ -24,6 +24,7 @@ SAFE_ACTIONS: FrozenSet[str] = frozenset({
     "network_status",
     "wifi_diagnostics",
     "get_session_token",
+    "donate",
 })
 
 

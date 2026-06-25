@@ -307,7 +307,9 @@ class NetworkMedic:
         """
         current = self.get_firewall_status()
         action = "enable" if current == "OFF" else "disable"
-        CommandRunner.run(["ufw", action], require_root=True)
+        res = CommandRunner.run(["ufw", action], require_root=True)
+        if not res.success:
+            return NetResult("Firewall", False, f"ufw {action} failed", details=res.stderr)
 
         # Validación post-operación: No confiar solo en el exit code
         final_status = self.get_firewall_status()

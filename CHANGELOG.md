@@ -11,7 +11,7 @@ All notable changes to NetMedic Linux are documented here.
 - `netmedic_ai` package restored with guardrail whitelist
 - Headless mode without GTK import (`runtime.py` / `gui.py` split)
 - Stale lock recovery after crash (SIGKILL)
-- Comprehensive test suite (39 tests)
+- Comprehensive test suite (45+ tests)
 - GitHub-ready project structure (`scripts/`, `assets/`, `docs/`, `tools/`)
 
 ### Fixed
@@ -21,6 +21,14 @@ All notable changes to NetMedic Linux are documented here.
 - IPC server now starts on application launch
 - Revoke client post-operation PKI verification
 - Resilience test uses isolated `XDG_STATE_HOME`
+- `vpn_reconnect` restarts OpenVPN instead of resetting NetworkManager
+- IPC newline framing and full-request socket locking
+- About manual link, version display, icon/desktop install paths
+- VPN start service control; client revoke/add validation feedback
+- Headless shutdown cleanup, signal reentrancy guard, bootstrap lock rollback
+- AI console markup escaping, English labels, loading indicator
+- AppImage desktop entry Exec/Icon paths; `donate` IPC handler
+- Sensor and firewall command timeout/exit-status handling
 
 ### Security
 - Command log redaction for passwords/tokens

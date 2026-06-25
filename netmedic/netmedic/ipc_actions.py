@@ -3,7 +3,10 @@ from typing import Any, Callable, Dict
 
 from netmedic.network import NetworkMedic
 from netmedic.operators.wifi import WifiOperator
+from netmedic.operators.vpn.angristan import AngristanOperator
 from netmedic.ipc_security import IPCSession
+
+DONATE_URL = "https://buymeacoffee.com/kayabsoftware"
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +26,7 @@ def create_action_dispatcher(
 ) -> Callable[[str, Dict[str, Any]], Dict[str, Any]]:
     """Builds the IPC action router bound to a NetworkMedic instance."""
     wifi = WifiOperator()
+    vpn = AngristanOperator()
 
     def dispatch(action: str, params: Dict[str, Any]) -> Dict[str, Any]:
         try:
@@ -50,7 +54,10 @@ def create_action_dispatcher(
                 return _result_payload(medic.renew_ip())
 
             if action == "vpn_reconnect":
-                return _result_payload(medic.reset_tcp_ip_stack())
+                return _result_payload(vpn.restart_service())
+
+            if action == "donate":
+                return {"status": "ok", "message": "Opening donation page.", "url": DONATE_URL}
 
             if action == "change_dns":
                 server = params.get("server", "1.1.1.1")

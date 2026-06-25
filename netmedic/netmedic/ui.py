@@ -14,12 +14,14 @@ from netmedic.ui_vpn import VPNPanel  # Nuevo panel modular
 from netmedic.theme import apply_theme
 from netmedic.ai_console import AIConsoleController
 from netmedic.integration import shutdown_operators
+from netmedic import __version__
+from netmedic.paths import resolve_app_icon_path, resolve_manual_path
 
 class MainWindow(Gtk.Window):
     def __init__(self):
         super().__init__(title="NetMedic Linux - Professional")
         self.is_destroyed = False
-        self.set_icon_name("netmedic")
+        self._apply_window_icon()
         apply_theme()
         self.medic = NetworkMedic()
         self.wifi_op = WifiOperator()
@@ -71,8 +73,9 @@ class MainWindow(Gtk.Window):
         header.pack_end(btn_about)
 
         # 2. Notebook for Tabs (Hierarchical UI)
-        notebook = Gtk.Notebook()
-        main_box.pack_start(notebook, True, True, 0)
+        self.notebook = Gtk.Notebook()
+        main_box.pack_start(self.notebook, True, True, 0)
+        notebook = self.notebook
 
         # --- TAB 1: BASIC REPAIR (Safe & Automated) ---
         basic_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=15)
@@ -198,12 +201,24 @@ class MainWindow(Gtk.Window):
         if getattr(self, "is_destroyed", False):
             return False
         self.status_bar.push(self.status_context, msg if busy else "System Ready")
+        action_buttons = (
+            getattr(self, "btn_diag", None),
+            getattr(self, "btn_dns", None),
+            getattr(self, "btn_ip", None),
+            getattr(self, "btn_wifi", None),
+        )
         if busy:
             self.spinner.start()
-            # Bloqueamos tabs para evitar condiciones de carrera entre paneles
-            # (Futura mejora: bloquear solo panel activo)
+            self.notebook.set_sensitive(False)
+            for btn in action_buttons:
+                if btn is not None:
+                    btn.set_sensitive(False)
         else:
             self.spinner.stop()
+            self.notebook.set_sensitive(True)
+            for btn in action_buttons:
+                if btn is not None:
+                    btn.set_sensitive(True)
         return False
 
     def ask_confirmation(self, title, message):
@@ -219,6 +234,16 @@ class MainWindow(Gtk.Window):
         response = dialog.run()
         dialog.destroy()
         return response == Gtk.ResponseType.OK
+
+    def _apply_window_icon(self):
+        icon_path = resolve_app_icon_path()
+        if icon_path is not None:
+            try:
+                self.set_icon_from_file(str(icon_path))
+                return
+            except GLib.Error:
+                logging.debug("Failed to load icon from %s", icon_path, exc_info=True)
+        self.set_icon_name("netmedic")
 
     def on_destroy(self, widget):
         logging.info("Closing application. Running final cleanup...")
@@ -349,14 +374,14 @@ class MainWindow(Gtk.Window):
     def on_about(self, _):
         about = Gtk.AboutDialog()
         about.set_program_name("NetMedic Linux")
-        about.set_version("1.0.0")
+        about.set_version(__version__)
         about.set_comments("Sovereign Runtime Network Manager.\n\nRead the Manual to learn more.")
         about.set_license_type(Gtk.License.MIT_X11)
-        
-        # Enlace a documentación/README
-        manual = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../docs/MANUAL.md"))
-        about.set_website("file://" + manual)
-        about.set_website_label("User Manual")
+
+        manual = resolve_manual_path()
+        if manual is not None:
+            about.set_website("file://" + str(manual))
+            about.set_website_label("User Manual")
         
         # Enlace a soporte
         # Gtk.AboutDialog no permite múltiples sitios web fácilmente, 

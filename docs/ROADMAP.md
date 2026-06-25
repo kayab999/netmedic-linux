@@ -15,7 +15,16 @@ NetMedic aims to be a sovereign, open-source network management tool for Linux �
 - [x] 39-test automated suite
 - [x] Documentation and GitHub-ready structure
 
-## v1.1.0 — Refinement (Planned)
+## v1.1.0 — Released (2026-06-18)
+
+- [x] IPC session tokens and security hardening
+- [x] Headless runtime / GUI split
+- [x] AI pilot restoration with guardrail whitelist
+- [x] Repository restructure (`scripts/`, `assets/`, `tools/`, `docs/`)
+- [x] Icon/desktop install fixes and adversarial audit remediation
+- [x] 45+ test automated suite
+
+## v1.2.0 — Refinement (Planned)
 
 - [ ] Plugin API for third-party operators
 - [ ] Real-time network sensor visualization

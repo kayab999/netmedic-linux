@@ -17,7 +17,14 @@ def get_network_snapshot():
 
     # 1. Interfaces (usando ip -j)
     try:
-        iface_data = json.loads(subprocess.check_output(["ip", "-j", "link"]).decode())
+        proc = subprocess.run(
+            ["ip", "-j", "link"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=True,
+        )
+        iface_data = json.loads(proc.stdout)
         for iface in iface_data:
             snapshot["ifaces"][iface["ifname"]] = iface.get("operstate", "unknown")
     except Exception as e:

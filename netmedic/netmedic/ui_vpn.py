@@ -194,8 +194,10 @@ class VPNPanel(Gtk.Box):
             
             elif status == OperatorStatus.STOPPED.value:
                 self.status_label.set_text("VPN Service Stopped")
-                self.action_btn.set_label("Start Service (Not Impl)")
-                self.clients_frame.set_sensitive(True) # Can still see list
+                self.action_btn.set_label("Start VPN Service")
+                self.action_btn.get_style_context().add_class("primary-action")
+                self.action_btn.set_sensitive(True)
+                self.clients_frame.set_sensitive(True)
                 self.run_async(self.operator.list_clients, callback=self.update_client_list)
                 
             else: # ERROR / UNKNOWN
@@ -233,6 +235,19 @@ class VPNPanel(Gtk.Box):
             
             if response == Gtk.ResponseType.OK:
                 self.run_async(self.operator.install, callback=lambda _: self.refresh_state())
+        elif "Start VPN" in label:
+            dialog = Gtk.MessageDialog(
+                transient_for=self.get_toplevel(),
+                flags=0,
+                message_type=Gtk.MessageType.QUESTION,
+                buttons=Gtk.ButtonsType.OK_CANCEL,
+                text="Start OpenVPN Service?",
+            )
+            dialog.format_secondary_text("This requires administrator privileges.")
+            response = dialog.run()
+            dialog.destroy()
+            if response == Gtk.ResponseType.OK:
+                self.run_async(self.operator.start_service, callback=lambda _: self.refresh_state())
         else:
             self.refresh_state()
 
@@ -254,25 +269,34 @@ class VPNPanel(Gtk.Box):
         name = entry.get_text().strip()
         dialog.destroy()
         
-        if response == Gtk.ResponseType.OK and name:
+        if response == Gtk.ResponseType.OK:
+            if not name:
+                self._show_error("Invalid Name", "Please enter a client name.")
+                return
             self.run_async(self.operator.add_client, name, callback=lambda _: self.run_async(self.operator.list_clients, callback=self.update_client_list))
 
     def on_revoke_client(self, widget):
         selection = self.tree_view.get_selection()
         model, treeiter = selection.get_selected()
-        if treeiter:
-            name = model[treeiter][0]
-            
-            dialog = Gtk.MessageDialog(
-                transient_for=self.get_toplevel(),
-                flags=0,
-                message_type=Gtk.MessageType.WARNING,
-                buttons=Gtk.ButtonsType.OK_CANCEL,
-                text=f"Revoke client '{name}'?",
+        if not treeiter:
+            self._show_error("No Selection", "Select a client to revoke.")
+            return
+
+        name = model[treeiter][0]
+        dialog = Gtk.MessageDialog(
+            transient_for=self.get_toplevel(),
+            flags=0,
+            message_type=Gtk.MessageType.WARNING,
+            buttons=Gtk.ButtonsType.OK_CANCEL,
+            text=f"Revoke client '{name}'?",
+        )
+        dialog.format_secondary_text("This action cannot be easily undone. The client certificate will be revoked.")
+        response = dialog.run()
+        dialog.destroy()
+
+        if response == Gtk.ResponseType.OK:
+            self.run_async(
+                self.operator.revoke_client,
+                name,
+                callback=lambda _: self.run_async(self.operator.list_clients, callback=self.update_client_list),
             )
-            dialog.format_secondary_text("This action cannot be easily undone. The client certificate will be revoked.")
-            response = dialog.run()
-            dialog.destroy()
-            
-            if response == Gtk.ResponseType.OK:
-                 self.run_async(self.operator.revoke_client, name, callback=lambda _: self.run_async(self.operator.list_clients, callback=self.update_client_list))

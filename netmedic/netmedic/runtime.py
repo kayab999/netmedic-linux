@@ -17,6 +17,7 @@ _medic_instance = None
 _ipc_server = None
 _ipc_session = None
 _lifecycle_manager = LifecycleManager()
+_shutting_down = False
 
 
 def get_medic_instance():
@@ -31,6 +32,11 @@ def get_ipc_session() -> IPCSession:
 
 
 def handle_signals(signum, frame):
+    global _shutting_down
+    if _shutting_down:
+        return
+    _shutting_down = True
+
     sig_name = signal.Signals(signum).name
     logging.info("Received signal %s (%s). Starting emergency cleanup...", sig_name, signum)
 
@@ -106,38 +112,55 @@ def bootstrap(headless: bool = False) -> bool:
     except Exception as exc:
         print(f"CRITICAL: Failed to setup logging: {exc}", file=sys.stderr)
 
-    if not _lifecycle_manager.acquire_lock():
-        msg = "NetMedic ya está en ejecución. Solo se permite una instancia activa."
-        logging.error(msg)
-        if not headless:
-            try:
-                from netmedic.gui import show_error_dialog
-                show_error_dialog(msg)
-            except Exception:
+    lock_acquired = False
+    try:
+        if not _lifecycle_manager.acquire_lock():
+            msg = "NetMedic ya está en ejecución. Solo se permite una instancia activa."
+            logging.error(msg)
+            if not headless:
+                try:
+                    from netmedic.gui import show_error_dialog
+                    show_error_dialog(msg)
+                except Exception:
+                    print(msg, file=sys.stderr)
+            else:
                 print(msg, file=sys.stderr)
-        else:
-            print(msg, file=sys.stderr)
-        return False
+            return False
 
-    _lifecycle_manager.write_pid()
+        lock_acquired = True
+        _lifecycle_manager.write_pid()
 
-    _medic_instance = NetworkMedic()
-    _ipc_session = IPCSession()
-    _ipc_session.issue_token()
+        _medic_instance = NetworkMedic()
+        _ipc_session = IPCSession()
+        _ipc_session.issue_token()
 
-    dispatcher = create_action_dispatcher(_medic_instance, _ipc_session)
-    _ipc_server = NetMedicIPCServer(dispatcher, _lifecycle_manager)
-    _ipc_server.start()
-    return True
+        dispatcher = create_action_dispatcher(_medic_instance, _ipc_session)
+        _ipc_server = NetMedicIPCServer(dispatcher, _lifecycle_manager)
+        _ipc_server.start()
+        return True
+    except Exception:
+        if lock_acquired:
+            _lifecycle_manager.cleanup()
+        raise
 
 
 def shutdown():
-    global _ipc_server, _ipc_session
+    global _ipc_server, _ipc_session, _shutting_down
+    if _shutting_down:
+        return
+    _shutting_down = True
+
     if _ipc_server is not None:
         _ipc_server.stop()
     if _ipc_session is not None:
         _ipc_session.cleanup()
     _lifecycle_manager.cleanup()
+
+    try:
+        if _medic_instance is not None:
+            _medic_instance.cleanup()
+    except Exception as exc:
+        logging.error("Cleanup failed during shutdown: %s", exc)
 
 
 def parse_args(argv=None):

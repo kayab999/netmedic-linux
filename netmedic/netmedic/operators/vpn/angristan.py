@@ -264,6 +264,32 @@ class AngristanOperator(VPNOperator):
             f"Script reported success but client '{name}' was not marked revoked in PKI index",
         )
 
+    def start_service(self) -> NetResult:
+        """Starts the OpenVPN systemd unit when installed."""
+        if not self.script_path.exists():
+            return NetResult(self.name, False, OperatorStatus.NOT_INSTALLED.value, details="Script not found.")
+        if not self._verify_integrity():
+            return NetResult(self.name, False, OperatorStatus.ERROR.value, details="Script integrity check failed.")
+
+        service = self.get_service_name()
+        res = CommandRunner.run(["systemctl", "start", service], require_root=True, timeout=60)
+        if CommandRunner.is_service_active(service):
+            return NetResult(self.name, True, "VPN service started")
+        return NetResult(self.name, False, "Failed to start VPN service", details=res.stderr)
+
+    def restart_service(self) -> NetResult:
+        """Restarts the OpenVPN systemd unit without touching NetworkManager."""
+        if not self.script_path.exists():
+            return NetResult(self.name, False, OperatorStatus.NOT_INSTALLED.value, details="VPN not installed.")
+        if not self._verify_integrity():
+            return NetResult(self.name, False, OperatorStatus.ERROR.value, details="Script integrity check failed.")
+
+        service = self.get_service_name()
+        res = CommandRunner.run(["systemctl", "restart", service], require_root=True, timeout=60)
+        if CommandRunner.is_service_active(service):
+            return NetResult(self.name, True, "VPN tunnel restarted")
+        return NetResult(self.name, False, "Failed to restart VPN service", details=res.stderr)
+
     def stop(self) -> None:
         """Releases operator resources without stopping the system VPN service."""
         logger.info(

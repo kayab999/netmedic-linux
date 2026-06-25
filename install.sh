@@ -40,8 +40,12 @@ echo -e "${BLUE}[3/5] Installing NetMedic core...${NC}"
 pip install PyGObject
 pip install -e netmedic/
 
-echo -e "${BLUE}Install AI module (optional)? [y/N]${NC}"
-read -r install_ai
+if [ -t 0 ]; then
+    echo -e "${BLUE}Install AI module (optional)? [y/N]${NC}"
+    read -r install_ai
+else
+    install_ai="n"
+fi
 if [[ "$install_ai" =~ ^([yY][eE][sS]|[yY])$ ]]; then
     echo -e "${BLUE}[3b/5] Installing AI pilot dependencies...${NC}"
     if command -v nvidia-smi &>/dev/null; then
@@ -53,8 +57,17 @@ if [[ "$install_ai" =~ ^([yY][eE][sS]|[yY])$ ]]; then
     pip install -e "netmedic[ai]"
 fi
 
-echo -e "${BLUE}[4/5] Installing desktop launcher...${NC}"
-sed "s|@INSTALL_DIR@|${REPO_ROOT}|g" assets/netmedic.desktop.in > /tmp/netmedic.desktop
+echo -e "${BLUE}[4/5] Installing icon and desktop launcher...${NC}"
+ICON_THEME_ROOT="${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor"
+for size in 48 128 256; do
+    mkdir -p "${ICON_THEME_ROOT}/${size}x${size}/apps"
+    cp assets/netmedic.png "${ICON_THEME_ROOT}/${size}x${size}/apps/netmedic.png"
+done
+gtk-update-icon-cache -f -t "${ICON_THEME_ROOT}" 2>/dev/null || true
+
+sed -e "s|@INSTALL_DIR@|${REPO_ROOT}|g" \
+    -e "s|@EXEC@|${REPO_ROOT}/venv/bin/python -m netmedic|g" \
+    assets/netmedic.desktop.in > /tmp/netmedic.desktop
 mkdir -p ~/.local/share/applications
 cp /tmp/netmedic.desktop ~/.local/share/applications/netmedic.desktop
 chmod +x ~/.local/share/applications/netmedic.desktop

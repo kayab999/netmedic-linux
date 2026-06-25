@@ -1,5 +1,5 @@
 import json
-from gi.repository import Gtk
+from gi.repository import Gtk, GLib
 from .ipc_client import PilotClient
 from .sensors import get_network_snapshot
 import logging
@@ -45,8 +45,8 @@ class AIConsoleController:
         self.revealer.set_reveal_child(not revealed)
         if not revealed:
             self.entry.grab_focus()
-            snapshot = get_network_snapshot()
-            self.entry.set_text(f"Estado: {json.dumps(snapshot, separators=(',', ':'))[:60]}...")
+            for child in self.preview_box.get_children():
+                self.preview_box.remove(child)
         return True
 
     def _on_user_command(self, entry):
@@ -65,14 +65,30 @@ class AIConsoleController:
         for child in self.preview_box.get_children():
             self.preview_box.remove(child)
 
+        loading = Gtk.Label(label="Analyzing request…")
+        loading.set_margin_top(8)
+        self.preview_box.pack_start(loading, False, False, 0)
+        self.preview_box.show_all()
+
+    @staticmethod
+    def _escape_markup(value) -> str:
+        return GLib.markup_escape_text(str(value))
+
     def _translate_to_human(self, action, params):
         translations = {
-            "vpn_reconnect": f"Fuerza el reinicio del túnel VPN en la interfaz <b>{params.get('interface', 'actual')}</b>.",
-            "change_dns": f"Redirige la resolución de nombres al servidor DNS <b>{params.get('server', 'especificado')}</b>.",
-            "network_status": "Ejecuta un escaneo profundo de la red.",
-            "wifi_diagnostics": "Analiza el espectro Wi-Fi buscando canales menos congestionados."
+            "vpn_reconnect": (
+                "Restart the OpenVPN tunnel service "
+                f"({self._escape_markup(params.get('interface', 'system'))})."
+            ),
+            "change_dns": (
+                "Redirect DNS resolution to "
+                f"{self._escape_markup(params.get('server', 'the specified server'))}."
+            ),
+            "network_status": "Run a full network diagnostics scan.",
+            "wifi_diagnostics": "Analyze Wi-Fi spectrum for less congested channels.",
+            "donate": "Open the Kayab Software support page in your browser.",
         }
-        return translations.get(action, f"Ejecuta la operación técnica <b>{action}</b>.")
+        return translations.get(action, f"Execute the <b>{self._escape_markup(action)}</b> operation.")
 
     def _handle_pilot_response(self, result):
         if result.get("status") == "error":
@@ -92,7 +108,7 @@ class AIConsoleController:
         box.set_margin_end(20)
 
         header_label = Gtk.Label(xalign=0)
-        header_label.set_markup("<span foreground='#3498db'><b>🤖 Propuesta de Nandi:</b></span>")
+        header_label.set_markup("<span foreground='#3498db'><b>🤖 AI Proposal:</b></span>")
         box.pack_start(header_label, False, False, 0)
 
         explanation_label = Gtk.Label(xalign=0)
@@ -101,16 +117,18 @@ class AIConsoleController:
         box.pack_start(explanation_label, False, False, 0)
 
         technical_label = Gtk.Label(xalign=0)
-        technical_label.set_markup(f"<span size='small' foreground='gray'>Target Tool: <tt>{action}</tt></span>")
+        technical_label.set_markup(
+            f"<span size='small' foreground='gray'>Target Tool: <tt>{self._escape_markup(action)}</tt></span>"
+        )
         box.pack_start(technical_label, False, False, 0)
 
         btn_box = Gtk.Box(spacing=10)
         btn_box.set_margin_top(10)
         
-        execute_btn = Gtk.Button(label="Autorizar y Ejecutar")
+        execute_btn = Gtk.Button(label="Authorize and Run")
         execute_btn.connect("clicked", lambda b: self._confirm_and_execute(action, params))
-        
-        cancel_btn = Gtk.Button(label="Ignorar")
+
+        cancel_btn = Gtk.Button(label="Dismiss")
         cancel_btn.connect("clicked", lambda b: self.revealer.set_reveal_child(False))
 
         btn_box.pack_start(execute_btn, True, True, 0)
@@ -127,10 +145,12 @@ class AIConsoleController:
         box.set_margin(12)
         
         err_label = Gtk.Label(xalign=0)
-        err_label.set_markup(f"<span foreground='#e74c3c'><b>⚠️ Advertencia:</b></span>\n{message}")
+        err_label.set_markup(
+            f"<span foreground='#e74c3c'><b>⚠️ Warning:</b></span>\n{self._escape_markup(message)}"
+        )
         box.pack_start(err_label, False, False, 0)
         
-        close_btn = Gtk.Button(label="Cerrar Panel")
+        close_btn = Gtk.Button(label="Close")
         close_btn.connect("clicked", lambda b: self.revealer.set_reveal_child(False))
         box.pack_start(close_btn, False, False, 0)
         
@@ -140,6 +160,18 @@ class AIConsoleController:
 
     def _confirm_and_execute(self, action, params):
         self.revealer.set_reveal_child(False)
+
+        if action == "donate":
+            import subprocess
+            try:
+                subprocess.Popen(
+                    ["xdg-open", "https://buymeacoffee.com/kayabsoftware"],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+            except OSError as exc:
+                logging.error("Failed to open donation URL: %s", exc)
+            return
 
         def on_result(result):
             logging.info("Resultado final: %s", result)
