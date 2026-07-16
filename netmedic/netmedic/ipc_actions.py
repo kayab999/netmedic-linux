@@ -29,12 +29,23 @@ def _validate_action(action: str) -> Optional[Dict[str, Any]]:
 
 
 def _result_payload(result) -> Dict[str, Any]:
-    return {
+    payload = {
         "status": "ok" if result.success else "error",
         "success": result.success,
         "message": result.message,
         "operation": result.operation,
     }
+    if result.details is not None:
+        payload["details"] = result.details
+    if result.data is not None:
+        if isinstance(result.data, list):
+            payload["data"] = [
+                {"name": c.name, "active": c.active} if hasattr(c, "name") else c
+                for c in result.data
+            ]
+        else:
+            payload["data"] = result.data
+    return payload
 
 
 def create_action_dispatcher(
@@ -92,6 +103,20 @@ def create_action_dispatcher(
 
             if action == "toggle_firewall":
                 return _result_payload(medic.toggle_firewall())
+
+            if action == "vpn_status":
+                return _result_payload(vpn.check_status())
+
+            if action == "vpn_list_clients":
+                return _result_payload(vpn.list_clients())
+
+            if action == "vpn_create_client":
+                name = params.get("name", "")
+                return _result_payload(vpn.add_client(name))
+
+            if action == "vpn_revoke_client":
+                name = params.get("name", "")
+                return _result_payload(vpn.revoke_client(name))
 
             return {"status": "error", "message": f"Unknown action: {action}"}
         except Exception:

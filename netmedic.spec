@@ -14,6 +14,9 @@ hiddenimports = []
 tmp_ret = collect_all('netmedic')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 
+tmp_ret_gi = collect_all('gi')
+datas += tmp_ret_gi[0]; binaries += tmp_ret_gi[1]; hiddenimports += tmp_ret_gi[2]
+
 
 a = Analysis(
     ['netmedic/netmedic/app.py'],

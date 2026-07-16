@@ -9,11 +9,9 @@ sys.path.insert(0, os.path.join(_REPO_ROOT, ".."))
 
 from fastmcp import FastMCP
 from netmedic.ipc_sync_client import SyncIPCClient
-from netmedic.operators.vpn.angristan import AngristanOperator
 
 mcp = FastMCP("NetMedic")
 ipc = SyncIPCClient()
-vpn_op = AngristanOperator()
 
 MUTATING_ENV = "NETMEDIC_MCP_ALLOW_MUTATING"
 
@@ -52,8 +50,10 @@ def get_vpn_status() -> str:
     blocked = _require_instance()
     if blocked:
         return blocked
-    res = vpn_op.check_status()
-    return f"Status: {res.message} | Details: {res.details or 'None'}"
+    res = ipc.request("vpn_status")
+    if res.get("status") == "ok":
+        return f"Status: {res.get('message')} | Details: {res.get('details') or 'None'}"
+    return f"Error: {res.get('message')}"
 
 
 @mcp.tool()
@@ -62,18 +62,18 @@ def list_vpn_clients() -> str:
     blocked = _require_instance()
     if blocked:
         return blocked
-    res = vpn_op.list_clients()
-    if not res.success:
-        return f"Error: {res.message} ({res.details})"
+    res = ipc.request("vpn_list_clients")
+    if res.get("status") != "ok":
+        return f"Error: {res.get('message')} ({res.get('details') or 'None'})"
 
-    clients = res.data
+    clients = res.get("data", [])
     if not clients:
         return "No VPN clients found."
 
     output = ["Current VPN Clients:"]
     for client in clients:
-        status = "Active" if client.active else "Revoked"
-        output.append(f"- {client.name}: {status}")
+        status = "Active" if client.get("active") else "Revoked"
+        output.append(f"- {client.get('name')}: {status}")
     return "\n".join(output)
 
 
@@ -83,8 +83,8 @@ def create_vpn_client(name: str) -> str:
     blocked = _require_mutating("create_vpn_client") or _require_instance()
     if blocked:
         return blocked
-    res = vpn_op.add_client(name)
-    return f"Result: {'OK' if res.success else 'FAIL'} {res.message}"
+    res = ipc.request("vpn_create_client", {"name": name}, confirmed=True)
+    return f"Result: {'OK' if res.get('status') == 'ok' else 'FAIL'} {res.get('message')}"
 
 
 @mcp.tool()
@@ -93,8 +93,8 @@ def revoke_vpn_client(name: str) -> str:
     blocked = _require_mutating("revoke_vpn_client") or _require_instance()
     if blocked:
         return blocked
-    res = vpn_op.revoke_client(name)
-    return f"Result: {'OK' if res.success else 'FAIL'} {res.message}"
+    res = ipc.request("vpn_revoke_client", {"name": name}, confirmed=True)
+    return f"Result: {'OK' if res.get('status') == 'ok' else 'FAIL'} {res.get('message')}"
 
 
 @mcp.tool()

@@ -38,6 +38,21 @@ class ActionRegistry:
         return name in self._tools
 
 
+def _run_tool(action: str, params: dict = None, default_sim: str = "Simulation") -> str:
+    try:
+        from netmedic.ipc_sync_client import SyncIPCClient
+        client = SyncIPCClient()
+        if client.is_available():
+            res = client.request(action, params or {}, confirmed=True)
+            if res.get("status") == "ok":
+                msg = res.get("message", "OK")
+                return f"Success: {msg}"
+            return f"Error: {res.get('message', 'Unknown error')}"
+    except Exception:
+        pass
+    return default_sim
+
+
 registry = ActionRegistry()
 
 
@@ -47,7 +62,7 @@ registry = ActionRegistry()
     parameters={"interface": "string"},
 )
 def tool_vpn_reconnect(interface: str = "actual"):
-    return f"Simulación: Reiniciando VPN en {interface}"
+    return _run_tool("vpn_reconnect", {}, f"Simulación: Reiniciando VPN en {interface}")
 
 
 @registry.register(
@@ -56,7 +71,7 @@ def tool_vpn_reconnect(interface: str = "actual"):
     parameters={},
 )
 def tool_network_status():
-    return "Simulación: Red estable, latencia 20ms."
+    return _run_tool("network_status", {}, "Simulación: Red estable, latencia 20ms.")
 
 
 @registry.register(
@@ -65,7 +80,7 @@ def tool_network_status():
     parameters={},
 )
 def tool_wifi_diagnostics():
-    return "Simulación: Escaneo Wi-Fi completado."
+    return _run_tool("wifi_diagnostics", {}, "Simulación: Escaneo Wi-Fi completado.")
 
 
 @registry.register(
@@ -74,7 +89,7 @@ def tool_wifi_diagnostics():
     parameters={},
 )
 def tool_flush_dns():
-    return "Simulación: Caché DNS limpiada."
+    return _run_tool("flush_dns", {}, "Simulación: Caché DNS limpiada.")
 
 
 @registry.register(
@@ -83,7 +98,7 @@ def tool_flush_dns():
     parameters={},
 )
 def tool_renew_ip():
-    return "Simulación: IP renovada."
+    return _run_tool("renew_ip", {}, "Simulación: IP renovada.")
 
 
 @registry.register(
@@ -92,7 +107,7 @@ def tool_renew_ip():
     parameters={"server": "string"},
 )
 def tool_change_dns(server: str = "1.1.1.1"):
-    return f"Simulación: DNS cambiado a {server}."
+    return _run_tool("change_dns", {"server": server}, f"Simulación: DNS cambiado a {server}.")
 
 
 @registry.register(
@@ -101,7 +116,7 @@ def tool_change_dns(server: str = "1.1.1.1"):
     parameters={},
 )
 def tool_restart_adapter():
-    return "Simulation: default adapter cycled."
+    return _run_tool("restart_adapter", {}, "Simulation: default adapter cycled.")
 
 
 @registry.register(
@@ -110,7 +125,7 @@ def tool_restart_adapter():
     parameters={},
 )
 def tool_reset_tcp_ip_stack():
-    return "Simulation: NetworkManager restarted."
+    return _run_tool("reset_tcp_ip_stack", {}, "Simulation: NetworkManager restarted.")
 
 
 @registry.register(
@@ -119,7 +134,7 @@ def tool_reset_tcp_ip_stack():
     parameters={},
 )
 def tool_toggle_firewall():
-    return "Simulation: firewall toggled."
+    return _run_tool("toggle_firewall", {}, "Simulation: firewall toggled.")
 
 
 @registry.register(
@@ -128,7 +143,7 @@ def tool_toggle_firewall():
     parameters={},
 )
 def tool_donate():
-    return (
+    return _run_tool("donate", {}, (
         "Gracias por considerar apoyar el desarrollo de NetMedic. "
         "Puedes hacerlo en: https://www.buymeacoffee.com/kayabsoftware"
-    )
+    ))

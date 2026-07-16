@@ -12,10 +12,7 @@ if [ -d venv ]; then
     source venv/bin/activate
 fi
 
-pyinstaller --noconfirm --onefile --windowed \
-    --name netmedic \
-    --collect-all netmedic \
-    --exclude-module netmedic_ai \
-    netmedic/netmedic/app.py
+rm -rf build dist netmedic_run
+pyinstaller netmedic.spec --clean --noconfirm
 
 echo "Binary ready: ${REPO_ROOT}/dist/netmedic"

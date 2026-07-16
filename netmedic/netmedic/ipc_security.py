@@ -16,6 +16,8 @@ PRIVILEGED_ACTIONS: FrozenSet[str] = frozenset({
     "restart_adapter",
     "reset_tcp_ip_stack",
     "toggle_firewall",
+    "vpn_create_client",
+    "vpn_revoke_client",
 })
 
 # Read-only / inference actions allowed without confirmation token.
@@ -25,6 +27,8 @@ SAFE_ACTIONS: FrozenSet[str] = frozenset({
     "wifi_diagnostics",
     "get_session_token",
     "donate",
+    "vpn_status",
+    "vpn_list_clients",
 })
 
 

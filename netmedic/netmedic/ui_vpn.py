@@ -56,12 +56,13 @@ class VPNPanel(Gtk.Box):
         self.tree_view = Gtk.TreeView(model=self.client_list_store)
         
         # Col 1: Name
-        renderer_text = Gtk.CellRendererText()
-        col_name = Gtk.TreeViewColumn("Name", renderer_text, text=0)
+        renderer_name = Gtk.CellRendererText()
+        col_name = Gtk.TreeViewColumn("Name", renderer_name, text=0)
         self.tree_view.append_column(col_name)
         
         # Col 2: Status
-        col_status = Gtk.TreeViewColumn("Status", renderer_text, text=1, foreground=2)
+        renderer_status = Gtk.CellRendererText()
+        col_status = Gtk.TreeViewColumn("Status", renderer_status, text=1, foreground=2)
         self.tree_view.append_column(col_status)
         
         scrolled.add(self.tree_view)
@@ -217,7 +218,7 @@ class VPNPanel(Gtk.Box):
         self.client_stack.set_visible_child_name("list")
 
         for client in result.data:
-            color = "green" if client.active else "gray"
+            color = "#4CAF50" if client.active else "#9E9E9E"
             status_text = "Active" if client.active else "Revoked"
             self.client_list_store.append([client.name, status_text, color])
 
