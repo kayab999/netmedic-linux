@@ -98,3 +98,38 @@ def test_vpn_create_and_revoke_client_security(mock_vpn_cls):
     res_revoke_ok = dispatch("vpn_revoke_client", {"name": "test-client", "confirmed": True, "session_token": token})
     assert res_revoke_ok["status"] == "ok"
     mock_vpn.revoke_client.assert_called_once_with("test-client")
+
+
+def test_privileged_confirmed_rejects_truthy_non_boolean(tmp_path, monkeypatch):
+    monkeypatch.setattr("netmedic.config.Config.get_state_dir", lambda: tmp_path)
+    session = IPCSession()
+    token = session.issue_token()
+    dispatch = create_action_dispatcher(MagicMock(), session)
+
+    for bad_confirmed in ("false", 1, [], "yes"):
+        result = dispatch(
+            "flush_dns",
+            {"confirmed": bad_confirmed, "session_token": token},
+        )
+        assert result["status"] == "error"
+        assert result.get("requires_confirmation") is True
+
+
+def test_firewall_status_ipc():
+    medic = MagicMock()
+    medic.get_firewall_status.return_value = "ON"
+    dispatch = create_action_dispatcher(medic, IPCSession())
+    result = dispatch("firewall_status", {})
+
+    medic.get_firewall_status.assert_called_once()
+    assert result["status"] == "ok"
+    assert result["message"] == "ON"
+    assert result["data"] == "ON"
+
+
+def test_get_session_token_before_issue(tmp_path, monkeypatch):
+    monkeypatch.setattr("netmedic.config.Config.get_state_dir", lambda: tmp_path)
+    dispatch = create_action_dispatcher(MagicMock(), IPCSession())
+    result = dispatch("get_session_token", {})
+    assert result["status"] == "error"
+    assert "not yet available" in result["message"].lower()

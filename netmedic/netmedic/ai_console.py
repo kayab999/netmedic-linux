@@ -114,8 +114,10 @@ class AIConsoleController:
         return translations.get(action, f"Execute the <b>{self._escape_markup(action)}</b> operation.")
 
     def _handle_pilot_response(self, result):
+        if getattr(self.main_window, "is_destroyed", False):
+            return
         if result.get("status") == "error":
-            self._show_error_card(result.get("message", "Fallo de inferencia."))
+            self._show_error_card(result.get("message", "Inference failed."))
             return
 
         action = result.get("action")
@@ -163,6 +165,8 @@ class AIConsoleController:
         self.preview_box.show_all()
 
     def _show_error_card(self, message):
+        if getattr(self.main_window, "is_destroyed", False):
+            return
         preview = Gtk.Frame()
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         box.set_margin(12)
@@ -200,6 +204,8 @@ class AIConsoleController:
         self.main_window.set_busy(True, f"AI: {action}...")
 
         def on_result(result):
+            if getattr(self.main_window, "is_destroyed", False):
+                return
             self.main_window.set_busy(False)
             logging.info("AI execution result: %s", result)
             if hasattr(self.main_window, "append_log"):

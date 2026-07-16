@@ -12,8 +12,12 @@ def _bundle_root() -> Path | None:
 
 
 def _source_repo_root() -> Path:
+    """Walk upward from the package until repo markers (assets/, docs/) are found."""
     module_dir = Path(__file__).resolve().parent
-    return module_dir.parents[1]
+    for ancestor in module_dir.parents:
+        if (ancestor / "assets" / "netmedic.png").is_file() or (ancestor / "docs" / "MANUAL.md").is_file():
+            return ancestor
+    return module_dir.parents[2] if len(module_dir.parents) > 2 else module_dir.parent
 
 
 def resolve_app_icon_path() -> Path | None:

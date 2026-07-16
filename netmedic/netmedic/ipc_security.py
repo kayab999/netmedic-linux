@@ -29,6 +29,7 @@ SAFE_ACTIONS: FrozenSet[str] = frozenset({
     "donate",
     "vpn_status",
     "vpn_list_clients",
+    "firewall_status",
 })
 
 
@@ -57,12 +58,12 @@ class IPCSession:
             return None
 
         if action not in PRIVILEGED_ACTIONS:
-            return {"status": "error", "message": f"Acción desconocida: {action}"}
+            return {"status": "error", "message": f"Unknown privileged action: {action}"}
 
-        if not params.get("confirmed"):
+        if params.get("confirmed") is not True:
             return {
                 "status": "error",
-                "message": "Acción privilegiada requiere confirmación explícita (confirmed=true).",
+                "message": "Privileged action requires explicit confirmation (confirmed=true).",
                 "requires_confirmation": True,
             }
 
@@ -76,7 +77,7 @@ class IPCSession:
         if not secrets.compare_digest(supplied, expected):
             return {
                 "status": "error",
-                "message": "Token de sesión IPC inválido o ausente.",
+                "message": "Invalid or missing IPC session token.",
             }
 
         return None

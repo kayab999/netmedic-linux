@@ -27,13 +27,13 @@ def test_registry_manifest_aligned_with_ipc():
 def test_guardrail_blocks_unknown_action():
     result = PilotoGuardrail.execute_tool("rm_rf_everything", {})
     assert result["status"] == "error"
-    assert "no permitida" in result["message"]
+    assert "not permitted" in result["message"].lower()
 
 
-def test_guardrail_executes_registered_tool():
+def test_guardrail_fails_closed_without_daemon():
     result = PilotoGuardrail.execute_tool("network_status", {})
-    assert result["status"] == "success"
-    assert "Red estable" in result["data"]
+    assert result["status"] == "error"
+    assert "not running" in result["message"].lower() or "daemon" in result["message"].lower()
 
 
 def test_interpret_intent_without_llama():

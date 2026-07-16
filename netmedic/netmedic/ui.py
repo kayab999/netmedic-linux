@@ -302,12 +302,19 @@ class MainWindow(Gtk.Window):
 
     def on_destroy(self, widget):
         logging.info("Closing application. Running final cleanup...")
-        self.emergency_shutdown(wait_for_executor=True)
+        self.emergency_shutdown(wait_for_executor=False)
         try:
-            res = self.medic.cleanup()
-            logging.info("Final cleanup: %s", res.message)
-        except Exception as e:
-            logging.error("Error in final cleanup: %s", e)
+            from netmedic.ipc_client import PilotClient
+            PilotClient().shutdown()
+        except Exception as exc:
+            logging.debug("PilotClient shutdown skipped: %s", exc)
+        def _deferred_cleanup():
+            try:
+                res = self.medic.cleanup()
+                logging.info("Final cleanup: %s", res.message)
+            except Exception as e:
+                logging.error("Error in final cleanup: %s", e)
+        threading.Thread(target=_deferred_cleanup, daemon=True).start()
         Gtk.main_quit()
 
     def append_log(self, text):
@@ -395,10 +402,12 @@ class MainWindow(Gtk.Window):
             results = []
             for step_func, step_msg in steps:
                 GLib.idle_add(lambda m=step_msg: self.status_bar.push(repair_ctx, m))
-                res = step_func()
-                GLib.idle_add(lambda: self.status_bar.pop(repair_ctx))
-                results.append(res)
-                self.append_log(res.to_log_entry())
+                try:
+                    res = step_func()
+                    results.append(res)
+                    self.append_log(res.to_log_entry())
+                finally:
+                    GLib.idle_add(lambda: self.status_bar.pop(repair_ctx))
 
             succeeded = sum(1 for res in results if res.success)
             total = len(results)

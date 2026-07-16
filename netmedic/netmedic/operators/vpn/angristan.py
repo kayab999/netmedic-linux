@@ -233,6 +233,9 @@ class AngristanOperator(VPNOperator):
         return NetResult(self.name, False, f"Script reported success but client '{name}' was not found in PKI index")
 
     def revoke_client(self, name: str) -> NetResult:
+        if not self._validate_client_name(name):
+            return NetResult(self.name, False, "Invalid client name (use a-z, 0-9, -, _)")
+
         # Verificación de integridad antes de manipulación
         if not self._verify_integrity():
             return NetResult(self.name, False, "Security abort: Script integrity failure.")

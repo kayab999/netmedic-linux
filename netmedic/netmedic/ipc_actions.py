@@ -60,6 +60,8 @@ def create_action_dispatcher(
         try:
             if action == "get_session_token":
                 token = session.get_token()
+                if not token:
+                    return {"status": "error", "message": "IPC session token not yet available."}
                 return {"status": "ok", "session_token": token}
 
             unknown = _validate_action(action)
@@ -103,6 +105,10 @@ def create_action_dispatcher(
 
             if action == "toggle_firewall":
                 return _result_payload(medic.toggle_firewall())
+
+            if action == "firewall_status":
+                status = medic.get_firewall_status()
+                return {"status": "ok", "message": status, "data": status}
 
             if action == "vpn_status":
                 return _result_payload(vpn.check_status())

@@ -10,31 +10,33 @@ class PilotoGuardrail:
     def execute_tool(action_name: str, params: dict) -> dict:
         if not registry.is_registered(action_name):
             logger.error(
-                "Bloqueo de seguridad: Intento de llamar a herramienta no registrada '%s'.",
+                "Security block: attempt to call unregistered tool '%s'.",
                 action_name,
             )
             return {
                 "status": "error",
-                "message": "Acción no permitida por la Constitución del Piloto.",
+                "message": "Action not permitted by the pilot guardrail.",
             }
 
         tool = registry.get_tool(action_name)
 
         try:
             logger.info(
-                "Piloto ejecutando: %s con parámetros %s",
+                "Pilot executing: %s with parameters %s",
                 action_name,
                 params,
             )
             result = tool["impl"](**params)
+            if isinstance(result, str) and result.startswith("Error:"):
+                return {"status": "error", "message": result[6:].strip()}
             return {"status": "success", "data": result}
         except Exception as exc:
             logger.error(
-                "Fallo durante la ejecución de la herramienta %s: %s",
+                "Tool execution failed for %s: %s",
                 action_name,
                 exc,
             )
             return {
                 "status": "error",
-                "message": "Fallo interno al ejecutar la acción.",
+                "message": "Internal error while executing the action.",
             }

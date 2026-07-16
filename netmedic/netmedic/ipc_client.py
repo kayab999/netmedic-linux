@@ -63,7 +63,11 @@ class PilotClient:
 
     def _worker_loop(self):
         while True:
-            action, params, callback, confirmed = self._queue.get()
+            item = self._queue.get()
+            if item is None:
+                self._queue.task_done()
+                break
+            action, params, callback, confirmed = item
             try:
                 request_params = dict(params)
                 if confirmed:
@@ -76,7 +80,7 @@ class PilotClient:
                 if (
                     confirmed
                     and result.get("status") == "error"
-                    and "Token" in result.get("message", "")
+                    and "token" in result.get("message", "").lower()
                 ):
                     self._refresh_session_token()
                     request_params["session_token"] = self._session_token
@@ -92,6 +96,15 @@ class PilotClient:
                 GLib.idle_add(callback, {"status": "error", "message": str(exc)})
             finally:
                 self._queue.task_done()
+
+    def shutdown(self, timeout: float = 2.0):
+        """Stop the worker thread (best-effort)."""
+        try:
+            self._queue.put(None, timeout=1.0)
+        except queue.Full:
+            pass
+        if self._worker.is_alive():
+            self._worker.join(timeout=timeout)
 
     def ask(self, action, params, callback, *, confirmed: bool = False):
         try:

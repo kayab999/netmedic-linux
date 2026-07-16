@@ -162,9 +162,10 @@ def get_firewall_info() -> str:
     blocked = _require_instance()
     if blocked:
         return blocked
-    from netmedic.network import NetworkMedic
-
-    return f"Firewall Status: {NetworkMedic().get_firewall_status()}"
+    res = ipc.request("firewall_status")
+    if res.get("status") == "ok":
+        return f"Firewall Status: {res.get('message', 'Unknown')}"
+    return f"Error: {res.get('message', 'Unknown IPC error')}"
 
 
 if __name__ == "__main__":

@@ -38,19 +38,21 @@ class ActionRegistry:
         return name in self._tools
 
 
-def _run_tool(action: str, params: dict = None, default_sim: str = "Simulation") -> str:
+def _run_tool(action: str, params: dict | None = None) -> str:
+    """Execute via IPC when the daemon is available; fail closed otherwise."""
     try:
         from netmedic.ipc_sync_client import SyncIPCClient
+
         client = SyncIPCClient()
-        if client.is_available():
-            res = client.request(action, params or {}, confirmed=True)
-            if res.get("status") == "ok":
-                msg = res.get("message", "OK")
-                return f"Success: {msg}"
-            return f"Error: {res.get('message', 'Unknown error')}"
-    except Exception:
-        pass
-    return default_sim
+        if not client.is_available():
+            return "Error: NetMedic daemon is not running. Start the GUI or run: netmedic --headless"
+        res = client.request(action, params or {}, confirmed=True)
+        if res.get("status") == "ok":
+            msg = res.get("message", "OK")
+            return f"Success: {msg}"
+        return f"Error: {res.get('message', 'Unknown error')}"
+    except Exception as exc:
+        return f"Error: {exc}"
 
 
 registry = ActionRegistry()
@@ -58,56 +60,56 @@ registry = ActionRegistry()
 
 @registry.register(
     name="vpn_reconnect",
-    description="Fuerza la reconexión de una interfaz VPN activa si se detecta latencia crítica.",
+    description="Force reconnection of an active VPN interface when critical latency is detected.",
     parameters={"interface": "string"},
 )
-def tool_vpn_reconnect(interface: str = "actual"):
-    return _run_tool("vpn_reconnect", {}, f"Simulación: Reiniciando VPN en {interface}")
+def tool_vpn_reconnect(interface: str = "default"):
+    return _run_tool("vpn_reconnect", {"interface": interface})
 
 
 @registry.register(
     name="network_status",
-    description="Obtiene el estado actual del stack de red, latencia y DNS.",
+    description="Get current network stack status, latency, and DNS health.",
     parameters={},
 )
 def tool_network_status():
-    return _run_tool("network_status", {}, "Simulación: Red estable, latencia 20ms.")
+    return _run_tool("network_status")
 
 
 @registry.register(
     name="wifi_diagnostics",
-    description="Analiza el espectro Wi-Fi buscando canales menos congestionados.",
+    description="Analyze the Wi-Fi spectrum for less congested channels.",
     parameters={},
 )
 def tool_wifi_diagnostics():
-    return _run_tool("wifi_diagnostics", {}, "Simulación: Escaneo Wi-Fi completado.")
+    return _run_tool("wifi_diagnostics")
 
 
 @registry.register(
     name="flush_dns",
-    description="Limpia la caché DNS del sistema.",
+    description="Clear the system DNS resolver cache.",
     parameters={},
 )
 def tool_flush_dns():
-    return _run_tool("flush_dns", {}, "Simulación: Caché DNS limpiada.")
+    return _run_tool("flush_dns")
 
 
 @registry.register(
     name="renew_ip",
-    description="Renueva la dirección IP vía DHCP en la interfaz activa.",
+    description="Renew the IP address via DHCP on the active interface.",
     parameters={},
 )
 def tool_renew_ip():
-    return _run_tool("renew_ip", {}, "Simulación: IP renovada.")
+    return _run_tool("renew_ip")
 
 
 @registry.register(
     name="change_dns",
-    description="Redirige la resolución de nombres a un servidor DNS específico.",
+    description="Redirect name resolution to a specific DNS server.",
     parameters={"server": "string"},
 )
 def tool_change_dns(server: str = "1.1.1.1"):
-    return _run_tool("change_dns", {"server": server}, f"Simulación: DNS cambiado a {server}.")
+    return _run_tool("change_dns", {"server": server})
 
 
 @registry.register(
@@ -116,7 +118,7 @@ def tool_change_dns(server: str = "1.1.1.1"):
     parameters={},
 )
 def tool_restart_adapter():
-    return _run_tool("restart_adapter", {}, "Simulation: default adapter cycled.")
+    return _run_tool("restart_adapter")
 
 
 @registry.register(
@@ -125,7 +127,7 @@ def tool_restart_adapter():
     parameters={},
 )
 def tool_reset_tcp_ip_stack():
-    return _run_tool("reset_tcp_ip_stack", {}, "Simulation: NetworkManager restarted.")
+    return _run_tool("reset_tcp_ip_stack")
 
 
 @registry.register(
@@ -134,16 +136,13 @@ def tool_reset_tcp_ip_stack():
     parameters={},
 )
 def tool_toggle_firewall():
-    return _run_tool("toggle_firewall", {}, "Simulation: firewall toggled.")
+    return _run_tool("toggle_firewall")
 
 
 @registry.register(
     name="donate",
-    description="Muestra información sobre cómo apoyar el desarrollo de NetMedic.",
+    description="Show information about supporting NetMedic development.",
     parameters={},
 )
 def tool_donate():
-    return _run_tool("donate", {}, (
-        "Gracias por considerar apoyar el desarrollo de NetMedic. "
-        "Puedes hacerlo en: https://www.buymeacoffee.com/kayabsoftware"
-    ))
+    return _run_tool("donate")
