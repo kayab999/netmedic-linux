@@ -60,7 +60,7 @@ def handle_signals(signum, frame):
     sys.exit(0)
 
 
-def setup_logging():
+def setup_logging(headless: bool = False):
     log_file = Config.get_log_file()
 
     if not log_file.exists():
@@ -84,7 +84,7 @@ def setup_logging():
 
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setFormatter(formatter)
-    console_handler.setLevel(logging.DEBUG)
+    console_handler.setLevel(logging.INFO if headless else logging.DEBUG)
 
     root_logger = logging.getLogger()
     root_logger.setLevel(logging.DEBUG)
@@ -111,14 +111,14 @@ def bootstrap(headless: bool = False) -> bool:
     global _medic_instance, _ipc_server, _ipc_session
 
     try:
-        setup_logging()
+        setup_logging(headless=headless)
     except Exception as exc:
         print(f"CRITICAL: Failed to setup logging: {exc}", file=sys.stderr)
 
     lock_acquired = False
     try:
         if not _lifecycle_manager.acquire_lock():
-            msg = "NetMedic ya está en ejecución. Solo se permite una instancia activa."
+            msg = "NetMedic is already running. Only one active instance is allowed."
             logging.error(msg)
             if not headless:
                 try:
@@ -177,6 +177,7 @@ def parse_args(argv=None):
 def run(headless: bool = False):
     signal.signal(signal.SIGINT, handle_signals)
     signal.signal(signal.SIGTERM, handle_signals)
+    signal.signal(signal.SIGHUP, handle_signals)
 
     if not bootstrap(headless=headless):
         sys.exit(1)

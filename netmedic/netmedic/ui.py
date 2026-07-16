@@ -6,6 +6,8 @@ gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, GLib
 from concurrent.futures import ThreadPoolExecutor
 
+MAX_LOG_LINES = 500
+
 from netmedic.network import NetworkMedic
 from netmedic.operators.wifi import WifiOperator
 from netmedic.models import NetResult, TaskResult
@@ -27,6 +29,8 @@ class MainWindow(Gtk.Window):
         self.wifi_op = WifiOperator()
         self.executor = ThreadPoolExecutor(max_workers=3)
         self._log_lock = threading.Lock()
+        self._busy_count = 0
+        self._busy_lock = threading.Lock()
         
         self.set_default_size(500, 650) # Un poco más alto para acomodar el panel VPN
         self.set_border_width(10)
@@ -82,17 +86,17 @@ class MainWindow(Gtk.Window):
         basic_box.set_border_width(20)
         basic_box.get_style_context().add_class("surface-card")
         
-        repair_btn = Gtk.Button()
-        repair_btn.set_label("SMART REPAIR (Safe)")
-        repair_btn.get_style_context().add_class("primary-action")
+        self.repair_btn = Gtk.Button()
+        self.repair_btn.set_label("SMART REPAIR (Safe)")
+        self.repair_btn.get_style_context().add_class("primary-action")
         
         # A11Y: Smart Repair
-        a11y_repair = repair_btn.get_accessible()
+        a11y_repair = self.repair_btn.get_accessible()
         a11y_repair.set_name("Run Smart Repair")
         a11y_repair.set_description("Executes non-destructive network diagnostics, DNS flush and IP renewal automatically")
         
-        repair_btn.connect("clicked", self.on_smart_repair)
-        basic_box.pack_start(repair_btn, False, False, 0)
+        self.repair_btn.connect("clicked", self.on_smart_repair)
+        basic_box.pack_start(self.repair_btn, False, False, 0)
         
         basic_info = Gtk.Label(label="Runs non-destructive diagnostics, DNS flush and IP renewal.")
         basic_info.set_line_wrap(True)
@@ -152,12 +156,13 @@ class MainWindow(Gtk.Window):
         # Pasamos el executor y métodos de feedback de la ventana principal
         self.vpn_panel = VPNPanel(
             executor=self.executor,
-            log_callback=self.append_log, # Usamos el método interno que ya es thread-safe
+            log_callback=self.append_log,
             set_busy_callback=self.set_busy
         )
         adv_box.pack_start(self.vpn_panel, True, True, 0)
             
         notebook.append_page(adv_box, Gtk.Label(label="Infrastructure"))
+        notebook.connect("switch-page", self._on_tab_switch)
 
         # 3. Log Area
         scrolled = Gtk.ScrolledWindow()
@@ -187,6 +192,12 @@ class MainWindow(Gtk.Window):
         self.ai_console.mount(self._root_overlay)
         register_teardown(self.emergency_shutdown)
 
+    def _on_tab_switch(self, notebook, page, page_num):
+        """Defer VPN refresh until Infrastructure tab is first shown."""
+        if page_num == 1 and hasattr(self, 'vpn_panel') and not self.vpn_panel._state_loaded:
+            self.vpn_panel._state_loaded = True
+            self.vpn_panel.refresh_state()
+
     def create_btn(self, label, handler, destructive=False, accessible_name=None, accessible_description=None):
         btn = Gtk.Button(label=label)
         if destructive:
@@ -204,10 +215,19 @@ class MainWindow(Gtk.Window):
         return btn
 
     def set_busy(self, busy, msg="Processing..."):
-        GLib.idle_add(lambda: self._update_busy_ui(busy, msg))
+        """Reference-counted busy state. Multiple subsystems can overlap."""
+        with self._busy_lock:
+            if busy:
+                self._busy_count += 1
+                if self._busy_count == 1:
+                    GLib.idle_add(lambda: self._update_busy_ui(True, msg))
+            else:
+                self._busy_count = max(0, self._busy_count - 1)
+                if self._busy_count == 0:
+                    GLib.idle_add(lambda: self._update_busy_ui(False, msg))
 
     def _update_busy_ui(self, busy, msg):
-        """Thread-safe UI update for busy state"""
+        """Thread-safe UI update for busy state."""
         if getattr(self, "is_destroyed", False):
             return False
         if self._status_message_id:
@@ -223,6 +243,7 @@ class MainWindow(Gtk.Window):
             getattr(self, "btn_stack", None),
             getattr(self, "btn_adapter", None),
             getattr(self, "btn_firewall", None),
+            getattr(self, "repair_btn", None),
         )
         if busy:
             self.spinner.start()
@@ -296,6 +317,12 @@ class MainWindow(Gtk.Window):
             with self._log_lock:
                 buffer = self.log_view.get_buffer()
                 buffer.insert(buffer.get_end_iter(), text + "\n")
+                # Cap log to MAX_LOG_LINES to prevent memory growth
+                line_count = buffer.get_line_count()
+                if line_count > MAX_LOG_LINES:
+                    start = buffer.get_start_iter()
+                    excess_end = buffer.get_iter_at_line(line_count - MAX_LOG_LINES)
+                    buffer.delete(start, excess_end)
                 self.log_view.scroll_to_iter(buffer.get_end_iter(), 0, False, 0, 0)
             return False
         GLib.idle_add(_append)
@@ -312,32 +339,34 @@ class MainWindow(Gtk.Window):
         future.add_done_callback(lambda f: self.on_task_done(f))
 
     def on_task_done(self, future):
-        GLib.idle_add(lambda: self.set_busy(False))
+        self.set_busy(False)
         try:
             res = future.result()
             if res.success:
                 net_res = res.data
                 self.append_log(net_res.to_log_entry())
                 
-                # Feedback específico para elevación cancelada
-                if not net_res.success and "cancel" in net_res.message.lower():
-                    self.append_log("⚠️ Operación cancelada por el usuario (Falta de privilegios).")
-                    GLib.idle_add(lambda: self._show_error_dialog(
-                        "Autenticación Requerida", 
-                        "La operación necesita privilegios de administrador. "
-                        "Por favor, introduzca su contraseña cuando se le solicite."
-                    ))
+                # Unified auth cancellation detection (message + details)
+                if not net_res.success:
+                    text = (net_res.message + " " + (net_res.details or "")).lower()
+                    if any(w in text for w in ("cancel", "dismissed")):
+                        self.append_log("⚠️ Operation cancelled by the user (missing privileges).")
+                        GLib.idle_add(lambda: self._show_error_dialog(
+                            "Authentication Required",
+                            "This operation requires administrator privileges. "
+                            "Please enter your password when prompted."
+                        ))
             else:
-                self.append_log(f"❌ Error del Sistema: {res.error}")
-                GLib.idle_add(lambda: self._show_error_dialog("Error Inesperado", res.error))
+                self.append_log(f"❌ System Error: {res.error}")
+                GLib.idle_add(lambda: self._show_error_dialog("Unexpected Error", res.error))
         except concurrent.futures.CancelledError:
-            self.append_log("⚠️ Tarea cancelada.")
+            self.append_log("⚠️ Task cancelled.")
         except Exception as e:
             self.append_log(f"❌ Fatal: {e}")
-            logging.error(f"Error in on_task_done: {e}", exc_info=True)
+            logging.error("Error in on_task_done: %s", e, exc_info=True)
 
     def _show_error_dialog(self, title, message):
-        """Muestra un diálogo de error amigable."""
+        """Shows a user-friendly error dialog."""
         if getattr(self, "is_destroyed", False): return
         dialog = Gtk.MessageDialog(
             transient_for=self,
@@ -356,6 +385,7 @@ class MainWindow(Gtk.Window):
         # No confirmation needed for safe repair
         def sequence():
             self.append_log("--- Starting Smart Repair ---")
+            repair_ctx = self.status_bar.get_context_id("repair")
             steps = [
                 (self.medic.run_diagnostics, "Diagnosing..."),
                 (self.medic.flush_dns, "Flushing DNS..."),
@@ -364,14 +394,19 @@ class MainWindow(Gtk.Window):
             
             results = []
             for step_func, step_msg in steps:
-                GLib.idle_add(lambda m=step_msg: self.status_bar.push(self.status_context, m))
+                GLib.idle_add(lambda m=step_msg: self.status_bar.push(repair_ctx, m))
                 res = step_func()
+                GLib.idle_add(lambda: self.status_bar.pop(repair_ctx))
                 results.append(res)
                 self.append_log(res.to_log_entry())
 
             succeeded = sum(1 for res in results if res.success)
-            overall = succeeded > 0
-            summary = f"Smart Repair finished: {succeeded}/{len(results)} steps succeeded"
+            total = len(results)
+            overall = succeeded == total
+            if overall:
+                summary = f"Smart Repair finished: all {total} steps succeeded"
+            else:
+                summary = f"Smart Repair: {succeeded}/{total} steps succeeded — review log for failures"
             return NetResult("Smart Repair", overall, summary)
             
         self.run_async_task(sequence, "Repairing Network...")

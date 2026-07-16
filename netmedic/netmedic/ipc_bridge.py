@@ -64,6 +64,8 @@ class NetMedicIPCServer:
             if data:
                 response = self._handle_payload(data)
                 conn.sendall(encode_message(json.loads(response)))
+            else:
+                conn.sendall(encode_message({"status": "error", "message": "Empty request."}))
 
     def _handle_payload(self, data: bytes) -> str:
         try:

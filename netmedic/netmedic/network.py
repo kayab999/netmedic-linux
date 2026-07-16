@@ -180,7 +180,7 @@ class NetworkMedic:
         """
         with self._state_lock:
             if not self._created_ifaces:
-                return NetResult("Cleanup", True, "Nada que limpiar")
+                return NetResult("Cleanup", True, "Nothing to clean")
             to_clean = list(self._created_ifaces)
             self._created_ifaces.clear()
 
@@ -196,7 +196,7 @@ class NetworkMedic:
         self._save_state()
 
         return NetResult("Cleanup", len(failed) == 0, 
-                         "Limpieza completada" if not failed else f"Falló en: {failed}")
+                         "Cleanup completed" if not failed else f"Failed on: {failed}")
 
     def run_diagnostics(self) -> NetResult:
         """
@@ -236,13 +236,13 @@ class NetworkMedic:
         Limpia la caché DNS de systemd-resolved.
         """
         if not self._check_requirement("resolvectl"):
-            return NetResult("Flush DNS", False, "Falta 'resolvectl' (systemd-resolved no detectado)")
+            return NetResult("Flush DNS", False, "Missing 'resolvectl' (systemd-resolved not detected)")
 
         if CommandRunner.is_service_active("systemd-resolved"):
             res = CommandRunner.run(["resolvectl", "flush-caches"], require_root=True)
-            return NetResult("Flush DNS", res.success, "Caché systemd-resolved limpia" if res.success else res.stderr)
+            return NetResult("Flush DNS", res.success, "systemd-resolved cache flushed" if res.success else res.stderr)
         
-        return NetResult("Flush DNS", False, "El servicio systemd-resolved no está activo")
+        return NetResult("Flush DNS", False, "systemd-resolved service is not active")
 
     def change_dns(self, server: str = "1.1.1.1") -> NetResult:
         """
@@ -283,14 +283,15 @@ class NetworkMedic:
     def renew_ip(self) -> NetResult:
         """
         Solicita una nueva IP al servidor DHCP.
+        Requests a new IP from the DHCP server.
         
-        Riesgo: Medio (Corte temporal de conexión).
-        Tiempo: 5s - 20s.
-        Reversibilidad: Sí (Se puede reasignar estáticamente o reintentar).
+        Risk: Medium (Temporary connection cut).
+        Time: 5s - 20s.
+        Reversibility: Yes (Can be statically reassigned or retried).
         """
         iface = self.get_default_interface()
         if not iface:
-            return NetResult("Renew IP", False, "No se detectó interfaz")
+            return NetResult("Renew IP", False, "No interface detected")
         
         # Modern NetworkManager fallback
         nm_error = ""
@@ -318,7 +319,7 @@ class NetworkMedic:
                 details=res.stderr,
             )
 
-        return NetResult("Renew IP", True, f"IP renovada en {iface}")
+        return NetResult("Renew IP", True, f"IP renewed on {iface}")
 
     def reset_tcp_ip_stack(self) -> NetResult:
         """
@@ -329,7 +330,7 @@ class NetworkMedic:
         Reversibilidad: Sí (El servicio vuelve a subir automáticamente).
         """
         res = CommandRunner.run(["systemctl", "restart", "NetworkManager"], require_root=True)
-        return NetResult("Reset Stack", res.success, "Stack reiniciado" if res.success else res.stderr)
+        return NetResult("Reset Stack", res.success, "Stack reset successful" if res.success else res.stderr)
 
     def restart_adapter(self) -> NetResult:
         """
@@ -341,7 +342,7 @@ class NetworkMedic:
         """
         iface = self.get_default_interface()
         if not iface:
-            return NetResult("Restart Adapter", False, "No se detectó interfaz")
+            return NetResult("Restart Adapter", False, "No interface detected")
         
         down = CommandRunner.run(["ip", "link", "set", iface, "down"], require_root=True)
         if not down.success:
@@ -386,9 +387,9 @@ class NetworkMedic:
         expected = "ON" if action == "enable" else "OFF"
         
         if final_status == expected:
-            return NetResult("Firewall", True, f"Firewall ahora: {final_status}")
+            return NetResult("Firewall", True, f"Firewall is now: {final_status}")
         else:
-            return NetResult("Firewall", False, f"Error al cambiar firewall. Estado actual: {final_status}")
+            return NetResult("Firewall", False, f"Failed to toggle firewall. Current state: {final_status}")
 
     def create_virtual_adapter(self) -> NetResult:
         """
@@ -404,5 +405,5 @@ class NetworkMedic:
             with self._state_lock:
                 self._created_ifaces.add(iface)
                 self._save_state()
-            return NetResult("Virtual Adapter", True, f"Creado: {iface}")
+            return NetResult("Virtual Adapter", True, f"Created: {iface}")
         return NetResult("Virtual Adapter", False, res.stderr)

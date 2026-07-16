@@ -15,6 +15,7 @@ class VPNPanel(Gtk.Box):
         self.log_cb = log_callback
         self.set_busy_cb = set_busy_callback
         self.operator = AngristanOperator()
+        self._state_loaded = False
         
         # --- UI Components ---
         
@@ -104,8 +105,8 @@ class VPNPanel(Gtk.Box):
         
         self.add(self.clients_frame)
         
-        # Initial State
-        self.refresh_state()
+        # Initial state is deferred until the Infrastructure tab is first shown
+        # (see MainWindow._on_tab_switch). This avoids a global busy flash on launch.
 
     def log(self, text):
         """Helper para loguear opcionalmente."""
@@ -115,13 +116,12 @@ class VPNPanel(Gtk.Box):
             logging.info(f"[VPNPanel] {text}")
 
     def set_busy(self, busy, msg="Processing..."):
-        """Helper para mostrar estado ocupado opcionalmente."""
+        """Route busy state through the main window's reference-counted system."""
         if self.set_busy_cb:
             self.set_busy_cb(busy, msg)
 
     def run_async(self, func, *args, callback=None):
         self.set_busy(True, "Processing VPN task...")
-        self.set_sensitive(False) # Lock UI
         
         def task_wrapper():
             try:
@@ -132,8 +132,7 @@ class VPNPanel(Gtk.Box):
         future = self.executor.submit(task_wrapper)
         
         def on_done(f):
-            GLib.idle_add(lambda: self.set_busy(False))
-            GLib.idle_add(lambda: self.set_sensitive(True)) # Unlock UI
+            self.set_busy(False)
             try:
                 res = f.result()
                 if res.success:
@@ -141,12 +140,14 @@ class VPNPanel(Gtk.Box):
                     if callback: GLib.idle_add(callback, net_res)
                     GLib.idle_add(lambda: self.log(net_res.to_log_entry()))
                     
-                    # Feedback para elevación cancelada
-                    if not net_res.success and "cancelada" in net_res.message.lower():
-                        GLib.idle_add(lambda: self._show_error(
-                            "Autenticación Requerida", 
-                            "La operación VPN requiere privilegios de administrador."
-                        ))
+                    # Unified auth cancellation detection (message + details)
+                    if not net_res.success:
+                        text = (net_res.message + " " + (net_res.details or "")).lower()
+                        if any(w in text for w in ("cancel", "dismissed")):
+                            GLib.idle_add(lambda: self._show_error(
+                                "Authentication Required",
+                                "This VPN operation requires administrator privileges."
+                            ))
                 else:
                     GLib.idle_add(lambda: self.log(f"❌ VPN Error: {res.error}"))
             except Exception as exc:
@@ -156,7 +157,7 @@ class VPNPanel(Gtk.Box):
         future.add_done_callback(on_done)
 
     def _show_error(self, title, message):
-        """Muestra un diálogo de error si el panel está en una ventana."""
+        """Shows an error dialog if the panel is inside a window."""
         toplevel = self.get_toplevel()
         if not toplevel or not isinstance(toplevel, Gtk.Window): return
         
@@ -188,6 +189,7 @@ class VPNPanel(Gtk.Box):
                 self.action_btn.set_label("Re-Check Status")
                 self.action_btn.get_style_context().remove_class("primary-action")
                 self.action_btn.get_style_context().add_class("secondary-action")
+                self.action_btn.set_sensitive(True)
                 self.clients_frame.set_sensitive(True)
                 # Auto-load clients
                 self.run_async(self.operator.list_clients, callback=self.update_client_list)
@@ -229,7 +231,7 @@ class VPNPanel(Gtk.Box):
                 buttons=Gtk.ButtonsType.OK_CANCEL,
                 text="Install OpenVPN Server?",
             )
-            dialog.format_secondary_text("This will download and configure OpenVPN using Angristan's script.\nIt requiere Root y verificación de integridad SHA256.")
+            dialog.format_secondary_text("This will download and configure OpenVPN using Angristan's script.\nIt requires root privileges and SHA256 integrity verification.")
             response = dialog.run()
             dialog.destroy()
             

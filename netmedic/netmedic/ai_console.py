@@ -196,13 +196,17 @@ class AIConsoleController:
                 logging.error("Failed to open donation URL: %s", exc)
             return
 
+        # Engage the main window's busy system so concurrent GUI actions are blocked
+        self.main_window.set_busy(True, f"AI: {action}...")
+
         def on_result(result):
-            logging.info("Resultado final: %s", result)
+            self.main_window.set_busy(False)
+            logging.info("AI execution result: %s", result)
             if hasattr(self.main_window, "append_log"):
                 if result.get("status") == "error":
                     self.main_window.append_log(f"❌ AI [{action}]: {result.get('message', 'Error')}")
                 else:
-                    msg = result.get("message") or result.get("data") or "Completado"
+                    msg = result.get("message") or result.get("data") or "Completed"
                     self.main_window.append_log(f"🤖 AI [{action}]: {msg}")
 
         self.client.ask(action, params, on_result, confirmed=True)
