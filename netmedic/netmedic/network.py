@@ -1,7 +1,7 @@
 import logging
 import os
 import re
-import random
+import uuid
 import threading
 import shutil
 import json
@@ -250,11 +250,13 @@ class NetworkMedic:
         res = CommandRunner.run(["dhclient", iface], require_root=True, timeout=15)
         
         if not res.success:
-            logger.error(f"Fallo crítico en DHCP para {iface}. Intentando rollback (NetworkManager restart)...")
-            # Rollback: Si dhclient falló, el sistema podría estar sin IP. 
-            # Reiniciar NM suele ser la forma más segura de recuperar el estado transaccional.
-            self.reset_tcp_ip_stack()
-            return NetResult("Renew IP", False, f"Error en DHCP en {iface}. Se activó recuperación automática.")
+            logger.error("DHCP renewal failed for %s: %s", iface, res.stderr)
+            return NetResult(
+                "Renew IP",
+                False,
+                f"DHCP renewal failed on {iface}. Try Infrastructure tab for a full stack reset.",
+                details=res.stderr,
+            )
 
         return NetResult("Renew IP", True, f"IP renovada en {iface}")
 
@@ -281,10 +283,16 @@ class NetworkMedic:
         if not iface:
             return NetResult("Restart Adapter", False, "No se detectó interfaz")
         
-        CommandRunner.run(["ip", "link", "set", iface, "down"], require_root=True)
+        down = CommandRunner.run(["ip", "link", "set", iface, "down"], require_root=True)
+        if not down.success:
+            return NetResult("Restart Adapter", False, f"Failed to bring {iface} down", details=down.stderr)
         res = CommandRunner.run(["ip", "link", "set", iface, "up"], require_root=True)
-        
-        return NetResult("Restart Adapter", res.success, f"Adaptador {iface} reiniciado" if res.success else "Error al levantar")
+        return NetResult(
+            "Restart Adapter",
+            res.success,
+            f"Adapter {iface} restarted" if res.success else "Failed to bring interface up",
+            details=res.stderr if not res.success else None,
+        )
 
     def get_firewall_status(self) -> str:
         """
@@ -306,6 +314,8 @@ class NetworkMedic:
         Reversibilidad: Sí (Toggle inverso).
         """
         current = self.get_firewall_status()
+        if current not in ("ON", "OFF"):
+            return NetResult("Firewall", False, f"Cannot determine UFW status (got: {current})")
         action = "enable" if current == "OFF" else "disable"
         res = CommandRunner.run(["ufw", action], require_root=True)
         if not res.success:
@@ -328,7 +338,7 @@ class NetworkMedic:
         Tiempo: < 1s.
         Reversibilidad: Sí (Usar método cleanup()).
         """
-        iface = f"medic{random.randint(10,99)}"
+        iface = f"medic{uuid.uuid4().hex[:6]}"
         res = CommandRunner.run(["ip", "link", "add", iface, "type", "dummy"], require_root=True)
         if res.success:
             with self._state_lock:

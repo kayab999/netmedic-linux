@@ -68,8 +68,9 @@ class NetMedicIPCServer:
             return json.dumps(result)
         except json.JSONDecodeError:
             return json.dumps({"status": "error", "message": "Payload JSON inválido."})
-        except Exception as exc:
-            return json.dumps({"status": "error", "message": f"Fallo interno del IPC: {exc}"})
+        except Exception:
+            logger.exception("IPC payload handling failed")
+            return json.dumps({"status": "error", "message": "Internal IPC error."})
 
     def stop(self):
         """Cierre seguro del socket durante el cleanup de NetMedic."""

@@ -2,6 +2,20 @@
 
 All notable changes to NetMedic Linux are documented here.
 
+## [Unreleased]
+
+### Fixed
+- Menu launcher crash (`ImportError: __version__`) via strict editable install and relative imports
+- IPC client now uses per-request sockets matching server lifecycle
+- `renew_ip` no longer auto-restarts NetworkManager; firewall aborts on unknown UFW state
+- Wi-Fi scan JSON parsing with channel-only fallback; safe DNS line parsing in sensors
+- PyInstaller/AppImage bundle paths for icon and manual; desktop entry uses `netmedic` console script
+- MCP mutating tools gated behind `NETMEDIC_MCP_ALLOW_MUTATING=1`
+
+### Added
+- GitHub Actions CI workflow, `pytest.ini`, `tests/conftest.py`, launch import tests
+- AI palette focus styling; keyboard focus rings in theme
+
 ## [1.1.0] — 2026-06-18
 
 ### Added

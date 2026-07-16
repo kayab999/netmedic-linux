@@ -38,7 +38,7 @@ pip install --upgrade pip wheel setuptools pytest ruff
 
 echo -e "${BLUE}[3/5] Installing NetMedic core...${NC}"
 pip install PyGObject
-pip install -e netmedic/
+pip install -e netmedic/ --config-settings editable_mode=strict
 
 if [ -t 0 ]; then
     echo -e "${BLUE}Install AI module (optional)? [y/N]${NC}"
@@ -65,8 +65,7 @@ for size in 48 128 256; do
 done
 gtk-update-icon-cache -f -t "${ICON_THEME_ROOT}" 2>/dev/null || true
 
-sed -e "s|@INSTALL_DIR@|${REPO_ROOT}|g" \
-    -e "s|@EXEC@|${REPO_ROOT}/venv/bin/python -m netmedic|g" \
+sed -e "s|@EXEC@|${REPO_ROOT}/venv/bin/netmedic|g" \
     assets/netmedic.desktop.in > /tmp/netmedic.desktop
 mkdir -p ~/.local/share/applications
 cp /tmp/netmedic.desktop ~/.local/share/applications/netmedic.desktop
@@ -74,8 +73,8 @@ chmod +x ~/.local/share/applications/netmedic.desktop
 update-desktop-database ~/.local/share/applications 2>/dev/null || true
 
 echo -e "${BLUE}[5/5] Running test suite...${NC}"
-PYTHONPATH="netmedic:${REPO_ROOT}" python -m pytest tests/ -q
+python -m pytest tests/ -q
 
 echo -e "${GREEN}=== Installation complete ===${NC}"
-echo -e "Run: ${BLUE}${REPO_ROOT}/venv/bin/python -m netmedic${NC}"
+echo -e "Run: ${BLUE}${REPO_ROOT}/venv/bin/netmedic${NC}"
 echo -e "Or search for 'NetMedic' in your application menu."

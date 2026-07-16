@@ -63,8 +63,13 @@ class IPCSession:
             }
 
         expected = self.get_token()
-        supplied = params.get("session_token", "")
-        if not expected or not secrets.compare_digest(str(supplied), expected):
+        supplied = str(params.get("session_token", ""))
+        if not expected or len(supplied) != len(expected):
+            return {
+                "status": "error",
+                "message": "Invalid or missing IPC session token.",
+            }
+        if not secrets.compare_digest(supplied, expected):
             return {
                 "status": "error",
                 "message": "Token de sesión IPC inválido o ausente.",

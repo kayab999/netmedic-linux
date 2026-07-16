@@ -22,8 +22,6 @@ def recv_message(sock, max_size: int = _MAX_MESSAGE_SIZE) -> bytes:
         if b"\n" in buf:
             line, _remainder = buf.split(b"\n", 1)
             return line
-    if buf:
-        return bytes(buf)
     raise ValueError("IPC response incomplete")
 
 

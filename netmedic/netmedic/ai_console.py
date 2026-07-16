@@ -1,4 +1,3 @@
-import json
 from gi.repository import Gtk, GLib
 from .ipc_client import PilotClient
 from .sensors import get_network_snapshot
@@ -21,11 +20,12 @@ class AIConsoleController:
         self.overlay.add_overlay(self.revealer)
 
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        box.get_style_context().add_class("ai-palette-box")
         box.set_margin_top(20)
         box.set_margin_start(40)
         box.set_margin_end(40)
 
-        self.entry = Gtk.Entry(placeholder_text="Ej: 'Cambia DNS a Cloudflare' o 'Reinicia VPN'")
+        self.entry = Gtk.Entry(placeholder_text="e.g. 'Change DNS to Cloudflare' or 'Restart VPN' (Ctrl+Space)")
         self.entry.connect("activate", self._on_user_command)
         box.pack_start(self.entry, False, False, 0)
 
@@ -39,8 +39,25 @@ class AIConsoleController:
         self.main_window.add_accel_group(accel_group)
         key, mod = Gtk.accelerator_parse("<Control>space")
         accel_group.connect(key, mod, Gtk.AccelFlags.VISIBLE, self._toggle_palette)
+        escape_key, escape_mod = Gtk.accelerator_parse("Escape")
+        accel_group.connect(escape_key, escape_mod, Gtk.AccelFlags.VISIBLE, self._dismiss_palette)
+
+    def set_sensitive(self, sensitive: bool):
+        if self.revealer is not None:
+            self.revealer.set_sensitive(sensitive)
+        if self.entry is not None:
+            self.entry.set_sensitive(sensitive)
+
+    def _dismiss_palette(self, *args):
+        if self.revealer is not None:
+            self.revealer.set_reveal_child(False)
+        return True
 
     def _toggle_palette(self, *args):
+        if hasattr(self.main_window, "is_destroyed") and self.main_window.is_destroyed:
+            return True
+        if not self.revealer.get_sensitive():
+            return True
         revealed = self.revealer.get_reveal_child()
         self.revealer.set_reveal_child(not revealed)
         if not revealed:
@@ -53,6 +70,7 @@ class AIConsoleController:
         user_input = entry.get_text().strip()
         if not user_input:
             return
+        entry.set_text("")
 
         snapshot = get_network_snapshot()
 
@@ -87,6 +105,11 @@ class AIConsoleController:
             "network_status": "Run a full network diagnostics scan.",
             "wifi_diagnostics": "Analyze Wi-Fi spectrum for less congested channels.",
             "donate": "Open the Kayab Software support page in your browser.",
+            "flush_dns": "Clear the local DNS resolver cache (requires administrator privileges).",
+            "renew_ip": "Request a new DHCP lease on the default interface (brief disconnect).",
+            "restart_adapter": "Cycle the default network interface down and up.",
+            "reset_tcp_ip_stack": "Restart NetworkManager — disconnects all interfaces briefly.",
+            "toggle_firewall": "Enable or disable the UFW firewall.",
         }
         return translations.get(action, f"Execute the <b>{self._escape_markup(action)}</b> operation.")
 

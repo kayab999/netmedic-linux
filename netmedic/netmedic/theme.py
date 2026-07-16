@@ -108,6 +108,29 @@ label.header-text {
     font-size: 1.1em;
     color: #FFFFFF;
 }
+
+/* Keyboard focus */
+button:focus,
+entry:focus,
+textview:focus {
+    outline: 2px solid #4A90E2;
+    outline-offset: 2px;
+}
+
+/* AI command palette overlay */
+.ai-palette-box {
+    background-color: rgba(30, 30, 30, 0.95);
+    border: 1px solid #4A90E2;
+    border-radius: 8px;
+    padding: 12px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+.ai-palette-box entry {
+    background-color: #1A1A1A;
+    border: 1px solid #555555;
+    border-radius: 4px;
+    padding: 8px;
+}
 """
 
 def apply_theme():

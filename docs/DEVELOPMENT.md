@@ -34,16 +34,16 @@ pip install pytest ruff PyGObject
 
 ```bash
 # GUI
-./venv/bin/python -m netmedic
+./venv/bin/netmedic
 
 # Headless (IPC daemon only — no GTK import)
-./venv/bin/python -m netmedic --headless
+./venv/bin/netmedic --headless
 ```
 
 ## Testing
 
 ```bash
-PYTHONPATH="netmedic:." ./venv/bin/python -m pytest tests/ -v
+./venv/bin/python -m pytest tests/ -v
 ```
 
 Test categories:
@@ -89,7 +89,7 @@ sha256sum nandi-mini-tool-calling.gguf | awk '{print $1}' > nandi-mini-tool-call
 
 ```bash
 pip install fastmcp
-PYTHONPATH="netmedic:." python tools/netmedic_mcp.py
+python tools/netmedic_mcp.py
 ```
 
 ## State & Logs

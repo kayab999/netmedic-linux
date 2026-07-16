@@ -1,3 +1,6 @@
+import pytest
+
+pytestmark = pytest.mark.ai
 
 from netmedic_ai.guardrail import PilotoGuardrail
 from netmedic_ai.toolkit import registry

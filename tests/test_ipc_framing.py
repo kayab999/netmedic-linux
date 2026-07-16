@@ -1,5 +1,3 @@
-import json
-
 from netmedic.ipc_framing import encode_message, parse_message, recv_message
 
 

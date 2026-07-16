@@ -4,20 +4,23 @@ from netmedic.operators.vpn.angristan import AngristanOperator
 
 @patch('netmedic.system.CommandRunner.run')
 def test_wifi_scan_congestion(mock_run):
-    # Mock nmcli response
     mock_run.return_value = MagicMock(
-        success=True, 
-        stdout="SSID1:1:100\nSSID2:6:50\nSSID3:1:80",
-        stderr=""
+        success=True,
+        stdout=(
+            '[{"SSID":"SSID1","CHAN":1},'
+            '{"SSID":"SSID2","CHAN":6},'
+            '{"SSID":"SSID3","CHAN":1}]'
+        ),
+        stderr="",
     )
-    
+
     wifi = WifiOperator()
     res = wifi.scan_congestion()
-    
+
     assert res.success is True
-    assert "Canal más congestionado: 1" in res.message
-    assert res.data['1'] == 2
-    assert res.data['6'] == 1
+    assert "Most congested channel: 1" in res.message
+    assert res.data["1"] == 2
+    assert res.data["6"] == 1
 
 @patch('netmedic.system.CommandRunner.run')
 @patch('netmedic.operators.vpn.angristan.AngristanOperator._verify_integrity', return_value=True)

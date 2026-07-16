@@ -4,15 +4,15 @@ Use this checklist before tagging a public release.
 
 ## 1. Code Quality
 
-- [ ] All tests pass: `PYTHONPATH="netmedic:." venv/bin/python -m pytest tests/ -v`
+- [ ] All tests pass: `venv/bin/python -m pytest tests/ -v`
 - [ ] Linter clean: `venv/bin/ruff check netmedic/ netmedic_ai/ tests/`
 - [ ] Version aligned in `netmedic/pyproject.toml`, `CHANGELOG.md`, `README.md`
 
 ## 2. Installation
 
 - [ ] Clean VM install via `./install.sh`
-- [ ] GUI launches: `venv/bin/python -m netmedic`
-- [ ] Headless launches: `venv/bin/python -m netmedic --headless`
+- [ ] GUI launches: `venv/bin/netmedic`
+- [ ] Headless launches: `venv/bin/netmedic --headless`
 - [ ] Desktop entry appears in application menu
 - [ ] Log created at `~/.local/state/netmedic/netmedic.log` (mode 600)
 

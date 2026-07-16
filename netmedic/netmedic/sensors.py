@@ -35,7 +35,9 @@ def get_network_snapshot():
         with open("/etc/resolv.conf", "r") as f:
             for line in f:
                 if line.startswith("nameserver"):
-                    snapshot["dns"].append(line.split()[1])
+                    parts = line.split()
+                    if len(parts) >= 2:
+                        snapshot["dns"].append(parts[1])
     except OSError:
         pass
 

@@ -1,0 +1,13 @@
+[lint]
+select = ["E", "F"]
+ignore = ["E501"]
+
+[lint.per-file-ignores]
+"netmedic/netmedic/gui.py" = ["E402"]
+"netmedic/netmedic/theme.py" = ["E402"]
+"netmedic/netmedic/ui.py" = ["E402", "E701"]
+"netmedic/netmedic/ui_vpn.py" = ["E402", "E701"]
+"netmedic/netmedic/network.py" = ["E402"]
+"netmedic/netmedic/operators/vpn/angristan.py" = ["E701"]
+"netmedic_ai/pilot.py" = ["E402"]
+"tests/test_ai_package.py" = ["E402"]

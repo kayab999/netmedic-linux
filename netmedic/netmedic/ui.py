@@ -1,6 +1,5 @@
 import gi
 import logging
-import os
 import threading
 import concurrent.futures
 gi.require_version('Gtk', '3.0')
@@ -14,7 +13,7 @@ from netmedic.ui_vpn import VPNPanel  # Nuevo panel modular
 from netmedic.theme import apply_theme
 from netmedic.ai_console import AIConsoleController
 from netmedic.integration import shutdown_operators
-from netmedic import __version__
+from . import __version__
 from netmedic.paths import resolve_app_icon_path, resolve_manual_path
 
 class MainWindow(Gtk.Window):
@@ -103,7 +102,7 @@ class MainWindow(Gtk.Window):
         
         self.btn_diag = self.create_btn("Check Connectivity", self.on_diagnostics, accessible_description="Test internet connectivity")
         self.btn_dns = self.create_btn("Flush DNS", self.on_flush_dns, accessible_description="Clear local DNS cache")
-        self.btn_ip = self.create_btn("Renew IP Address", self.on_renew_ip, True, accessible_description="Request new IP from DHCP server")
+        self.btn_ip = self.create_btn("Renew IP Address", self.on_renew_ip, accessible_description="Request new IP from DHCP server")
         self.btn_wifi = self.create_btn("Scan Wi-Fi Congestion", self.on_scan_wifi, accessible_description="Analyze local Wi-Fi channel congestion")
         
         grid.attach(self.btn_diag, 0, 0, 1, 1)
@@ -128,9 +127,18 @@ class MainWindow(Gtk.Window):
         sys_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=5)
         sys_box.set_border_width(10)
         
-        self.btn_stack = self.create_btn("Reset TCP/IP Stack", self.on_reset_tcp_ip, True)
-        self.btn_adapter = self.create_btn("Cycle Network Adapter", self.on_restart_adapter, True)
-        self.btn_firewall = self.create_btn("Toggle Firewall (UFW)", self.on_toggle_firewall, True)
+        self.btn_stack = self.create_btn(
+            "Reset TCP/IP Stack", self.on_reset_tcp_ip, True,
+            accessible_description="Restart NetworkManager; disconnects all interfaces briefly",
+        )
+        self.btn_adapter = self.create_btn(
+            "Cycle Network Adapter", self.on_restart_adapter, True,
+            accessible_description="Bring default network interface down and up",
+        )
+        self.btn_firewall = self.create_btn(
+            "Toggle Firewall (UFW)", self.on_toggle_firewall, True,
+            accessible_description="Enable or disable the UFW firewall",
+        )
         
         sys_box.pack_start(self.btn_stack, False, False, 0)
         sys_box.pack_start(self.btn_adapter, False, False, 0)
@@ -165,7 +173,7 @@ class MainWindow(Gtk.Window):
         
         self.status_bar = Gtk.Statusbar()
         self.status_context = self.status_bar.get_context_id("main")
-        self.status_bar.push(self.status_context, "System Ready")
+        self._status_message_id = self.status_bar.push(self.status_context, "System Ready")
         
         self.spinner = Gtk.Spinner()
         
@@ -200,7 +208,11 @@ class MainWindow(Gtk.Window):
         """Thread-safe UI update for busy state"""
         if getattr(self, "is_destroyed", False):
             return False
-        self.status_bar.push(self.status_context, msg if busy else "System Ready")
+        if self._status_message_id:
+            self.status_bar.pop(self.status_context)
+        self._status_message_id = self.status_bar.push(
+            self.status_context, msg if busy else "System Ready"
+        )
         action_buttons = (
             getattr(self, "btn_diag", None),
             getattr(self, "btn_dns", None),
@@ -219,6 +231,8 @@ class MainWindow(Gtk.Window):
             for btn in action_buttons:
                 if btn is not None:
                     btn.set_sensitive(True)
+        if hasattr(self, "ai_console"):
+            self.ai_console.set_sensitive(not busy)
         return False
 
     def ask_confirmation(self, title, message):

@@ -5,7 +5,6 @@ Name=NetMedic
 Comment=Linux Network Diagnostics & Repair Tool
 Exec=@EXEC@
 Icon=netmedic
-Path=@INSTALL_DIR@
 Terminal=false
 Categories=System;Network;
 StartupNotify=true

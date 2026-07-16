@@ -1,14 +1,31 @@
 import logging
-from typing import Any, Callable, Dict
+from typing import Any, Callable, Dict, Optional
 
 from netmedic.network import NetworkMedic
 from netmedic.operators.wifi import WifiOperator
 from netmedic.operators.vpn.angristan import AngristanOperator
-from netmedic.ipc_security import IPCSession
+from netmedic.ipc_security import IPCSession, SAFE_ACTIONS, PRIVILEGED_ACTIONS
 
 DONATE_URL = "https://buymeacoffee.com/kayabsoftware"
 
 logger = logging.getLogger(__name__)
+
+_INTERNAL_ACTIONS = frozenset({"get_session_token", "user_intent", "donate"})
+
+
+def _validate_action(action: str) -> Optional[Dict[str, Any]]:
+    if action in _INTERNAL_ACTIONS:
+        return None
+    try:
+        from netmedic_ai.toolkit import registry  # type: ignore[import-untyped]
+
+        if registry.is_registered(action):
+            return None
+    except ImportError:
+        pass
+    if action in SAFE_ACTIONS or action in PRIVILEGED_ACTIONS:
+        return None
+    return {"status": "error", "message": f"Unknown action: {action}"}
 
 
 def _result_payload(result) -> Dict[str, Any]:
@@ -33,6 +50,10 @@ def create_action_dispatcher(
             if action == "get_session_token":
                 token = session.get_token()
                 return {"status": "ok", "session_token": token}
+
+            unknown = _validate_action(action)
+            if unknown:
+                return unknown
 
             auth_error = session.validate_privileged(action, params)
             if auth_error:
@@ -72,10 +93,10 @@ def create_action_dispatcher(
             if action == "toggle_firewall":
                 return _result_payload(medic.toggle_firewall())
 
-            return {"status": "error", "message": f"Acción desconocida: {action}"}
-        except Exception as exc:
+            return {"status": "error", "message": f"Unknown action: {action}"}
+        except Exception:
             logger.exception("IPC dispatch failed for action=%s", action)
-            return {"status": "error", "message": str(exc)}
+            return {"status": "error", "message": "Internal IPC error."}
 
     return dispatch
 
@@ -87,13 +108,13 @@ def _handle_user_intent(params: Dict[str, Any]) -> Dict[str, Any]:
     except ImportError:
         return {
             "status": "error",
-            "message": "Módulo AI no disponible. Instale con: pip install .[ai]",
+            "message": "AI module not available. Install with: pip install -e 'netmedic[ai]'",
         }
 
     user_request = params.get("user_request", "")
     network_state = params.get("network_state", {})
     if not user_request:
-        return {"status": "error", "message": "Solicitud vacía."}
+        return {"status": "error", "message": "Empty request."}
 
     try:
         return interpret_intent(user_request, network_state)

@@ -36,13 +36,13 @@ git clone https://github.com/kayab999/netmedic-linux.git
 cd netmedic-linux
 chmod +x install.sh
 ./install.sh
-./venv/bin/python -m netmedic
+./venv/bin/netmedic
 ```
 
 ### Headless mode (IPC daemon, no GUI)
 
 ```bash
-./venv/bin/python -m netmedic --headless
+./venv/bin/netmedic --headless
 ```
 
 ---
@@ -53,7 +53,7 @@ chmod +x install.sh
 netmedic-linux/
 ├── netmedic/          # Core application package
 ├── netmedic_ai/       # Optional AI pilot module
-├── tests/             # Test suite (46 tests)
+├── tests/             # Test suite (49 tests)
 ├── docs/              # User & developer documentation
 ├── scripts/           # Build & packaging scripts
 ├── assets/            # Icon and desktop entry template
@@ -81,7 +81,7 @@ netmedic-linux/
 
 ```bash
 ./install.sh                              # Full setup + test run
-PYTHONPATH="netmedic:." venv/bin/python -m pytest tests/ -v
+venv/bin/python -m pytest tests/ -v
 venv/bin/ruff check netmedic/ netmedic_ai/ tests/
 ./scripts/build_binary.sh                 # PyInstaller build
 ```

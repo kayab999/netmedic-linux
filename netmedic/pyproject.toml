@@ -22,3 +22,7 @@ netmedic = "netmedic.app:main"
 ai = [
     "llama-cpp-python>=0.2.57"
 ]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["netmedic*"]

@@ -1,7 +1,14 @@
 # -*- mode: python ; coding: utf-8 -*-
 from PyInstaller.utils.hooks import collect_all
 
-datas = []
+import os
+
+REPO_ROOT = os.path.dirname(os.path.abspath(SPEC))
+
+datas = [
+    (os.path.join(REPO_ROOT, 'assets', 'netmedic.png'), 'assets'),
+    (os.path.join(REPO_ROOT, 'docs', 'MANUAL.md'), 'docs'),
+]
 binaries = []
 hiddenimports = []
 tmp_ret = collect_all('netmedic')
