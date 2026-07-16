@@ -10,7 +10,7 @@ BUILD_DIR="NetMedic.AppDir"
 
 echo "Packaging ${APP_NAME} AppImage..."
 
-"${REPO_ROOT}/scripts/build_standalone.sh"
+"${REPO_ROOT}/scripts/build_binary.sh"
 
 rm -rf "$BUILD_DIR"
 mkdir -p "$BUILD_DIR/usr/bin"

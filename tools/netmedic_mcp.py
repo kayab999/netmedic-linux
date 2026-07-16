@@ -8,13 +8,11 @@ sys.path.insert(0, os.path.join(_REPO_ROOT, "..", "netmedic"))
 sys.path.insert(0, os.path.join(_REPO_ROOT, ".."))
 
 from fastmcp import FastMCP
-from netmedic.network import NetworkMedic
-from netmedic.operators.wifi import WifiOperator
+from netmedic.ipc_sync_client import SyncIPCClient
 from netmedic.operators.vpn.angristan import AngristanOperator
 
 mcp = FastMCP("NetMedic")
-medic = NetworkMedic()
-wifi_op = WifiOperator()
+ipc = SyncIPCClient()
 vpn_op = AngristanOperator()
 
 MUTATING_ENV = "NETMEDIC_MCP_ALLOW_MUTATING"
@@ -33,9 +31,27 @@ def _require_mutating(tool_name: str) -> str | None:
     )
 
 
+def _require_instance() -> str | None:
+    if ipc.is_available():
+        return None
+    return (
+        "NetMedic is not running. Start the GUI or run "
+        "'netmedic --headless' before using MCP tools."
+    )
+
+
+def _ipc_message(result: dict) -> str:
+    if result.get("status") == "ok":
+        return result.get("message", "OK")
+    return f"Error: {result.get('message', 'Unknown IPC error')}"
+
+
 @mcp.tool()
 def get_vpn_status() -> str:
     """Check if the VPN server (OpenVPN) is installed and running."""
+    blocked = _require_instance()
+    if blocked:
+        return blocked
     res = vpn_op.check_status()
     return f"Status: {res.message} | Details: {res.details or 'None'}"
 
@@ -43,6 +59,9 @@ def get_vpn_status() -> str:
 @mcp.tool()
 def list_vpn_clients() -> str:
     """List all configured VPN clients and their active status."""
+    blocked = _require_instance()
+    if blocked:
+        return blocked
     res = vpn_op.list_clients()
     if not res.success:
         return f"Error: {res.message} ({res.details})"
@@ -52,16 +71,16 @@ def list_vpn_clients() -> str:
         return "No VPN clients found."
 
     output = ["Current VPN Clients:"]
-    for c in clients:
-        status = "Active" if c.active else "Revoked"
-        output.append(f"- {c.name}: {status}")
+    for client in clients:
+        status = "Active" if client.active else "Revoked"
+        output.append(f"- {client.name}: {status}")
     return "\n".join(output)
 
 
 @mcp.tool()
 def create_vpn_client(name: str) -> str:
     """Create a new VPN client profile (requires sudo)."""
-    blocked = _require_mutating("create_vpn_client")
+    blocked = _require_mutating("create_vpn_client") or _require_instance()
     if blocked:
         return blocked
     res = vpn_op.add_client(name)
@@ -71,7 +90,7 @@ def create_vpn_client(name: str) -> str:
 @mcp.tool()
 def revoke_vpn_client(name: str) -> str:
     """Revoke an existing VPN client profile (requires sudo)."""
-    blocked = _require_mutating("revoke_vpn_client")
+    blocked = _require_mutating("revoke_vpn_client") or _require_instance()
     if blocked:
         return blocked
     res = vpn_op.revoke_client(name)
@@ -81,64 +100,71 @@ def revoke_vpn_client(name: str) -> str:
 @mcp.tool()
 def get_network_status() -> str:
     """Check current connectivity status (Ping, DNS, Internet)."""
-    res = medic.run_diagnostics()
-    return f"Status: {'OK' if res.success else 'ISSUE'} | Details: {res.message}"
+    blocked = _require_instance()
+    if blocked:
+        return blocked
+    result = ipc.request("network_status")
+    return _ipc_message(result)
 
 
 @mcp.tool()
 def smart_repair() -> str:
     """Run automated non-destructive repairs (DNS flush, IP renewal)."""
-    blocked = _require_mutating("smart_repair")
+    blocked = _require_mutating("smart_repair") or _require_instance()
     if blocked:
         return blocked
-    results = []
-    results.append(f"DNS Flush: {medic.flush_dns().message}")
-    results.append(f"IP Renewal: {medic.renew_ip().message}")
-    return "\n".join(results)
+    lines = [
+        f"DNS Flush: {_ipc_message(ipc.request('flush_dns', confirmed=True))}",
+        f"IP Renewal: {_ipc_message(ipc.request('renew_ip', confirmed=True))}",
+    ]
+    return "\n".join(lines)
 
 
 @mcp.tool()
 def flush_dns_cache() -> str:
     """Flush the system DNS cache (requires sudo)."""
-    blocked = _require_mutating("flush_dns_cache")
+    blocked = _require_mutating("flush_dns_cache") or _require_instance()
     if blocked:
         return blocked
-    res = medic.flush_dns()
-    return f"Result: {'OK' if res.success else 'FAIL'} {res.message}"
+    return _ipc_message(ipc.request("flush_dns", confirmed=True))
 
 
 @mcp.tool()
 def renew_dhcp_lease() -> str:
     """Renew the DHCP lease for the default interface (requires sudo)."""
-    blocked = _require_mutating("renew_dhcp_lease")
+    blocked = _require_mutating("renew_dhcp_lease") or _require_instance()
     if blocked:
         return blocked
-    res = medic.renew_ip()
-    return f"Result: {'OK' if res.success else 'FAIL'} {res.message}"
+    return _ipc_message(ipc.request("renew_ip", confirmed=True))
 
 
 @mcp.tool()
 def scan_wifi_congestion() -> str:
     """Scan nearby Wi-Fi networks and report congestion levels."""
-    res = wifi_op.scan_congestion()
-    return f"Result: {'OK' if res.success else 'FAIL'} {res.message}"
+    blocked = _require_instance()
+    if blocked:
+        return blocked
+    return _ipc_message(ipc.request("wifi_diagnostics"))
 
 
 @mcp.tool()
 def reset_network_stack() -> str:
     """DESTRUCTIVE: Restart NetworkManager service (requires sudo)."""
-    blocked = _require_mutating("reset_network_stack")
+    blocked = _require_mutating("reset_network_stack") or _require_instance()
     if blocked:
         return blocked
-    res = medic.reset_tcp_ip_stack()
-    return f"Result: {'OK' if res.success else 'FAIL'} {res.message}"
+    return _ipc_message(ipc.request("reset_tcp_ip_stack", confirmed=True))
 
 
 @mcp.tool()
 def get_firewall_info() -> str:
     """Check if UFW firewall is active."""
-    status = medic.get_firewall_status()
-    return f"Firewall Status: {status}"
+    blocked = _require_instance()
+    if blocked:
+        return blocked
+    from netmedic.network import NetworkMedic
+
+    return f"Firewall Status: {NetworkMedic().get_firewall_status()}"
 
 
 if __name__ == "__main__":

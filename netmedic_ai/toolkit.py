@@ -96,6 +96,33 @@ def tool_change_dns(server: str = "1.1.1.1"):
 
 
 @registry.register(
+    name="restart_adapter",
+    description="Cycle the default network adapter down and up.",
+    parameters={},
+)
+def tool_restart_adapter():
+    return "Simulation: default adapter cycled."
+
+
+@registry.register(
+    name="reset_tcp_ip_stack",
+    description="Restart NetworkManager to reset the TCP/IP stack.",
+    parameters={},
+)
+def tool_reset_tcp_ip_stack():
+    return "Simulation: NetworkManager restarted."
+
+
+@registry.register(
+    name="toggle_firewall",
+    description="Toggle the UFW firewall on or off.",
+    parameters={},
+)
+def tool_toggle_firewall():
+    return "Simulation: firewall toggled."
+
+
+@registry.register(
     name="donate",
     description="Muestra información sobre cómo apoyar el desarrollo de NetMedic.",
     parameters={},

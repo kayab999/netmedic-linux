@@ -1,14 +1,17 @@
+import json
+import logging
 import os
 import socket
-import json
 import threading
-import logging
-from typing import Callable, Dict, Any, Optional
+from concurrent.futures import ThreadPoolExecutor
+from typing import Any, Callable, Dict, Optional
 
-from netmedic.ipc_framing import encode_message, recv_message
+from netmedic.ipc_framing import IPC_SOCKET_TIMEOUT, encode_message, recv_message
 from netmedic.lifecycle import LifecycleManager
 
 logger = logging.getLogger(__name__)
+
+_MAX_WORKERS = 4
 
 
 class NetMedicIPCServer:
@@ -18,6 +21,7 @@ class NetMedicIPCServer:
         self.running = False
         self.server: Optional[socket.socket] = None
         self.thread: Optional[threading.Thread] = None
+        self._pool = ThreadPoolExecutor(max_workers=_MAX_WORKERS, thread_name_prefix="IPCWorker")
 
     def start(self):
         if os.path.exists(self.sock_file):
@@ -29,9 +33,9 @@ class NetMedicIPCServer:
         self.server.listen(5)
         self.running = True
 
-        self.thread = threading.Thread(target=self._listen_loop, daemon=True)
+        self.thread = threading.Thread(target=self._listen_loop, daemon=True, name="IPCListener")
         self.thread.start()
-        logger.info("IPC Server en línea. Escuchando en %s", self.sock_file)
+        logger.info("IPC server listening on %s", self.sock_file)
 
     def _listen_loop(self):
         while self.running and self.server:
@@ -41,23 +45,25 @@ class NetMedicIPCServer:
                     conn, _ = self.server.accept()
                 except socket.timeout:
                     continue
-
-                with conn:
-                    try:
-                        data = recv_message(conn)
-                    except ValueError as exc:
-                        conn.sendall(encode_message({"status": "error", "message": str(exc)}))
-                        continue
-
-                    if data:
-                        response = self._handle_payload(data)
-                        conn.sendall(response.encode("utf-8") + b"\n")
+                self._pool.submit(self._handle_connection, conn)
             except OSError:
                 if self.running:
-                    logger.error("Fallo en loop IPC", exc_info=True)
+                    logger.error("IPC accept loop failure", exc_info=True)
             except Exception:
                 if self.running:
-                    logger.error("Fallo en loop IPC", exc_info=True)
+                    logger.error("IPC accept loop failure", exc_info=True)
+
+    def _handle_connection(self, conn: socket.socket):
+        with conn:
+            try:
+                data = recv_message(conn, timeout=IPC_SOCKET_TIMEOUT)
+            except ValueError as exc:
+                conn.sendall(encode_message({"status": "error", "message": str(exc)}))
+                return
+
+            if data:
+                response = self._handle_payload(data)
+                conn.sendall(encode_message(json.loads(response)))
 
     def _handle_payload(self, data: bytes) -> str:
         try:
@@ -67,14 +73,15 @@ class NetMedicIPCServer:
             result = self.action_dispatcher(action, params)
             return json.dumps(result)
         except json.JSONDecodeError:
-            return json.dumps({"status": "error", "message": "Payload JSON inválido."})
+            return json.dumps({"status": "error", "message": "Invalid JSON payload."})
         except Exception:
             logger.exception("IPC payload handling failed")
             return json.dumps({"status": "error", "message": "Internal IPC error."})
 
     def stop(self):
-        """Cierre seguro del socket durante el cleanup de NetMedic."""
+        """Gracefully stop the IPC server."""
         self.running = False
+        self._pool.shutdown(wait=False, cancel_futures=True)
         if self.thread:
             self.thread.join(timeout=2.0)
             self.thread = None
@@ -84,4 +91,4 @@ class NetMedicIPCServer:
             except OSError:
                 pass
             self.server = None
-        logger.info("IPC Server detenido.")
+        logger.info("IPC server stopped.")

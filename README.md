@@ -53,7 +53,7 @@ chmod +x install.sh
 netmedic-linux/
 ├── netmedic/          # Core application package
 ├── netmedic_ai/       # Optional AI pilot module
-├── tests/             # Test suite (49 tests)
+├── tests/             # Test suite (57 tests)
 ├── docs/              # User & developer documentation
 ├── scripts/           # Build & packaging scripts
 ├── assets/            # Icon and desktop entry template

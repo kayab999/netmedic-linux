@@ -5,7 +5,7 @@ import uuid
 import threading
 import shutil
 import json
-from typing import Set, Optional
+from typing import List, Optional, Set, Tuple
 
 _DNS_IP_RE = re.compile(
     r"^(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)$"
@@ -32,10 +32,10 @@ class NetworkMedic:
         if self._initialized:
             return
         self._state_lock = threading.Lock()
-        self._state_file = Config.get_state_dir() / "created_ifaces.json"
+        self._state_file = Config.get_state_dir() / f"created_ifaces.{os.getpid()}.json"
         self._created_ifaces: Set[str] = set()
-        
-        # Cargar estado previo y limpiar si hubo crash
+
+        self._reap_orphan_iface_state()
         self._load_state()
         if self._created_ifaces:
             logger.info(f"Detectadas interfaces residuales de sesión previa: {self._created_ifaces}. Limpiando...")
@@ -62,6 +62,59 @@ class NetworkMedic:
                 self._created_ifaces = set(ifaces)
         except Exception as e:
             logger.error(f"Error cargando estado de interfaces: {e}")
+
+    @staticmethod
+    def _is_process_alive(pid: int) -> bool:
+        try:
+            os.kill(pid, 0)
+            return True
+        except OSError:
+            return False
+
+    def _reap_orphan_iface_state(self):
+        """Remove virtual interfaces tracked by dead NetMedic processes."""
+        state_dir = Config.get_state_dir()
+        for path in state_dir.glob("created_ifaces.*.json"):
+            try:
+                pid = int(path.name.split(".")[1])
+            except (ValueError, IndexError):
+                continue
+            if pid == os.getpid() or self._is_process_alive(pid):
+                continue
+            try:
+                ifaces = json.loads(path.read_text())
+                for iface in ifaces:
+                    CommandRunner.run(["ip", "link", "del", iface], require_root=True)
+                path.unlink(missing_ok=True)
+                logger.info("Reaped orphan interface state from PID %d", pid)
+            except Exception as exc:
+                logger.warning("Failed to reap orphan state %s: %s", path, exc)
+
+    def _is_physical_interface(self, iface: str) -> bool:
+        virtual_markers = (
+            "docker", "br-", "veth", "vnet", "virbr",
+            "tun", "wg", "tailscale", "nm-", "lo",
+        )
+        return not any(marker in iface for marker in virtual_markers)
+
+    def _get_active_nm_connection(self) -> Optional[Tuple[str, str]]:
+        """Return (connection_name, device) aligned with the default-route interface."""
+        res = CommandRunner.run(["nmcli", "-t", "-f", "NAME,DEVICE", "con", "show", "--active"])
+        if not res.success or not res.stdout.strip():
+            return None
+
+        matches: List[Tuple[str, str]] = []
+        for line in res.stdout.splitlines():
+            parts = line.split(":")
+            if len(parts) >= 2 and parts[0] and parts[1]:
+                matches.append((parts[0], parts[1]))
+
+        iface = self.get_default_interface()
+        if iface:
+            for name, device in matches:
+                if device == iface:
+                    return (name, device)
+        return matches[0] if matches else None
 
     def get_default_interface(self) -> Optional[str]:
         """
@@ -92,8 +145,7 @@ class NetworkMedic:
                     continue
                 iface = parts[1].strip()
                 
-                # Ignorar loopback y virtuales obvias
-                if iface == "lo" or any(x in iface for x in ["docker", "br-", "veth", "vnet", "virbr"]):
+                if not self._is_physical_interface(iface):
                     continue
                 
                 # Si llegamos aquí, es una interfaz física probable (eth0, wlan0, enp3s0, etc)
@@ -206,11 +258,11 @@ class NetworkMedic:
         if not self._check_requirement("nmcli"):
             return NetResult("Change DNS", False, "NetworkManager (nmcli) no disponible")
 
-        res = CommandRunner.run(["nmcli", "-t", "-f", "NAME", "con", "show", "--active"])
-        if not res.success or not res.stdout.strip():
-            return NetResult("Change DNS", False, "No hay conexión activa de NetworkManager")
+        active = self._get_active_nm_connection()
+        if not active:
+            return NetResult("Change DNS", False, "No active NetworkManager connection found")
 
-        conn_name = res.stdout.strip().splitlines()[0]
+        conn_name, device = active
         mod_res = CommandRunner.run(
             [
                 "nmcli", "con", "mod", conn_name,
@@ -226,7 +278,7 @@ class NetworkMedic:
         if not up_res.success:
             return NetResult("Change DNS", False, up_res.stderr)
 
-        return NetResult("Change DNS", True, f"DNS cambiado a {server} en {conn_name}")
+        return NetResult("Change DNS", True, f"DNS set to {server} on {conn_name} ({device})")
 
     def renew_ip(self) -> NetResult:
         """
@@ -241,12 +293,20 @@ class NetworkMedic:
             return NetResult("Renew IP", False, "No se detectó interfaz")
         
         # Modern NetworkManager fallback
+        nm_error = ""
         if shutil.which("nmcli"):
             res = CommandRunner.run(["nmcli", "device", "reapply", iface], require_root=True)
             if res.success:
-                return NetResult("Renew IP", True, f"IP renovada vía NetworkManager en {iface}")
+                return NetResult("Renew IP", True, f"IP renewed via NetworkManager on {iface}")
+            nm_error = res.stderr or res.stdout
 
-        CommandRunner.run(["dhclient", "-r", iface], require_root=True, timeout=10)
+        if not shutil.which("dhclient"):
+            detail = nm_error or "dhclient not available"
+            return NetResult("Renew IP", False, f"DHCP renewal failed on {iface}", details=detail)
+
+        release_res = CommandRunner.run(["dhclient", "-r", iface], require_root=True, timeout=10)
+        if not release_res.success:
+            logger.warning("dhclient release failed on %s: %s", iface, release_res.stderr)
         res = CommandRunner.run(["dhclient", iface], require_root=True, timeout=15)
         
         if not res.success:

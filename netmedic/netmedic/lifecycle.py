@@ -29,8 +29,10 @@ class LifecycleManager:
 
     def _try_acquire_lock(self) -> bool:
         try:
-            self._lock_fd = open(self.lock_file, "w")
+            self._lock_fd = open(self.lock_file, "a+")
             fcntl.flock(self._lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            self._lock_fd.seek(0)
+            self._lock_fd.truncate()
             self._lock_fd.write(str(os.getpid()))
             self._lock_fd.flush()
             return True

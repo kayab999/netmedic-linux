@@ -13,6 +13,7 @@ from netmedic.ui_vpn import VPNPanel  # Nuevo panel modular
 from netmedic.theme import apply_theme
 from netmedic.ai_console import AIConsoleController
 from netmedic.integration import shutdown_operators
+from netmedic.teardown import register as register_teardown
 from . import __version__
 from netmedic.paths import resolve_app_icon_path, resolve_manual_path
 
@@ -184,6 +185,7 @@ class MainWindow(Gtk.Window):
 
         self.ai_console = AIConsoleController(self)
         self.ai_console.mount(self._root_overlay)
+        register_teardown(self.emergency_shutdown)
 
     def create_btn(self, label, handler, destructive=False, accessible_name=None, accessible_description=None):
         btn = Gtk.Button(label=label)
@@ -218,6 +220,9 @@ class MainWindow(Gtk.Window):
             getattr(self, "btn_dns", None),
             getattr(self, "btn_ip", None),
             getattr(self, "btn_wifi", None),
+            getattr(self, "btn_stack", None),
+            getattr(self, "btn_adapter", None),
+            getattr(self, "btn_firewall", None),
         )
         if busy:
             self.spinner.start()
@@ -225,12 +230,16 @@ class MainWindow(Gtk.Window):
             for btn in action_buttons:
                 if btn is not None:
                     btn.set_sensitive(False)
+            if hasattr(self, "vpn_panel"):
+                self.vpn_panel.set_sensitive(False)
         else:
             self.spinner.stop()
             self.notebook.set_sensitive(True)
             for btn in action_buttons:
                 if btn is not None:
                     btn.set_sensitive(True)
+            if hasattr(self, "vpn_panel"):
+                self.vpn_panel.set_sensitive(True)
         if hasattr(self, "ai_console"):
             self.ai_console.set_sensitive(not busy)
         return False
@@ -259,19 +268,25 @@ class MainWindow(Gtk.Window):
                 logging.debug("Failed to load icon from %s", icon_path, exc_info=True)
         self.set_icon_name("netmedic")
 
-    def on_destroy(self, widget):
-        logging.info("Closing application. Running final cleanup...")
+    def emergency_shutdown(self, *, wait_for_executor: bool = False):
+        if getattr(self, "_emergency_done", False):
+            return
+        self._emergency_done = True
         self.is_destroyed = True
-        self.executor.shutdown(wait=True, cancel_futures=True)
-
+        try:
+            self.executor.shutdown(wait=wait_for_executor, cancel_futures=True)
+        except Exception as exc:
+            logging.error("Executor shutdown failed: %s", exc)
         shutdown_operators([self.wifi_op, self.vpn_panel.operator])
 
+    def on_destroy(self, widget):
+        logging.info("Closing application. Running final cleanup...")
+        self.emergency_shutdown(wait_for_executor=True)
         try:
             res = self.medic.cleanup()
-            logging.info(f"Final cleanup: {res.message}")
+            logging.info("Final cleanup: %s", res.message)
         except Exception as e:
-            logging.error(f"Error in final cleanup: {e}")
-
+            logging.error("Error in final cleanup: %s", e)
         Gtk.main_quit()
 
     def append_log(self, text):
@@ -305,7 +320,7 @@ class MainWindow(Gtk.Window):
                 self.append_log(net_res.to_log_entry())
                 
                 # Feedback específico para elevación cancelada
-                if not net_res.success and "cancelada" in net_res.message.lower():
+                if not net_res.success and "cancel" in net_res.message.lower():
                     self.append_log("⚠️ Operación cancelada por el usuario (Falta de privilegios).")
                     GLib.idle_add(lambda: self._show_error_dialog(
                         "Autenticación Requerida", 
@@ -347,14 +362,17 @@ class MainWindow(Gtk.Window):
                 (self.medic.renew_ip, "Renewing IP...")
             ]
             
+            results = []
             for step_func, step_msg in steps:
                 GLib.idle_add(lambda m=step_msg: self.status_bar.push(self.status_context, m))
                 res = step_func()
+                results.append(res)
                 self.append_log(res.to_log_entry())
-                # En Smart Repair, NO abortamos si falla un paso (como Diagnostics),
-                # ya que el objetivo es intentar todas las reparaciones posibles.
 
-            return NetResult("Smart Repair", True, "Sequence finished")
+            succeeded = sum(1 for res in results if res.success)
+            overall = succeeded > 0
+            summary = f"Smart Repair finished: {succeeded}/{len(results)} steps succeeded"
+            return NetResult("Smart Repair", overall, summary)
             
         self.run_async_task(sequence, "Repairing Network...")
 

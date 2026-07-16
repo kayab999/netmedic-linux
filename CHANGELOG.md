@@ -4,7 +4,23 @@ All notable changes to NetMedic Linux are documented here.
 
 ## [Unreleased]
 
+### Added
+- IPC thread pool, socket timeouts, bounded client queue, `SyncIPCClient` for MCP
+- Enriched `sensors.get_network_snapshot()` (VPN, NM profile, rfkill, resolvectl DNS)
+- AI toolkit actions: `restart_adapter`, `reset_tcp_ip_stack`, `toggle_firewall`
+- `scripts/check-deps.sh`, installer flags (`--skip-tests`, `--keep-venv`, `--with-ai`)
+- Socket E2E, sync client, sensors, and connection-targeting tests
+- Signal teardown registry via `teardown.py`
+
 ### Fixed
+- MCP network tools route through IPC with session tokens (requires running instance)
+- Lifecycle lock no longer truncates PID before `flock` acquire fails
+- PID-scoped virtual adapter state with orphan reap across dead processes
+- `change_dns` targets NM connection on default-route interface
+- Smart Repair reports step success ratio instead of always succeeding
+- Infrastructure/VPN controls disabled during busy state
+- Subprocess kill-on-timeout in `CommandRunner`
+- AppImage packaging uses canonical `build_binary.sh`
 - Menu launcher crash (`ImportError: __version__`) via strict editable install and relative imports
 - IPC client now uses per-request sockets matching server lifecycle
 - `renew_ip` no longer auto-restarts NetworkManager; firewall aborts on unknown UFW state

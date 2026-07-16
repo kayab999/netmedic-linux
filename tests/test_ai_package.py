@@ -16,6 +16,9 @@ def test_registry_manifest_aligned_with_ipc():
         "flush_dns",
         "renew_ip",
         "change_dns",
+        "restart_adapter",
+        "reset_tcp_ip_stack",
+        "toggle_firewall",
         "donate",
     }
     assert expected.issubset(names)

@@ -10,44 +10,71 @@ BLUE='\033[0;34m'
 RED='\033[0;31m'
 NC='\033[0m'
 
+SKIP_TESTS=0
+RECREATE_VENV=1
+INSTALL_AI=0
+
+usage() {
+    echo "Usage: ./install.sh [--yes] [--skip-tests] [--with-ai] [--keep-venv]"
+}
+
+for arg in "$@"; do
+    case "$arg" in
+        --yes) INSTALL_AI=0 ;;
+        --skip-tests) SKIP_TESTS=1 ;;
+        --with-ai) INSTALL_AI=1 ;;
+        --keep-venv) RECREATE_VENV=0 ;;
+        -h|--help) usage; exit 0 ;;
+        *) echo "Unknown option: $arg"; usage; exit 1 ;;
+    esac
+done
+
 echo -e "${BLUE}=== NetMedic Linux Installer (v1.1.0) ===${NC}"
 
-echo -e "${BLUE}[1/5] Detecting system dependencies...${NC}"
+echo -e "${BLUE}[0/6] Runtime dependency preflight...${NC}"
+chmod +x scripts/check-deps.sh
+./scripts/check-deps.sh
+
+echo -e "${BLUE}[1/6] Detecting system dependencies...${NC}"
 if [ -f /etc/debian_version ]; then
-    pkgs="python3-venv python3-dev libgirepository-2.0-dev libcairo2-dev gir1.2-gtk-3.0"
+    sudo apt-get update -qq || true
+    pkgs="python3-venv python3-dev libgirepository-2.0-dev libcairo2-dev gir1.2-gtk-3.0 network-manager iproute2 curl iputils-ping policykit-1"
     install_cmd="sudo apt-get install -y $pkgs"
 elif [ -f /etc/fedora-release ]; then
-    pkgs="python3-devel gobject-introspection-devel cairo-gobject-devel gtk3"
+    pkgs="python3-devel gobject-introspection-devel cairo-gobject-devel gtk3 NetworkManager iproute curl iputils policykit"
     install_cmd="sudo dnf install -y $pkgs"
 elif [ -f /etc/arch-release ]; then
-    pkgs="python gobject-introspection cairo gtk3"
+    pkgs="python gobject-introspection cairo gtk3 networkmanager iproute2 curl iputils polkit"
     install_cmd="sudo pacman -S --noconfirm $pkgs"
 else
     echo -e "${RED}Unsupported distro for automatic dependency install.${NC}"
-    echo "Install Python 3.8+, GTK3, and GObject introspection headers manually."
+    echo "Install Python 3.8+, GTK3, NetworkManager, and GObject introspection headers manually."
     install_cmd="true"
 fi
 $install_cmd
 
-echo -e "${BLUE}[2/5] Creating virtual environment...${NC}"
-rm -rf venv
-python3 -m venv venv
+echo -e "${BLUE}[2/6] Creating virtual environment...${NC}"
+if [ "$RECREATE_VENV" -eq 1 ]; then
+    rm -rf venv
+    python3 -m venv venv
+fi
 # shellcheck disable=SC1091
 source venv/bin/activate
 pip install --upgrade pip wheel setuptools pytest ruff
 
-echo -e "${BLUE}[3/5] Installing NetMedic core...${NC}"
+echo -e "${BLUE}[3/6] Installing NetMedic core...${NC}"
 pip install PyGObject
 pip install -e netmedic/ --config-settings editable_mode=strict
 
-if [ -t 0 ]; then
+if [ "$INSTALL_AI" -eq 0 ] && [ -t 0 ]; then
     echo -e "${BLUE}Install AI module (optional)? [y/N]${NC}"
-    read -r install_ai
-else
-    install_ai="n"
+    read -r install_ai_answer
+    if [[ "$install_ai_answer" =~ ^([yY][eE][sS]|[yY])$ ]]; then
+        INSTALL_AI=1
+    fi
 fi
-if [[ "$install_ai" =~ ^([yY][eE][sS]|[yY])$ ]]; then
-    echo -e "${BLUE}[3b/5] Installing AI pilot dependencies...${NC}"
+if [ "$INSTALL_AI" -eq 1 ]; then
+    echo -e "${BLUE}[3b/6] Installing AI pilot dependencies...${NC}"
     if command -v nvidia-smi &>/dev/null; then
         export CMAKE_ARGS="-DLLAMA_CUBLAS=on"
     elif [ -d /usr/include/vulkan ] || command -v vulkaninfo &>/dev/null; then
@@ -57,7 +84,7 @@ if [[ "$install_ai" =~ ^([yY][eE][sS]|[yY])$ ]]; then
     pip install -e "netmedic[ai]"
 fi
 
-echo -e "${BLUE}[4/5] Installing icon and desktop launcher...${NC}"
+echo -e "${BLUE}[4/6] Installing icon and desktop launcher...${NC}"
 ICON_THEME_ROOT="${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor"
 for size in 48 128 256; do
     mkdir -p "${ICON_THEME_ROOT}/${size}x${size}/apps"
@@ -72,8 +99,12 @@ cp /tmp/netmedic.desktop ~/.local/share/applications/netmedic.desktop
 chmod +x ~/.local/share/applications/netmedic.desktop
 update-desktop-database ~/.local/share/applications 2>/dev/null || true
 
-echo -e "${BLUE}[5/5] Running test suite...${NC}"
-python -m pytest tests/ -q
+if [ "$SKIP_TESTS" -eq 0 ]; then
+    echo -e "${BLUE}[5/6] Running test suite...${NC}"
+    python -m pytest tests/ -q
+else
+    echo -e "${BLUE}[5/6] Skipping test suite (--skip-tests).${NC}"
+fi
 
 echo -e "${GREEN}=== Installation complete ===${NC}"
 echo -e "Run: ${BLUE}${REPO_ROOT}/venv/bin/netmedic${NC}"

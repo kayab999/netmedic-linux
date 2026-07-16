@@ -12,6 +12,7 @@ from netmedic.ipc_bridge import NetMedicIPCServer
 from netmedic.ipc_actions import create_action_dispatcher
 from netmedic.ipc_security import IPCSession
 from netmedic.lifecycle import LifecycleManager
+from netmedic.teardown import run_all as run_teardown_callbacks
 
 _medic_instance = None
 _ipc_server = None
@@ -39,6 +40,8 @@ def handle_signals(signum, frame):
 
     sig_name = signal.Signals(signum).name
     logging.info("Received signal %s (%s). Starting emergency cleanup...", sig_name, signum)
+
+    run_teardown_callbacks()
 
     if _ipc_server is not None:
         _ipc_server.stop()
@@ -149,6 +152,8 @@ def shutdown():
     if _shutting_down:
         return
     _shutting_down = True
+
+    run_teardown_callbacks()
 
     if _ipc_server is not None:
         _ipc_server.stop()

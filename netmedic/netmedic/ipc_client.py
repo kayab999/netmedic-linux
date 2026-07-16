@@ -5,7 +5,7 @@ import socket
 import threading
 
 from netmedic.config import Config
-from netmedic.ipc_framing import encode_message, parse_message, recv_message
+from netmedic.ipc_framing import IPC_SOCKET_TIMEOUT, encode_message, parse_message, recv_message
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +21,7 @@ class PilotClient:
             if cls._instance is None:
                 cls._instance = super().__new__(cls)
                 cls._instance._session_token = None
-                cls._instance._queue: queue.Queue = queue.Queue()
+                cls._instance._queue: queue.Queue = queue.Queue(maxsize=32)
                 cls._instance._worker = threading.Thread(
                     target=cls._instance._worker_loop,
                     daemon=True,
@@ -45,7 +45,7 @@ class PilotClient:
         try:
             sock.connect(self._sock_path)
             sock.sendall(encode_message({"action": action, "params": params}))
-            data = recv_message(sock)
+            data = recv_message(sock, timeout=IPC_SOCKET_TIMEOUT)
             return parse_message(data)
         except (ConnectionRefusedError, FileNotFoundError, OSError, json.JSONDecodeError, ValueError) as exc:
             logger.warning("IPC request failed: %s", exc)
@@ -94,4 +94,12 @@ class PilotClient:
                 self._queue.task_done()
 
     def ask(self, action, params, callback, *, confirmed: bool = False):
-        self._queue.put((action, params, callback, confirmed))
+        try:
+            self._queue.put((action, params, callback, confirmed), timeout=1.0)
+        except queue.Full:
+            from gi.repository import GLib
+
+            GLib.idle_add(
+                callback,
+                {"status": "error", "message": "IPC client queue is full. Try again shortly."},
+            )
