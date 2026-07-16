@@ -4,6 +4,17 @@ All notable changes to NetMedic Linux are documented here.
 
 ## [Unreleased]
 
+## [1.4.0] — 2026-07-16
+
+### Added
+- Peer UID enforcement for privileged IPC and session token issuance (`ipc_peer.py`)
+- Versioned IPC API schema (`ipc_schema.py`) and integration guide (`docs/IPC_API.md`)
+- systemd user unit for headless daemon (`netmedic-headless.service`)
+
+### Changed
+- `NETMEDIC_SKIP_POLKIT` honored only when `NETMEDIC_TEST_MODE=1` (production fail-closed)
+- Polkit GI authorization uses `UnixProcess.new_for_owner` when available
+
 ## [1.3.0] — 2026-07-16
 
 ### Added

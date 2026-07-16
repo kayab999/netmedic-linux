@@ -34,15 +34,15 @@ NetMedic aims to be a sovereign, open-source network management platform for Lin
 - [x] Structured audit log for privileged IPC
 - [x] Release integrity pipeline (SHA256SUMS, SBOM, GitHub workflow)
 - [x] Documentation version sync
+
+## v1.4.0 — Platform (Released 2026-07-16)
+
+- [x] Versioned IPC action schema and integration guide
+- [x] Peer UID enforcement hardening
+- [x] Production fail-closed without `NETMEDIC_SKIP_POLKIT`
+- [x] systemd user unit for headless daemon
 - [ ] Real-time network sensor visualization (deferred UI)
 - [ ] Flatpak packaging (deferred)
-
-## v1.4 — Platform (Planned)
-
-- [ ] Versioned IPC action schema and integration guide
-- [ ] Peer UID enforcement hardening
-- [ ] Production fail-closed without `NETMEDIC_SKIP_POLKIT`
-- [ ] systemd user unit for headless daemon
 
 ## v2.0.0 — Framework (Future)
 

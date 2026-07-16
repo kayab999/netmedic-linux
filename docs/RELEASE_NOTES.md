@@ -1,33 +1,30 @@
-# Release Notes — NetMedic v1.3.0
+# Release Notes — NetMedic v1.4.0
 
 ## Overview
 
-NetMedic v1.3.0 closes the enterprise governance gap identified in the v1.2.0 audit cycle. The privileged IPC core is unchanged; this release adds **demonstrability**: structured audit evidence, release artifact integrity, and synchronized documentation.
+NetMedic v1.4.0 positions the IPC core as an integration platform. The GUI remains one client; automation, MCP, and third-party tools integrate via a documented, versioned API with hardened peer identity checks.
 
 ## Highlights
 
-### Governance & Audit
-- Privileged IPC actions write structured JSON lines to `~/.local/state/netmedic/audit.log`
-- Each record includes timestamp, action, peer UID/PID, outcome, duration, and redacted params
-- Authorization denials (polkit, token, confirmation) are audited with `outcome: denied`
+### Platform API
+- `docs/IPC_API.md` — integration guide for external clients
+- `ipc_schema.export_schema()` — machine-readable action contract (API v1.0)
+- `SyncIPCClient` — reference Python client for scripts and agents
 
-### Release Integrity
-- Tag-triggered GitHub release workflow builds `dist/netmedic`
-- `SHA256SUMS` manifest for binary and SBOM
-- `sbom-python-<version>.txt` from `pip freeze` at build time
-- Optional GPG detached signature when `RELEASE_GPG_PRIVATE_KEY` and `RELEASE_GPG_KEY_ID` secrets are configured
+### Security Hardening
+- Peer UID must match the daemon owner for privileged actions and `get_session_token`
+- `NETMEDIC_SKIP_POLKIT` ignored in production (requires `NETMEDIC_TEST_MODE=1`)
+- Polkit GI path uses `UnixProcess.new_for_owner` when available
 
-### Security (carried from v1.2)
-- Polkit-backed privileged IPC with action catalog
-- `SO_PEERCRED` peer identification, session tokens, strict `confirmed=True`
-- Documented threat model (`docs/THREAT_MODEL.md`)
+### Operations
+- systemd user unit: `netmedic-headless.service` (installed by `install.sh`)
+- Structured audit log (`audit.log`) from v1.3
+- Release integrity pipeline (SHA256SUMS, SBOM) from v1.3
 
-## Verify a Release
+## Headless daemon
 
 ```bash
-sha256sum -c SHA256SUMS
-# If signed:
-gpg --verify SHA256SUMS.asc SHA256SUMS
+systemctl --user enable --now netmedic-headless.service
 ```
 
 ## Installation
@@ -35,7 +32,7 @@ gpg --verify SHA256SUMS.asc SHA256SUMS
 ```bash
 git clone https://github.com/kayab999/netmedic-linux.git
 cd netmedic-linux
-git checkout v1.3.0
+git checkout v1.4.0
 ./install.sh
 ./venv/bin/netmedic
 ```

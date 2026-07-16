@@ -36,6 +36,8 @@ Use this checklist before tagging a public release.
 - [ ] Crash recovery: app restarts after SIGKILL
 - [ ] IPC privileged actions rejected without token and polkit authorization
 - [ ] Privileged IPC writes structured lines to `~/.local/state/netmedic/audit.log`
+- [ ] Privileged IPC rejects peers whose UID does not match the daemon owner
+- [ ] `NETMEDIC_SKIP_POLKIT` has no effect without `NETMEDIC_TEST_MODE=1`
 - [ ] Polkit policy installed (`com.kayab.netmedic.policy`)
 - [ ] VPN service remains running after app close
 

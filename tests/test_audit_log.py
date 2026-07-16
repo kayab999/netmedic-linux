@@ -1,4 +1,5 @@
 import json
+import os
 from unittest.mock import MagicMock, patch
 
 from netmedic.audit_log import get_audit_log_path, record
@@ -11,7 +12,7 @@ def test_audit_record_writes_json_line(tmp_path, monkeypatch):
     monkeypatch.setattr("netmedic.config.Config.get_state_dir", lambda: tmp_path)
     record(
         action="flush_dns",
-        peer_uid=1000,
+        peer_uid=os.getuid(),
         peer_pid=42,
         params={"confirmed": True, "session_token": "secret"},
         result={"status": "ok", "message": "done"},
@@ -38,7 +39,7 @@ def test_privileged_dispatch_writes_audit_entry(mock_vpn_cls, tmp_path, monkeypa
     result = dispatch(
         "flush_dns",
         {"confirmed": True, "session_token": token},
-        peer_uid=1000,
+        peer_uid=os.getuid(),
         peer_pid=99,
     )
 
@@ -61,7 +62,7 @@ def test_privileged_denial_writes_audit_entry(tmp_path, monkeypatch):
         result = dispatch(
             "flush_dns",
             {"confirmed": True, "session_token": token},
-            peer_uid=1000,
+            peer_uid=os.getuid(),
             peer_pid=55,
         )
 
@@ -76,5 +77,5 @@ def test_safe_action_does_not_write_audit(tmp_path, monkeypatch):
     medic = MagicMock()
     medic.get_firewall_status.return_value = "ON"
     dispatch = create_action_dispatcher(medic, IPCSession())
-    dispatch("firewall_status", {}, peer_uid=1000, peer_pid=1)
+    dispatch("firewall_status", {}, peer_uid=os.getuid(), peer_pid=1)
     assert not get_audit_log_path().exists()

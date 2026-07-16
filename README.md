@@ -2,7 +2,7 @@
 
 Professional network diagnostics, repair, and infrastructure management for Linux. NetMedic combines a GTK3 interface with a hardened privileged IPC core, optional AI orchestration, and VPN lifecycle management.
 
-**Version:** 1.3.0 · **License:** [MIT](LICENSE)
+**Version:** 1.4.0 · **License:** [MIT](LICENSE)
 
 ---
 
@@ -45,6 +45,8 @@ chmod +x install.sh
 
 ```bash
 ./venv/bin/netmedic --headless
+# Or after install.sh:
+systemctl --user enable --now netmedic-headless.service
 ```
 
 ---
@@ -55,7 +57,7 @@ chmod +x install.sh
 netmedic-linux/
 ├── netmedic/          # Core application package
 ├── netmedic_ai/       # Optional AI pilot module
-├── tests/             # Test suite (99 tests)
+├── tests/             # Test suite (110 tests)
 ├── docs/              # User & developer documentation
 ├── scripts/           # Build & packaging scripts
 ├── assets/            # Icon and desktop entry template
@@ -73,6 +75,7 @@ netmedic-linux/
 | [User Manual](docs/MANUAL.md) | Feature guide and troubleshooting |
 | [Development Guide](docs/DEVELOPMENT.md) | Setup, testing, building |
 | [Architecture](docs/ARCHITECTURE.md) | System design overview |
+| [IPC API](docs/IPC_API.md) | Integration guide for automation clients |
 | [Threat Model](docs/THREAT_MODEL.md) | Trust boundaries and residual risks |
 | [Contributing](CONTRIBUTING.md) | Contribution guidelines |
 | [Changelog](CHANGELOG.md) | Version history |

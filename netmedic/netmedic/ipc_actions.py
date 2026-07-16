@@ -3,6 +3,7 @@ import time
 from typing import Any, Callable, Dict, Optional
 
 from netmedic.audit_log import record as audit_record
+from netmedic.ipc_peer import validate_peer_identity
 from netmedic.network import NetworkMedic
 from netmedic.operators.wifi import WifiOperator
 from netmedic.operators.vpn.angristan import AngristanOperator
@@ -105,6 +106,9 @@ def create_action_dispatcher(
         privileged = False
         try:
             if action == "get_session_token":
+                peer_error = validate_peer_identity(peer_uid, peer_pid)
+                if peer_error:
+                    return peer_error
                 token = session.get_token()
                 if not token:
                     return {"status": "error", "message": "IPC session token not yet available."}

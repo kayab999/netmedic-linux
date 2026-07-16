@@ -1,3 +1,4 @@
+import os
 from unittest.mock import MagicMock, patch
 
 from netmedic.ipc_actions import create_action_dispatcher
@@ -16,7 +17,12 @@ def test_vpn_reconnect_restarts_vpn_not_network_stack(mock_vpn_cls):
     token = session.issue_token()
     dispatch = create_action_dispatcher(medic, session)
 
-    result = dispatch("vpn_reconnect", {"confirmed": True, "session_token": token})
+    result = dispatch(
+        "vpn_reconnect",
+        {"confirmed": True, "session_token": token},
+        peer_uid=os.getuid(),
+        peer_pid=os.getpid(),
+    )
 
     mock_vpn.restart_service.assert_called_once()
     medic.reset_tcp_ip_stack.assert_not_called()
@@ -84,18 +90,33 @@ def test_vpn_create_and_revoke_client_security(mock_vpn_cls):
     assert res_fail.get("requires_confirmation") is True
 
     # 2. Confirmed without token should fail
-    res_no_token = dispatch("vpn_create_client", {"name": "test-client", "confirmed": True})
+    res_no_token = dispatch(
+        "vpn_create_client",
+        {"name": "test-client", "confirmed": True},
+        peer_uid=os.getuid(),
+        peer_pid=os.getpid(),
+    )
     assert res_no_token["status"] == "error"
     assert "token" in res_no_token["message"].lower()
 
     # 3. Confirmed with token should succeed
     token = session.issue_token()
-    res_ok = dispatch("vpn_create_client", {"name": "test-client", "confirmed": True, "session_token": token})
+    res_ok = dispatch(
+        "vpn_create_client",
+        {"name": "test-client", "confirmed": True, "session_token": token},
+        peer_uid=os.getuid(),
+        peer_pid=os.getpid(),
+    )
     assert res_ok["status"] == "ok"
     mock_vpn.add_client.assert_called_once_with("test-client")
 
     # 4. Revoke client with token should succeed
-    res_revoke_ok = dispatch("vpn_revoke_client", {"name": "test-client", "confirmed": True, "session_token": token})
+    res_revoke_ok = dispatch(
+        "vpn_revoke_client",
+        {"name": "test-client", "confirmed": True, "session_token": token},
+        peer_uid=os.getuid(),
+        peer_pid=os.getpid(),
+    )
     assert res_revoke_ok["status"] == "ok"
     mock_vpn.revoke_client.assert_called_once_with("test-client")
 
@@ -110,6 +131,8 @@ def test_privileged_confirmed_rejects_truthy_non_boolean(tmp_path, monkeypatch):
         result = dispatch(
             "flush_dns",
             {"confirmed": bad_confirmed, "session_token": token},
+            peer_uid=os.getuid(),
+            peer_pid=os.getpid(),
         )
         assert result["status"] == "error"
         assert result.get("requires_confirmation") is True
@@ -136,7 +159,7 @@ def test_privileged_requires_polkit_when_not_skipped(mock_polkit, tmp_path, monk
     result = dispatch(
         "flush_dns",
         {"confirmed": True, "session_token": token},
-        peer_uid=1000,
+        peer_uid=os.getuid(),
         peer_pid=1234,
     )
     assert result["status"] == "error"
@@ -146,6 +169,6 @@ def test_privileged_requires_polkit_when_not_skipped(mock_polkit, tmp_path, monk
 def test_get_session_token_before_issue(tmp_path, monkeypatch):
     monkeypatch.setattr("netmedic.config.Config.get_state_dir", lambda: tmp_path)
     dispatch = create_action_dispatcher(MagicMock(), IPCSession())
-    result = dispatch("get_session_token", {})
+    result = dispatch("get_session_token", {}, peer_uid=os.getuid(), peer_pid=os.getpid())
     assert result["status"] == "error"
     assert "not yet available" in result["message"].lower()

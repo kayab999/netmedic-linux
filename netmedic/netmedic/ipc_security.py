@@ -10,6 +10,7 @@ from netmedic.action_catalog import (  # noqa: F401 — re-exported for callers
     is_safe,
 )
 from netmedic.config import Config
+from netmedic.ipc_peer import validate_peer_identity
 from netmedic.polkit_auth import check_authorization
 
 logger = logging.getLogger(__name__)
@@ -55,6 +56,10 @@ class IPCSession:
                 "message": "Privileged action requires explicit confirmation (confirmed=true).",
                 "requires_confirmation": True,
             }
+
+        peer_error = validate_peer_identity(peer_uid, peer_pid)
+        if peer_error:
+            return peer_error
 
         authorized, polkit_error = check_authorization(action, peer_uid, peer_pid)
         if not authorized:

@@ -29,7 +29,7 @@ for arg in "$@"; do
     esac
 done
 
-echo -e "${BLUE}=== NetMedic Linux Installer (v1.3.0) ===${NC}"
+echo -e "${BLUE}=== NetMedic Linux Installer (v1.4.0) ===${NC}"
 
 echo -e "${BLUE}[0/6] Runtime dependency preflight...${NC}"
 chmod +x scripts/check-deps.sh
@@ -105,6 +105,12 @@ cp /tmp/netmedic.desktop ~/.local/share/applications/netmedic.desktop
 chmod +x ~/.local/share/applications/netmedic.desktop
 update-desktop-database ~/.local/share/applications 2>/dev/null || true
 
+SERVICE_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
+mkdir -p "$SERVICE_DIR"
+sed -e "s|@EXEC@|${REPO_ROOT}/venv/bin/netmedic|g" \
+    assets/netmedic-headless.service.in > "${SERVICE_DIR}/netmedic-headless.service"
+systemctl --user daemon-reload 2>/dev/null || true
+
 if [ "$SKIP_TESTS" -eq 0 ]; then
     echo -e "${BLUE}[5/6] Running test suite...${NC}"
     python -m pytest tests/ -q
@@ -115,3 +121,4 @@ fi
 echo -e "${GREEN}=== Installation complete ===${NC}"
 echo -e "Run: ${BLUE}${REPO_ROOT}/venv/bin/netmedic${NC}"
 echo -e "Or search for 'NetMedic' in your application menu."
+echo -e "Headless daemon: ${BLUE}systemctl --user enable --now netmedic-headless.service${NC}"

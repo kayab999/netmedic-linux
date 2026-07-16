@@ -1,0 +1,15 @@
+[Unit]
+Description=NetMedic headless IPC daemon
+Documentation=https://github.com/kayab999/netmedic-linux/blob/main/docs/IPC_API.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=@EXEC@ --headless
+Restart=on-failure
+RestartSec=5
+Environment=NO_AT_BRIDGE=1
+
+[Install]
+WantedBy=default.target

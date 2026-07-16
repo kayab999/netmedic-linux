@@ -1,3 +1,4 @@
+import os
 from unittest.mock import patch, MagicMock
 
 from netmedic.ipc_actions import create_action_dispatcher
@@ -54,7 +55,12 @@ def test_ipc_privileged_with_token(mock_run, mock_active, tmp_path, monkeypatch)
     token = session.issue_token()
     dispatch = create_action_dispatcher(NetworkMedic(), session)
 
-    result = dispatch("flush_dns", {"confirmed": True, "session_token": token})
+    result = dispatch(
+        "flush_dns",
+        {"confirmed": True, "session_token": token},
+        peer_uid=os.getuid(),
+        peer_pid=os.getpid(),
+    )
     assert result["status"] == "ok"
 
 
@@ -66,7 +72,7 @@ def test_ipc_bridge_handles_invalid_json(tmp_path, monkeypatch):
         return {"status": "ok", "action": action}
 
     server = NetMedicIPCServer(dispatch, lifecycle)
-    payload = server._handle_payload(b"not-json", peer_pid=1, peer_uid=1000)
+    payload = server._handle_payload(b"not-json", peer_pid=1, peer_uid=os.getuid())
 
     assert payload["status"] == "error"
     assert "JSON" in payload["message"]
@@ -83,7 +89,7 @@ def test_ipc_bridge_strips_trailing_newline(tmp_path, monkeypatch):
     payload = server._handle_payload(
         b'{"action": "network_status", "params": {}}\n',
         peer_pid=1,
-        peer_uid=1000,
+        peer_uid=os.getuid(),
     )
 
     assert payload["status"] == "ok"

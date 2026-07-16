@@ -11,6 +11,8 @@ netmedic/ipc_actions.py
 netmedic/ipc_bridge.py
 netmedic/ipc_client.py
 netmedic/ipc_framing.py
+netmedic/ipc_peer.py
+netmedic/ipc_schema.py
 netmedic/ipc_security.py
 netmedic/ipc_sync_client.py
 netmedic/lifecycle.py

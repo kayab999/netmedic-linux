@@ -13,7 +13,15 @@ logger = logging.getLogger(__name__)
 
 
 def skip_polkit() -> bool:
-    return os.environ.get("NETMEDIC_SKIP_POLKIT", "").lower() in ("1", "true", "yes")
+    """Honor polkit skip only in explicit test mode (fail-closed in production)."""
+    if os.environ.get("NETMEDIC_SKIP_POLKIT", "").lower() not in ("1", "true", "yes"):
+        return False
+    if os.environ.get("NETMEDIC_TEST_MODE") == "1":
+        return True
+    logger.warning(
+        "NETMEDIC_SKIP_POLKIT is set but ignored outside NETMEDIC_TEST_MODE (fail-closed)."
+    )
+    return False
 
 
 def check_authorization(
@@ -41,7 +49,10 @@ def check_authorization(
         from gi.repository import Polkit
 
         authority = Polkit.Authority.get_sync(None)
-        subject = Polkit.UnixProcess.new(pid)
+        try:
+            subject = Polkit.UnixProcess.new_for_owner(pid, uid, -1)
+        except (AttributeError, TypeError):
+            subject = Polkit.UnixProcess.new(pid)
         flags = (
             Polkit.CheckAuthorizationFlags.ALLOW_USER_INTERACTION
             if allow_interaction

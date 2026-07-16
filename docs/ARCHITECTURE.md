@@ -44,7 +44,9 @@
 | `system.py` | `CommandRunner` with log redaction |
 | `lifecycle.py` | PID/lock/socket cleanup, stale lock recovery |
 | `ipc_bridge.py` | Unix socket IPC server |
-| `ipc_security.py` | Session tokens for privileged IPC actions |
+| `ipc_security.py` | Session tokens and peer identity for privileged IPC |
+| `ipc_peer.py` | SO_PEERCRED UID/PID validation |
+| `ipc_schema.py` | Versioned IPC action contract export |
 | `ipc_actions.py` | Action dispatcher routing |
 | `operators/` | Pluggable infrastructure operators |
 
@@ -61,16 +63,17 @@ class BaseOperator(ABC):
 
 VPN operator (`AngristanOperator`) pins script SHA256 before any execution.
 
-## IPC Security Model (v1.2)
+## IPC Security Model (v1.4)
 
 1. On startup, `IPCSession` issues a random token stored at `~/.local/state/netmedic/ipc.token` (mode 600).
-2. Read-only actions (`network_status`, `user_intent`, `wifi_diagnostics`, `firewall_status`) execute without confirmation.
+2. Safe actions execute without confirmation; see [IPC_API.md](IPC_API.md) for the full contract.
 3. Privileged actions require:
+   - Peer UID matching the daemon owner (`ipc_peer.py`)
    - `confirmed: true` (strict boolean)
-   - Polkit authorization for the mapped action ID (peer UID/PID from Unix socket)
+   - Polkit authorization for the mapped action ID
    - Matching `session_token` in params
-4. Action IDs and classifications live in `action_catalog.py`; polkit policies in `assets/com.kayab.netmedic.policy`.
-5. The AI console passes confirmation after user authorization in the preview dialog; polkit prompts are triggered server-side.
+4. Action IDs and classifications live in `action_catalog.py`; exported schema in `ipc_schema.py`.
+5. Privileged attempts are recorded in `audit.log`; polkit prompts are triggered server-side.
 
 See [THREAT_MODEL.md](THREAT_MODEL.md) for actor and residual-risk analysis.
 
