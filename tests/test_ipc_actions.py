@@ -127,6 +127,22 @@ def test_firewall_status_ipc():
     assert result["data"] == "ON"
 
 
+@patch("netmedic.ipc_security.check_authorization", return_value=(False, "Polkit authorization denied."))
+def test_privileged_requires_polkit_when_not_skipped(mock_polkit, tmp_path, monkeypatch):
+    monkeypatch.delenv("NETMEDIC_SKIP_POLKIT", raising=False)
+    session = IPCSession()
+    token = session.issue_token()
+    dispatch = create_action_dispatcher(MagicMock(), session)
+    result = dispatch(
+        "flush_dns",
+        {"confirmed": True, "session_token": token},
+        peer_uid=1000,
+        peer_pid=1234,
+    )
+    assert result["status"] == "error"
+    assert result.get("requires_polkit") is True
+
+
 def test_get_session_token_before_issue(tmp_path, monkeypatch):
     monkeypatch.setattr("netmedic.config.Config.get_state_dir", lambda: tmp_path)
     dispatch = create_action_dispatcher(MagicMock(), IPCSession())

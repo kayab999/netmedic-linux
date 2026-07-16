@@ -4,6 +4,25 @@ All notable changes to NetMedic Linux are documented here.
 
 ## [Unreleased]
 
+## [1.2.0] — 2026-07-16
+
+### Added
+- Polkit-backed privileged IPC (`polkit_auth.py`, `action_catalog.py`, policy XML)
+- `docs/THREAT_MODEL.md` and CI PyInstaller build-smoke job
+- Guardrail parameter validation (`param_validation.py`)
+- Minimal operator plugin registration API
+- Smart Repair skips IP renewal when no default gateway is detected
+- 16+ new tests (polkit, MCP, guardrail params, action catalog, sensors)
+
+### Fixed
+- IPC server passes peer UID/PID for polkit checks via `SO_PEERCRED`
+- Sensors firewall snapshot avoids `NetworkMedic()` singleton side effects
+- VPN panel retries status on tab re-entry after failure
+- AppImage `AppRun` sets GDK backend env vars
+- Non-blocking GTK shutdown and `quit_gui_if_running()` on signals
+
+## [1.1.1] — prior unreleased batch
+
 ### Added
 - IPC thread pool, socket timeouts, bounded client queue, `SyncIPCClient` for MCP
 - Enriched `sensors.get_network_snapshot()` (VPN, NM profile, rfkill, resolvectl DNS)

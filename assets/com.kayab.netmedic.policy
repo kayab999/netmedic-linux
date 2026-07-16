@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC
+ "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<policyconfig>
+  <vendor>Kayab Software</vendor>
+  <vendor_url>https://github.com/kayab999/netmedic-linux</vendor_url>
+
+  <action id="com.kayab.netmedic.flush-dns">
+    <description>Flush DNS resolver cache</description>
+    <message>NetMedic needs permission to flush the DNS cache</message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+  </action>
+
+  <action id="com.kayab.netmedic.renew-ip">
+    <description>Renew DHCP IP address</description>
+    <message>NetMedic needs permission to renew the IP address</message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+  </action>
+
+  <action id="com.kayab.netmedic.change-dns">
+    <description>Change DNS server</description>
+    <message>NetMedic needs permission to change DNS settings</message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+  </action>
+
+  <action id="com.kayab.netmedic.restart-adapter">
+    <description>Restart network adapter</description>
+    <message>NetMedic needs permission to cycle the network adapter</message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+  </action>
+
+  <action id="com.kayab.netmedic.reset-stack">
+    <description>Reset TCP/IP stack</description>
+    <message>NetMedic needs permission to restart NetworkManager</message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+  </action>
+
+  <action id="com.kayab.netmedic.toggle-firewall">
+    <description>Toggle UFW firewall</description>
+    <message>NetMedic needs permission to change firewall state</message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+  </action>
+
+  <action id="com.kayab.netmedic.vpn-create">
+    <description>Create VPN client</description>
+    <message>NetMedic needs permission to create a VPN client profile</message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+  </action>
+
+  <action id="com.kayab.netmedic.vpn-revoke">
+    <description>Revoke VPN client</description>
+    <message>NetMedic needs permission to revoke a VPN client profile</message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+  </action>
+
+  <action id="com.kayab.netmedic.vpn-reconnect">
+    <description>Reconnect VPN service</description>
+    <message>NetMedic needs permission to restart the VPN service</message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+  </action>
+</policyconfig>

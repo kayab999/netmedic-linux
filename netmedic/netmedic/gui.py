@@ -9,14 +9,19 @@ from netmedic.teardown import register as register_teardown
 _main_window = None
 
 
+def quit_gui_if_running():
+    if Gtk.main_level() > 0:
+        GLib.idle_add(Gtk.main_quit)
+
+
 def show_error_dialog(message: str):
-    """Muestra un diálogo de error GTK simple."""
+    """Show a simple GTK error dialog."""
     dialog = Gtk.MessageDialog(
         transient_for=None,
         flags=0,
         message_type=Gtk.MessageType.ERROR,
         buttons=Gtk.ButtonsType.OK,
-        text="Error de Instancia",
+        text="Instance Error",
     )
     dialog.format_secondary_text(message)
     dialog.run()

@@ -9,3 +9,9 @@ def _reset_ipc_client_singleton():
     PilotClient.reset_singleton()
     yield
     PilotClient.reset_singleton()
+
+
+@pytest.fixture(autouse=True)
+def _skip_polkit_in_tests(monkeypatch):
+    """Tests mock polkit explicitly; default to skip for direct dispatch calls."""
+    monkeypatch.setenv("NETMEDIC_SKIP_POLKIT", "1")

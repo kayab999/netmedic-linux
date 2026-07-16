@@ -148,7 +148,7 @@ def get_network_snapshot() -> Dict[str, Any]:
     try:
         from netmedic.network import NetworkMedic
 
-        snapshot["firewall"] = NetworkMedic().get_firewall_status()
+        snapshot["firewall"] = NetworkMedic.read_firewall_status()
     except Exception:
         pass
 

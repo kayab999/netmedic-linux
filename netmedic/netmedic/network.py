@@ -355,16 +355,18 @@ class NetworkMedic:
             details=res.stderr if not res.success else None,
         )
 
-    def get_firewall_status(self) -> str:
-        """
-        Consulta el estado actual de UFW.
-        """
+    @staticmethod
+    def read_firewall_status() -> str:
+        """Read UFW state without initializing the NetworkMedic singleton."""
         res = CommandRunner.run(["ufw", "status"])
         if "inactive" in res.stdout.lower():
             return "OFF"
         if "active" in res.stdout.lower():
             return "ON"
         return "Unknown"
+
+    def get_firewall_status(self) -> str:
+        return self.read_firewall_status()
 
     def toggle_firewall(self) -> NetResult:
         """

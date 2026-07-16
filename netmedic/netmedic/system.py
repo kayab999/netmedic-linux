@@ -59,7 +59,7 @@ class CommandRunner:
         if require_root and os.geteuid() != 0:
             if not shutil.which("pkexec"):
                 logger.error("pkexec not found, cannot elevate privileges")
-                return CommandResult(False, 127, "", "pkexec no encontrado", final_cmd)
+                return CommandResult(False, 127, "", "pkexec not found", final_cmd)
             final_cmd = ["pkexec"] + final_cmd
 
         cmd_str_redacted = CommandRunner._redact_command(final_cmd)

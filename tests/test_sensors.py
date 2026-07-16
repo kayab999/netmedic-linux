@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 from netmedic.sensors import get_network_snapshot
 
 
-@patch("netmedic.network.NetworkMedic")
+@patch("netmedic.network.NetworkMedic.read_firewall_status", return_value="ON")
 @patch("netmedic.sensors._nm_active_connection")
 @patch("netmedic.sensors._rfkill_blocked", return_value=False)
 @patch("netmedic.sensors._vpn_status", return_value={"active": True, "provider": "openvpn"})
@@ -15,15 +15,13 @@ def test_snapshot_includes_enriched_fields(
     mock_vpn,
     mock_rfkill,
     mock_nm,
-    mock_medic_cls,
+    _mock_firewall,
 ):
     mock_proc_run.side_effect = [
         MagicMock(returncode=0, stdout='[{"ifname":"wlan0","operstate":"UP"}]', stderr=""),
         MagicMock(returncode=0, stdout="64 bytes from 8.8.8.8: icmp_seq=1 ttl=118 time=12.3 ms\n", stderr=""),
     ]
     mock_nm.return_value = {"name": "home", "device": "wlan0", "type": "wifi"}
-    mock_medic_cls.return_value.get_firewall_status.return_value = "ON"
-
     with patch("netmedic.sensors.CommandRunner.run") as mock_cmd:
         mock_cmd.return_value = MagicMock(success=True, stdout="default via 192.168.1.1 dev wlan0", stderr="")
         snapshot = get_network_snapshot()

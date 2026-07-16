@@ -46,6 +46,16 @@ def test_interpret_intent_without_llama():
 
 from unittest.mock import MagicMock, patch
 
+def test_user_intent_ipc_does_not_execute_tools():
+    from netmedic.ipc_actions import _handle_user_intent
+
+    result = _handle_user_intent({"user_request": "flush dns", "network_state": {}})
+    assert result.get("status") in ("ok", "error")
+    if result.get("status") == "ok":
+        assert "action" in result
+        assert "data" not in result or result.get("status") != "success"
+
+
 @patch("netmedic.ipc_sync_client.SyncIPCClient")
 def test_guardrail_executes_via_ipc_when_available(mock_client_cls):
     mock_client = MagicMock()

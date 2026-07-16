@@ -189,15 +189,8 @@ class AIConsoleController:
         self.revealer.set_reveal_child(False)
 
         if action == "donate":
-            import subprocess
-            try:
-                subprocess.Popen(
-                    ["xdg-open", "https://buymeacoffee.com/kayabsoftware"],
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                )
-            except OSError as exc:
-                logging.error("Failed to open donation URL: %s", exc)
+            if hasattr(self.main_window, "_spawn_browser"):
+                self.main_window._spawn_browser("https://buymeacoffee.com/kayabsoftware")
             return
 
         # Engage the main window's busy system so concurrent GUI actions are blocked

@@ -21,11 +21,11 @@ MODEL_PATH = BASE_DIR / "nandi-mini-tool-calling.gguf"
 SUM_PATH = BASE_DIR / "nandi-mini-tool-calling.sum"
 
 SYSTEM_PROMPT = (
-    "Eres el Piloto Automático de NetMedic.\n"
-    "Tu propósito es el mantenimiento de la integridad de la red.\n"
-    "- Solo puedes realizar acciones mediante el ActionRegistry.\n"
-    "- NUNCA intentes ejecutar comandos shell directamente.\n"
-    "- Prioriza la estabilidad y seguridad del usuario."
+    "You are the NetMedic Autopilot.\n"
+    "Your purpose is maintaining network integrity.\n"
+    "- You may only perform actions via the ActionRegistry.\n"
+    "- NEVER attempt to execute shell commands directly.\n"
+    "- Prioritize user stability and safety."
 )
 
 _GBNF_TEMPLATE = (
@@ -71,7 +71,7 @@ class NandiPilot:
     def _initialize_model(self):
         if Llama is None or LlamaGrammar is None:
             raise ImportError(
-                "llama-cpp-python no está instalado. Instale con: pip install .[ai]"
+                "llama-cpp-python is not installed. Install with: pip install .[ai]"
             )
 
         action_list = " | ".join(f'"{tool["name"]}"' for tool in self.manifest)

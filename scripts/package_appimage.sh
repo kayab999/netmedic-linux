@@ -26,6 +26,8 @@ cp assets/netmedic.png "$BUILD_DIR/usr/share/icons/hicolor/scalable/apps/netmedi
 
 cat > "$BUILD_DIR/AppRun" <<'EOF'
 #!/bin/sh
+export GDK_BACKEND=x11,wayland
+export NO_AT_BRIDGE=1
 exec usr/bin/netmedic "$@"
 EOF
 chmod +x "$BUILD_DIR/AppRun"

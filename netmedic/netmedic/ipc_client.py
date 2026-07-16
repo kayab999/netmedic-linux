@@ -40,6 +40,10 @@ class PilotClient:
     def _sock_path(self) -> str:
         return str(Config.get_state_dir() / "ipc.sock")
 
+    def is_available(self) -> bool:
+        import os
+        return os.path.exists(self._sock_path)
+
     def _request(self, action: str, params: dict) -> dict:
         sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         try:

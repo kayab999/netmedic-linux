@@ -8,7 +8,7 @@ cd "$REPO_ROOT"
 APP_NAME="NetMedic"
 VENV_DIR="${REPO_ROOT}/venv"
 
-echo "--- Building ${APP_NAME} v1.1.0 ---"
+echo "--- Building ${APP_NAME} v1.2.0 ---"
 
 if [ ! -d "$VENV_DIR" ]; then
     echo "Virtual environment not found. Run ./install.sh first."

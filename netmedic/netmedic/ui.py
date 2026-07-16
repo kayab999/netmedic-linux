@@ -157,7 +157,8 @@ class MainWindow(Gtk.Window):
         self.vpn_panel = VPNPanel(
             executor=self.executor,
             log_callback=self.append_log,
-            set_busy_callback=self.set_busy
+            set_busy_callback=self.set_busy,
+            main_window=self,
         )
         adv_box.pack_start(self.vpn_panel, True, True, 0)
             
@@ -194,9 +195,9 @@ class MainWindow(Gtk.Window):
 
     def _on_tab_switch(self, notebook, page, page_num):
         """Defer VPN refresh until Infrastructure tab is first shown."""
-        if page_num == 1 and hasattr(self, 'vpn_panel') and not self.vpn_panel._state_loaded:
-            self.vpn_panel._state_loaded = True
-            self.vpn_panel.refresh_state()
+        if page_num == 1 and hasattr(self, "vpn_panel"):
+            if not self.vpn_panel._state_loaded or self.vpn_panel._needs_retry:
+                self.vpn_panel.refresh_state()
 
     def create_btn(self, label, handler, destructive=False, accessible_name=None, accessible_description=None):
         btn = Gtk.Button(label=label)
@@ -393,13 +394,33 @@ class MainWindow(Gtk.Window):
         def sequence():
             self.append_log("--- Starting Smart Repair ---")
             repair_ctx = self.status_bar.get_context_id("repair")
+            results = []
+            diag_res = None
             steps = [
                 (self.medic.run_diagnostics, "Diagnosing..."),
                 (self.medic.flush_dns, "Flushing DNS..."),
-                (self.medic.renew_ip, "Renewing IP...")
             ]
-            
-            results = []
+            for step_func, step_msg in steps:
+                GLib.idle_add(lambda m=step_msg: self.status_bar.push(repair_ctx, m))
+                try:
+                    res = step_func()
+                    if step_func == self.medic.run_diagnostics:
+                        diag_res = res
+                    results.append(res)
+                    self.append_log(res.to_log_entry())
+                finally:
+                    GLib.idle_add(lambda: self.status_bar.pop(repair_ctx))
+
+            skip_renew = False
+            if diag_res and diag_res.success and "Gateway" not in diag_res.message:
+                skip_renew = True
+                self.append_log("Smart Repair: skipping IP renewal (no default gateway detected).")
+
+            if not skip_renew:
+                steps = [(self.medic.renew_ip, "Renewing IP...")]
+            else:
+                steps = []
+
             for step_func, step_msg in steps:
                 GLib.idle_add(lambda m=step_msg: self.status_bar.push(repair_ctx, m))
                 try:
@@ -439,13 +460,20 @@ class MainWindow(Gtk.Window):
         if self.ask_confirmation("Toggle Firewall?", "Changing firewall rules may expose your system or block connections."):
             self.run_async_task(self.medic.toggle_firewall, "Toggling Firewall...")
 
-    def on_donate(self, _):
+    def _spawn_browser(self, url: str):
         import subprocess
-        donate_url = "https://buymeacoffee.com/kayabsoftware"
         try:
-            subprocess.Popen(["xdg-open", donate_url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            proc = subprocess.Popen(
+                ["xdg-open", url],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            GLib.child_watch_add(proc.pid, lambda _pid, _status: None)
         except Exception as e:
-            logging.error(f"Failed to open donation URL: {e}")
+            logging.error("Failed to open URL %s: %s", url, e)
+
+    def on_donate(self, _):
+        self._spawn_browser("https://buymeacoffee.com/kayabsoftware")
 
     def on_about(self, _):
         about = Gtk.AboutDialog()

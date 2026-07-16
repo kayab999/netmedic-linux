@@ -29,7 +29,7 @@ for arg in "$@"; do
     esac
 done
 
-echo -e "${BLUE}=== NetMedic Linux Installer (v1.1.0) ===${NC}"
+echo -e "${BLUE}=== NetMedic Linux Installer (v1.2.0) ===${NC}"
 
 echo -e "${BLUE}[0/6] Runtime dependency preflight...${NC}"
 chmod +x scripts/check-deps.sh
@@ -84,7 +84,13 @@ if [ "$INSTALL_AI" -eq 1 ]; then
     pip install -e "netmedic[ai]"
 fi
 
-echo -e "${BLUE}[4/6] Installing icon and desktop launcher...${NC}"
+echo -e "${BLUE}[4/6] Installing polkit policy, icon, and desktop launcher...${NC}"
+POLKIT_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/polkit-1/actions"
+mkdir -p "$POLKIT_DIR"
+cp assets/com.kayab.netmedic.policy "$POLKIT_DIR/com.kayab.netmedic.policy"
+if [ -w /usr/share/polkit-1/actions ] 2>/dev/null; then
+    cp assets/com.kayab.netmedic.policy /usr/share/polkit-1/actions/com.kayab.netmedic.policy 2>/dev/null || true
+fi
 ICON_THEME_ROOT="${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor"
 for size in 48 128 256; do
     mkdir -p "${ICON_THEME_ROOT}/${size}x${size}/apps"

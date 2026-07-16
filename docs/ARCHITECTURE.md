@@ -61,12 +61,18 @@ class BaseOperator(ABC):
 
 VPN operator (`AngristanOperator`) pins script SHA256 before any execution.
 
-## IPC Security Model
+## IPC Security Model (v1.2)
 
 1. On startup, `IPCSession` issues a random token stored at `~/.local/state/netmedic/ipc.token` (mode 600).
-2. Read-only actions (`network_status`, `user_intent`, `wifi_diagnostics`) execute without confirmation.
-3. Privileged actions require `confirmed: true` and matching `session_token` in params.
-4. The AI console passes both after user authorization in the preview dialog.
+2. Read-only actions (`network_status`, `user_intent`, `wifi_diagnostics`, `firewall_status`) execute without confirmation.
+3. Privileged actions require:
+   - `confirmed: true` (strict boolean)
+   - Polkit authorization for the mapped action ID (peer UID/PID from Unix socket)
+   - Matching `session_token` in params
+4. Action IDs and classifications live in `action_catalog.py`; polkit policies in `assets/com.kayab.netmedic.policy`.
+5. The AI console passes confirmation after user authorization in the preview dialog; polkit prompts are triggered server-side.
+
+See [THREAT_MODEL.md](THREAT_MODEL.md) for actor and residual-risk analysis.
 
 ## AI Pilot (Optional)
 

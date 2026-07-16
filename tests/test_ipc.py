@@ -1,4 +1,3 @@
-import json
 from unittest.mock import patch, MagicMock
 
 from netmedic.ipc_actions import create_action_dispatcher
@@ -63,12 +62,11 @@ def test_ipc_bridge_handles_invalid_json(tmp_path, monkeypatch):
     monkeypatch.setattr("netmedic.config.Config.get_state_dir", lambda: tmp_path)
     lifecycle = LifecycleManager()
 
-    def dispatch(action, params):
+    def dispatch(action, params, **kwargs):
         return {"status": "ok", "action": action}
 
     server = NetMedicIPCServer(dispatch, lifecycle)
-    response = server._handle_payload(b"not-json")
-    payload = json.loads(response)
+    payload = server._handle_payload(b"not-json", peer_pid=1, peer_uid=1000)
 
     assert payload["status"] == "error"
     assert "JSON" in payload["message"]
@@ -78,12 +76,15 @@ def test_ipc_bridge_strips_trailing_newline(tmp_path, monkeypatch):
     monkeypatch.setattr("netmedic.config.Config.get_state_dir", lambda: tmp_path)
     lifecycle = LifecycleManager()
 
-    def dispatch(action, params):
+    def dispatch(action, params, **kwargs):
         return {"status": "ok", "action": action, "params": params}
 
     server = NetMedicIPCServer(dispatch, lifecycle)
-    response = server._handle_payload(b'{"action": "network_status", "params": {}}\n')
-    payload = json.loads(response)
+    payload = server._handle_payload(
+        b'{"action": "network_status", "params": {}}\n',
+        peer_pid=1,
+        peer_uid=1000,
+    )
 
     assert payload["status"] == "ok"
     assert payload["action"] == "network_status"

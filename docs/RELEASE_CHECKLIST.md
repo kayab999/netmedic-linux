@@ -34,7 +34,8 @@ Use this checklist before tagging a public release.
 
 - [ ] Second instance blocked with clear error message
 - [ ] Crash recovery: app restarts after SIGKILL
-- [ ] IPC privileged actions rejected without token
+- [ ] IPC privileged actions rejected without token and polkit authorization
+- [ ] Polkit policy installed (`com.kayab.netmedic.policy`)
 - [ ] VPN service remains running after app close
 
 ## 6. Packaging

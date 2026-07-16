@@ -57,6 +57,12 @@ def handle_signals(signum, frame):
     except Exception as exc:
         logging.error("Cleanup failed: %s", exc)
 
+    try:
+        from netmedic.gui import quit_gui_if_running
+        quit_gui_if_running()
+    except Exception:
+        pass
+
     sys.exit(0)
 
 

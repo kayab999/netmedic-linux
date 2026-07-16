@@ -4,17 +4,15 @@ from typing import Any, Callable, Dict, Optional
 from netmedic.network import NetworkMedic
 from netmedic.operators.wifi import WifiOperator
 from netmedic.operators.vpn.angristan import AngristanOperator
-from netmedic.ipc_security import IPCSession, SAFE_ACTIONS, PRIVILEGED_ACTIONS
+from netmedic.action_catalog import PRIVILEGED_ACTIONS, SAFE_ACTIONS, is_internal
+from netmedic.ipc_security import IPCSession
 
 DONATE_URL = "https://buymeacoffee.com/kayabsoftware"
 
 logger = logging.getLogger(__name__)
 
-_INTERNAL_ACTIONS = frozenset({"get_session_token", "user_intent", "donate"})
-
-
 def _validate_action(action: str) -> Optional[Dict[str, Any]]:
-    if action in _INTERNAL_ACTIONS:
+    if is_internal(action):
         return None
     try:
         from netmedic_ai.toolkit import registry  # type: ignore[import-untyped]
@@ -51,12 +49,18 @@ def _result_payload(result) -> Dict[str, Any]:
 def create_action_dispatcher(
     medic: NetworkMedic,
     session: IPCSession,
-) -> Callable[[str, Dict[str, Any]], Dict[str, Any]]:
+) -> Callable[..., Dict[str, Any]]:
     """Builds the IPC action router bound to a NetworkMedic instance."""
     wifi = WifiOperator()
     vpn = AngristanOperator()
 
-    def dispatch(action: str, params: Dict[str, Any]) -> Dict[str, Any]:
+    def dispatch(
+        action: str,
+        params: Dict[str, Any],
+        *,
+        peer_uid: int = -1,
+        peer_pid: int = -1,
+    ) -> Dict[str, Any]:
         try:
             if action == "get_session_token":
                 token = session.get_token()
@@ -68,7 +72,9 @@ def create_action_dispatcher(
             if unknown:
                 return unknown
 
-            auth_error = session.validate_privileged(action, params)
+            auth_error = session.validate_privileged(
+                action, params, peer_uid=peer_uid, peer_pid=peer_pid
+            )
             if auth_error:
                 return auth_error
 

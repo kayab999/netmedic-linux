@@ -7,15 +7,17 @@ from netmedic.operators.base import OperatorStatus
 from netmedic.models import NetResult, TaskResult
 
 class VPNPanel(Gtk.Box):
-    def __init__(self, executor, log_callback=None, set_busy_callback=None):
+    def __init__(self, executor, log_callback=None, set_busy_callback=None, main_window=None):
         super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=10)
         self.set_border_width(10)
         
         self.executor = executor
         self.log_cb = log_callback
         self.set_busy_cb = set_busy_callback
+        self.main_window = main_window
         self.operator = AngristanOperator()
         self._state_loaded = False
+        self._needs_retry = False
         
         # --- UI Components ---
         
@@ -158,12 +160,16 @@ class VPNPanel(Gtk.Box):
         future.add_done_callback(on_done)
 
     def _show_error(self, title, message):
-        """Shows an error dialog if the panel is inside a window."""
-        toplevel = self.get_toplevel()
-        if not toplevel or not isinstance(toplevel, Gtk.Window): return
-        
+        """Shows an error dialog using the main window when available."""
+        parent = self.main_window
+        if parent is None:
+            toplevel = self.get_toplevel()
+            parent = toplevel if isinstance(toplevel, Gtk.Window) else None
+        if parent is None or getattr(parent, "is_destroyed", False):
+            return
+
         dialog = Gtk.MessageDialog(
-            transient_for=toplevel,
+            transient_for=parent,
             flags=0,
             message_type=Gtk.MessageType.ERROR,
             buttons=Gtk.ButtonsType.OK,
@@ -175,8 +181,16 @@ class VPNPanel(Gtk.Box):
 
     def refresh_state(self):
         def update_ui(status_res):
+            if not status_res.success:
+                self._needs_retry = True
+                self._state_loaded = False
+                self.status_label.set_text(f"VPN Error: {status_res.message}")
+                return
+
+            self._needs_retry = False
+            self._state_loaded = True
             status = status_res.message
-            
+
             # Update Header
             if status == OperatorStatus.NOT_INSTALLED.value:
                 self.status_label.set_text("VPN Not Installed")
