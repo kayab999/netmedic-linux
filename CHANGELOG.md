@@ -4,6 +4,16 @@ All notable changes to NetMedic Linux are documented here.
 
 ## [Unreleased]
 
+## [1.3.0] — 2026-07-16
+
+### Added
+- Structured JSON audit log for privileged IPC (`audit.log` in state dir)
+- Release integrity pipeline: `SHA256SUMS`, Python SBOM, GitHub release workflow
+- Optional GPG detached signature for checksums via `RELEASE_GPG_*` CI secrets
+
+### Fixed
+- Documentation version alignment (README, RELEASE_NOTES, ROADMAP, desktop entry, netmedic_ai)
+
 ## [1.2.0] — 2026-07-16
 
 ### Added

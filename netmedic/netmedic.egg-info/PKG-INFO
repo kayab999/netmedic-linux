@@ -1,7 +1,10 @@
 Metadata-Version: 2.4
 Name: netmedic
-Version: 1.0.0
-Summary: A simple network diagnostic and repair tool for Linux.
-Author-email: Gemini <gemini@google.com>
+Version: 1.3.0
+Summary: Professional network diagnostics, repair, and infrastructure management for Linux.
+Author-email: Kayab Software <support@kayabsoftware.com>
 Requires-Python: >=3.8
 Requires-Dist: PyGObject
+Requires-Dist: pillow
+Provides-Extra: ai
+Requires-Dist: llama-cpp-python>=0.2.57; extra == "ai"

@@ -2,7 +2,7 @@
 
 ## Vision
 
-NetMedic aims to be a sovereign, open-source network management tool for Linux — transparent, verifiable, and resilient.
+NetMedic aims to be a sovereign, open-source network management platform for Linux — transparent, verifiable, and resilient. The GUI is one client; the privileged IPC core is the product.
 
 ## v1.0.0 — Released
 
@@ -12,8 +12,6 @@ NetMedic aims to be a sovereign, open-source network management tool for Linux �
 - [x] Lifecycle management (singleton lock, crash recovery)
 - [x] IPC server with session token authorization
 - [x] Optional AI pilot with guardrail whitelist
-- [x] 39-test automated suite
-- [x] Documentation and GitHub-ready structure
 
 ## v1.1.0 — Released (2026-06-18)
 
@@ -21,18 +19,30 @@ NetMedic aims to be a sovereign, open-source network management tool for Linux �
 - [x] Headless runtime / GUI split
 - [x] AI pilot restoration with guardrail whitelist
 - [x] Repository restructure (`scripts/`, `assets/`, `tools/`, `docs/`)
-- [x] Icon/desktop install fixes and adversarial audit remediation
-- [x] 45+ test automated suite
 
-## v1.2.0 — Refinement (In Progress)
+## v1.2.0 — Released (2026-07-16)
 
 - [x] Polkit-backed privileged IPC authorization
+- [x] Action catalog as single source of truth
 - [x] Fail-closed AI toolkit execution
 - [x] CI PyInstaller build smoke
-- [x] Smart Repair gateway heuristic (skip renew when no gateway)
-- [x] Minimal plugin operator registration API
+- [x] Threat model documentation
+- [x] 95-test trust-core suite
+
+## v1.3.0 — Enterprise Governance (Released 2026-07-16)
+
+- [x] Structured audit log for privileged IPC
+- [x] Release integrity pipeline (SHA256SUMS, SBOM, GitHub workflow)
+- [x] Documentation version sync
 - [ ] Real-time network sensor visualization (deferred UI)
 - [ ] Flatpak packaging (deferred)
+
+## v1.4 — Platform (Planned)
+
+- [ ] Versioned IPC action schema and integration guide
+- [ ] Peer UID enforcement hardening
+- [ ] Production fail-closed without `NETMEDIC_SKIP_POLKIT`
+- [ ] systemd user unit for headless daemon
 
 ## v2.0.0 — Framework (Future)
 

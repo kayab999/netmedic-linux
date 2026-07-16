@@ -1,0 +1,71 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            python3-gi python3-gi-cairo gir1.2-gtk-3.0 \
+            libcairo2-dev libgirepository-2.0-dev pkg-config \
+            policykit-1
+
+      - name: Install Python packages
+        run: |
+          python -m pip install --upgrade pip wheel setuptools pytest pyinstaller
+          pip install -e netmedic/ --config-settings editable_mode=strict
+          pip install -e netmedic_ai/
+
+      - name: Test
+        run: python -m pytest tests/ -q
+
+      - name: Build release assets
+        run: |
+          chmod +x scripts/prepare_release_assets.sh
+          TAG="${GITHUB_REF_NAME#v}"
+          ./scripts/prepare_release_assets.sh "$TAG"
+
+      - name: Sign checksums (optional)
+        env:
+          RELEASE_GPG_PRIVATE_KEY: ${{ secrets.RELEASE_GPG_PRIVATE_KEY }}
+          RELEASE_GPG_KEY_ID: ${{ secrets.RELEASE_GPG_KEY_ID }}
+        run: |
+          if [ -n "${RELEASE_GPG_PRIVATE_KEY:-}" ] && [ -n "${RELEASE_GPG_KEY_ID:-}" ]; then
+            echo "$RELEASE_GPG_PRIVATE_KEY" | gpg --batch --import
+            gpg --batch --yes --armor --detach-sign \
+              --local-user "$RELEASE_GPG_KEY_ID" \
+              --output dist/SHA256SUMS.asc \
+              dist/SHA256SUMS
+          else
+            echo "GPG signing skipped (secrets not configured)."
+          fi
+
+      - name: Stage release artifacts
+        run: |
+          mkdir -p release-upload
+          cp dist/netmedic dist/SHA256SUMS dist/sbom-python-*.txt release-upload/
+          if [ -f dist/SHA256SUMS.asc ]; then
+            cp dist/SHA256SUMS.asc release-upload/
+          fi
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: release-upload/*

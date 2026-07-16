@@ -37,6 +37,10 @@ class Config:
         return Config.get_state_dir() / "netmedic.log"
 
     @staticmethod
+    def get_audit_log_file() -> Path:
+        return Config.get_state_dir() / "audit.log"
+
+    @staticmethod
     def get_default_timeout() -> int:
         """Timeout por defecto para comandos cortos (30s)."""
         return 30

@@ -8,7 +8,8 @@ cd "$REPO_ROOT"
 APP_NAME="NetMedic"
 VENV_DIR="${REPO_ROOT}/venv"
 
-echo "--- Building ${APP_NAME} v1.2.0 ---"
+VERSION="$(python3 -c "from netmedic import __version__; print(__version__)" 2>/dev/null || echo "unknown")"
+echo "--- Building ${APP_NAME} v${VERSION} ---"
 
 if [ ! -d "$VENV_DIR" ]; then
     echo "Virtual environment not found. Run ./install.sh first."

@@ -29,7 +29,7 @@ for arg in "$@"; do
     esac
 done
 
-echo -e "${BLUE}=== NetMedic Linux Installer (v1.2.0) ===${NC}"
+echo -e "${BLUE}=== NetMedic Linux Installer (v1.3.0) ===${NC}"
 
 echo -e "${BLUE}[0/6] Runtime dependency preflight...${NC}"
 chmod +x scripts/check-deps.sh

@@ -1,47 +1,50 @@
-# Release Notes — NetMedic v1.1.0
+# Release Notes — NetMedic v1.3.0
 
 ## Overview
 
-NetMedic v1.1.0 is a major hardening and restructuring release following v1.0.0. It delivers a production-ready network diagnostic and repair tool with optional AI orchestration, VPN management, and hardened security controls.
+NetMedic v1.3.0 closes the enterprise governance gap identified in the v1.2.0 audit cycle. The privileged IPC core is unchanged; this release adds **demonstrability**: structured audit evidence, release artifact integrity, and synchronized documentation.
 
 ## Highlights
 
-### Network Repair
-- Smart Repair sequence (diagnostics → DNS → DHCP)
-- Wi-Fi congestion analysis
-- DNS server configuration via NetworkManager
-- Firewall and adapter management
+### Governance & Audit
+- Privileged IPC actions write structured JSON lines to `~/.local/state/netmedic/audit.log`
+- Each record includes timestamp, action, peer UID/PID, outcome, duration, and redacted params
+- Authorization denials (polkit, token, confirmation) are audited with `outcome: denied`
 
-### Security
-- IPC session tokens for privileged operations
-- Log redaction for sensitive command arguments
-- SHA256 integrity verification for VPN installer scripts
-- Singleton instance locking with crash recovery
+### Release Integrity
+- Tag-triggered GitHub release workflow builds `dist/netmedic`
+- `SHA256SUMS` manifest for binary and SBOM
+- `sbom-python-<version>.txt` from `pip freeze` at build time
+- Optional GPG detached signature when `RELEASE_GPG_PRIVATE_KEY` and `RELEASE_GPG_KEY_ID` secrets are configured
 
-### AI Pilot (Optional)
-- Natural-language command palette (Ctrl+Space)
-- GBNF-constrained LLM output
-- Guardrail whitelist — only registered actions permitted
-- User confirmation required before execution
+### Security (carried from v1.2)
+- Polkit-backed privileged IPC with action catalog
+- `SO_PEERCRED` peer identification, session tokens, strict `confirmed=True`
+- Documented threat model (`docs/THREAT_MODEL.md`)
 
-### Infrastructure
-- OpenVPN server install and client management (Angristan)
-- Headless IPC daemon mode
-- MCP server integration (`tools/netmedic_mcp.py`)
+## Verify a Release
+
+```bash
+sha256sum -c SHA256SUMS
+# If signed:
+gpg --verify SHA256SUMS.asc SHA256SUMS
+```
 
 ## Installation
 
 ```bash
 git clone https://github.com/kayab999/netmedic-linux.git
 cd netmedic-linux
+git checkout v1.3.0
 ./install.sh
-./venv/bin/python -m netmedic
+./venv/bin/netmedic
 ```
 
 ## Requirements
 
 - Linux with GTK3 and NetworkManager
 - Python 3.8+
+- PolicyKit for privileged IPC actions
 - Optional: `llama-cpp-python` + GGUF model for AI features
 
 ---

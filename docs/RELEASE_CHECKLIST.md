@@ -6,7 +6,7 @@ Use this checklist before tagging a public release.
 
 - [ ] All tests pass: `venv/bin/python -m pytest tests/ -v`
 - [ ] Linter clean: `venv/bin/ruff check netmedic/ netmedic_ai/ tests/`
-- [ ] Version aligned in `netmedic/pyproject.toml`, `CHANGELOG.md`, `README.md`
+- [ ] Version aligned in `netmedic/pyproject.toml`, `netmedic_ai/`, `CHANGELOG.md`, `README.md`, `docs/RELEASE_NOTES.md`
 
 ## 2. Installation
 
@@ -35,12 +35,14 @@ Use this checklist before tagging a public release.
 - [ ] Second instance blocked with clear error message
 - [ ] Crash recovery: app restarts after SIGKILL
 - [ ] IPC privileged actions rejected without token and polkit authorization
+- [ ] Privileged IPC writes structured lines to `~/.local/state/netmedic/audit.log`
 - [ ] Polkit policy installed (`com.kayab.netmedic.policy`)
 - [ ] VPN service remains running after app close
 
 ## 6. Packaging
 
-- [ ] `./scripts/build_binary.sh` produces `dist/netmedic`
+- [ ] `./scripts/prepare_release_assets.sh` produces `dist/netmedic`, `SHA256SUMS`, and SBOM
 - [ ] `./scripts/package_appimage.sh` produces AppImage (if appimagetool available)
-- [ ] Release assets uploaded to GitHub Releases page
+- [ ] Tag push triggers `.github/workflows/release.yml` (or manual upload)
+- [ ] `sha256sum -c SHA256SUMS` passes on release artifacts
 - [ ] `CHANGELOG.md` and `docs/RELEASE_NOTES.md` updated
