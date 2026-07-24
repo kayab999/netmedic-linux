@@ -107,10 +107,32 @@ class NandiPilot:
             "params": decision.get("params", {}),
         }
 
-    def process_event(self, network_state: dict, user_request: str) -> dict:
+    def process_event(
+        self,
+        network_state: dict,
+        user_request: str,
+        *,
+        confirmed: bool = False,
+    ) -> dict:
+        """Infer intent and optionally execute — execution requires confirmed=True.
+
+        Prefer interpret_intent / IPC user_intent for preview, then a separate
+        confirmed privileged IPC call. Auto-execute without confirmation is forbidden.
+        """
         decision = self.infer_intent(network_state, user_request)
         if decision.get("status") == "error":
             return decision
+        if not confirmed:
+            return {
+                "status": "error",
+                "message": (
+                    "process_event refuses unconfirmed execution. "
+                    "Use interpret_intent for preview, then a confirmed IPC action."
+                ),
+                "requires_confirmation": True,
+                "action": decision.get("action"),
+                "params": decision.get("params", {}),
+            }
         return PilotoGuardrail.execute_tool(
             decision["action"],
             decision.get("params", {}),

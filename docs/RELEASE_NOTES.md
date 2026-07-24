@@ -1,3 +1,11 @@
+# Release Notes — NetMedic v1.4.1
+
+Security hardening release on the v1.4 platform: polkit subject fix, GUI→IPC
+unified elevation, medic* iface allowlist, privileged concurrency limit, and
+AI/UI safety fixes. See [CHANGELOG.md](../CHANGELOG.md) for the full list.
+
+---
+
 # Release Notes — NetMedic v1.4.0
 
 ## Overview

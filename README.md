@@ -2,7 +2,7 @@
 
 Professional network diagnostics, repair, and infrastructure management for Linux. NetMedic combines a GTK3 interface with a hardened privileged IPC core, optional AI orchestration, and VPN lifecycle management.
 
-**Version:** 1.4.0 · **License:** [MIT](LICENSE)
+**Version:** 1.4.1 · **License:** [MIT](LICENSE)
 
 ---
 
@@ -49,6 +49,16 @@ chmod +x install.sh
 systemctl --user enable --now netmedic-headless.service
 ```
 
+### Polkit policy (privileged IPC)
+
+System-wide policy is required for privileged actions (GUI, MCP, AI):
+
+```bash
+./scripts/install-polkit-policy.sh
+# or: sudo cp assets/com.kayab.netmedic.policy /usr/share/polkit-1/actions/
+pkaction --action-id com.kayab.netmedic.flush-dns
+```
+
 ---
 
 ## Project Structure
@@ -57,7 +67,7 @@ systemctl --user enable --now netmedic-headless.service
 netmedic-linux/
 ├── netmedic/          # Core application package
 ├── netmedic_ai/       # Optional AI pilot module
-├── tests/             # Test suite (110 tests)
+├── tests/             # Test suite (160+ tests)
 ├── docs/              # User & developer documentation
 ├── scripts/           # Build & packaging scripts
 ├── assets/            # Icon and desktop entry template

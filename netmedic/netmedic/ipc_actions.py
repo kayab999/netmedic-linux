@@ -1,4 +1,5 @@
 import logging
+import threading
 import time
 from typing import Any, Callable, Dict, Optional
 
@@ -11,6 +12,11 @@ from netmedic.action_catalog import PRIVILEGED_ACTIONS, SAFE_ACTIONS, is_interna
 from netmedic.ipc_security import IPCSession
 
 DONATE_URL = "https://buymeacoffee.com/kayabsoftware"
+
+# Serialize privileged execution so concurrent pkexec/polkit work cannot exhaust
+# the IPC worker pool (documented residual risk in THREAT_MODEL).
+_MAX_CONCURRENT_PRIVILEGED = 1
+_privileged_slots = threading.Semaphore(_MAX_CONCURRENT_PRIVILEGED)
 
 logger = logging.getLogger(__name__)
 
@@ -148,6 +154,7 @@ def create_action_dispatcher(
     ) -> Dict[str, Any]:
         started = time.monotonic()
         privileged = False
+        held_privileged_slot = False
         try:
             if not isinstance(action, str) or not action:
                 return {"status": "error", "message": "Invalid request shape: action must be a non-empty string."}
@@ -194,6 +201,28 @@ def create_action_dispatcher(
                     action, params, result,
                     peer_uid=peer_uid, peer_pid=peer_pid, started=started, privileged=privileged,
                 )
+
+            if privileged:
+                if not _privileged_slots.acquire(blocking=False):
+                    busy = {
+                        "status": "error",
+                        "message": (
+                            "Another privileged operation is already running. "
+                            "Retry after it completes."
+                        ),
+                        "busy": True,
+                    }
+                    audit_record(
+                        action=action,
+                        peer_uid=peer_uid,
+                        peer_pid=peer_pid,
+                        params=params,
+                        result=busy,
+                        duration_ms=(time.monotonic() - started) * 1000,
+                        outcome="denied",
+                    )
+                    return busy
+                held_privileged_slot = True
 
             if action == "user_intent":
                 return _handle_user_intent(params)
@@ -302,6 +331,9 @@ def create_action_dispatcher(
                     action, params, result, peer_uid=peer_uid, peer_pid=peer_pid, started=started
                 )
             return result
+        finally:
+            if held_privileged_slot:
+                _privileged_slots.release()
 
     return dispatch
 

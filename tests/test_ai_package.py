@@ -67,3 +67,26 @@ def test_guardrail_executes_via_ipc_when_available(mock_client_cls):
     assert result["status"] == "success"
     assert "Success: Real DNS Flushed" in result["data"]
     mock_client.request.assert_called_once_with("flush_dns", {}, confirmed=True)
+
+
+def test_process_event_requires_confirmed():
+    from netmedic_ai.pilot import NandiPilot
+
+    pilot = object.__new__(NandiPilot)
+    with patch.object(
+        pilot,
+        "infer_intent",
+        return_value={"status": "ok", "action": "flush_dns", "params": {}},
+    ):
+        denied = pilot.process_event({}, "flush dns")
+        assert denied["status"] == "error"
+        assert denied.get("requires_confirmation") is True
+        assert denied.get("action") == "flush_dns"
+
+        with patch(
+            "netmedic_ai.pilot.PilotoGuardrail.execute_tool",
+            return_value={"status": "success", "data": "ok"},
+        ) as exec_tool:
+            allowed = pilot.process_event({}, "flush dns", confirmed=True)
+            assert allowed["status"] == "success"
+            exec_tool.assert_called_once_with("flush_dns", {})

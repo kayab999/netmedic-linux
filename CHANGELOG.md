@@ -4,6 +4,8 @@ All notable changes to NetMedic Linux are documented here.
 
 ## [Unreleased]
 
+## [1.4.1] — 2026-07-24
+
 ### Security
 - Fix polkit GI subject construction: `new_for_owner(pid, start_time, uid)` (was miswired as uid/starttime)
 - Pass process start_time to `pkcheck --process`; enable `--allow-user-interaction`
@@ -18,6 +20,8 @@ All notable changes to NetMedic Linux are documented here.
 - AI disruptive actions require second confirmation; execute single-flight
 - Smart Repair correctly skips IP renew on `Gateway Not Found`
 - Installer installs polkit policy system-wide (sudo); safer desktop temp file
+- Serialize privileged IPC execution (one at a time) to avoid worker-pool exhaustion
+- `process_event` refuses unconfirmed tool execution (preview-only without `confirmed=True`)
 
 ### Fixed
 - AI palette overlay no longer steals content clicks when hidden (pass-through + alignment)
@@ -26,8 +30,8 @@ All notable changes to NetMedic Linux are documented here.
 - Synchronous virtual-iface cleanup on window destroy
 
 ### Ops
-- Installer prefers system-wide polkit policy; if install was skipped, run:
-  `sudo cp assets/com.kayab.netmedic.policy /usr/share/polkit-1/actions/`
+- `scripts/install-polkit-policy.sh` for system-wide polkit actions
+- Installer prefers system-wide polkit policy; if install was skipped, run the script above
 
 ## [1.4.0] — 2026-07-16
 

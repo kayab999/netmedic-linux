@@ -44,6 +44,15 @@ NetMedic aims to be a sovereign, open-source network management platform for Lin
 - [ ] Real-time network sensor visualization (deferred UI)
 - [ ] Flatpak packaging (deferred)
 
+## v1.4.1 — Security Hardening (Released 2026-07-24)
+
+- [x] Enterprise audit remediation (polkit subject, auth order, medic* allowlist)
+- [x] GUI → IPC bridge for shared polkit + audit on catalog actions
+- [x] VPN install/start privileged IPC; list-clients reclassified privileged
+- [x] Privileged IPC concurrency limit; AI process_event confirmation gate
+- [x] Overlay click-steal fix; UI wiring regression suite
+- [x] Polkit install script and installer system-path install
+
 ## v2.0.0 — Framework (Future)
 
 - [ ] Full plugin architecture with discovery

@@ -2,7 +2,7 @@
 
 ## Scope
 
-NetMedic is a single-user desktop privileged operations platform. This document describes trust boundaries for v1.4.0.
+NetMedic is a single-user desktop privileged operations platform. This document describes trust boundaries for v1.4.1.
 
 ## Actors
 
@@ -44,7 +44,7 @@ NetMedic is a single-user desktop privileged operations platform. This document 
 - GUI catalog actions (repair, stack, DNS, firewall, full VPN surface) go through IPC and are audit-logged. Residual direct elevation: local virtual-iface cleanup on exit.
 - After IPC authorization, `CommandRunner` still uses generic `pkexec` for the actual root command (fine-grained polkit action IDs gate the IPC action, not the argv).
 - Headless MCP mutating operations require `pkttyagent` or fail with an explicit error.
-- IPC thread pool exhaustion under concurrent long `pkexec` operations.
+- IPC worker pool still has a fixed size; privileged execution is serialized (one at a time) to reduce exhaustion under concurrent long `pkexec` operations.
 - VPN script staging narrows TOCTOU but cannot fully eliminate same-UID races without a root-owned helper.
 - Session token + `confirmed` are not same-UID authentication; polkit/pkexec remain the real elevation gates.
 
