@@ -17,15 +17,15 @@ def test_cleanup_on_signal(mock_run):
 
     medic = NetworkMedic()
     with medic._state_lock:
-        medic._created_ifaces.add("medic99")
+        medic._created_ifaces.add("medicabcdef")
 
-    assert "medic99" in medic._created_ifaces
+    assert "medicabcdef" in medic._created_ifaces
 
     res = medic.cleanup()
 
     assert res.success is True
-    assert "medic99" not in medic._created_ifaces
-    mock_run.assert_called_with(["ip", "link", "del", "medic99"], require_root=True)
+    assert "medicabcdef" not in medic._created_ifaces
+    mock_run.assert_called_with(["ip", "link", "del", "medicabcdef"], require_root=True)
 
 
 def test_signal_handler_registration():

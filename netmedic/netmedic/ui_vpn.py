@@ -5,6 +5,7 @@ from gi.repository import Gtk, GLib
 from netmedic.operators.vpn.angristan import AngristanOperator
 from netmedic.operators.base import OperatorStatus
 from netmedic.models import NetResult, TaskResult
+from netmedic.gui_actions import GuiActionBridge
 
 class VPNPanel(Gtk.Box):
     def __init__(self, executor, log_callback=None, set_busy_callback=None, main_window=None):
@@ -16,6 +17,8 @@ class VPNPanel(Gtk.Box):
         self.set_busy_cb = set_busy_callback
         self.main_window = main_window
         self.operator = AngristanOperator()
+        # All VPN catalog ops go through IPC (auth + audit); operator kept for teardown.
+        self.actions = GuiActionBridge()
         self._state_loaded = False
         self._needs_retry = False
         
@@ -206,22 +209,28 @@ class VPNPanel(Gtk.Box):
                 self.action_btn.get_style_context().add_class("secondary-action")
                 self.action_btn.set_sensitive(True)
                 self.clients_frame.set_sensitive(True)
-                # Auto-load clients
-                self.run_async(self.operator.list_clients, callback=self.update_client_list)
-            
+                # Auto-load clients via privileged IPC (PKI index read).
+                self.run_async(
+                    lambda: self.actions.call("vpn_list_clients"),
+                    callback=self.update_client_list,
+                )
+
             elif status == OperatorStatus.STOPPED.value:
                 self.status_label.set_text("VPN Service Stopped")
                 self.action_btn.set_label("Start VPN Service")
                 self.action_btn.get_style_context().add_class("primary-action")
                 self.action_btn.set_sensitive(True)
                 self.clients_frame.set_sensitive(True)
-                self.run_async(self.operator.list_clients, callback=self.update_client_list)
-                
+                self.run_async(
+                    lambda: self.actions.call("vpn_list_clients"),
+                    callback=self.update_client_list,
+                )
+
             else: # ERROR / UNKNOWN
                 self.status_label.set_text(f"Status: {status}")
                 self.clients_frame.set_sensitive(False)
 
-        self.run_async(self.operator.check_status, callback=update_ui)
+        self.run_async(lambda: self.actions.call("vpn_status"), callback=update_ui)
 
     def update_client_list(self, result: NetResult):
         self.client_list_store.clear()
@@ -251,7 +260,10 @@ class VPNPanel(Gtk.Box):
             dialog.destroy()
             
             if response == Gtk.ResponseType.OK:
-                self.run_async(self.operator.install, callback=lambda _: self.refresh_state())
+                self.run_async(
+                    lambda: self.actions.call("vpn_install"),
+                    callback=lambda _: self.refresh_state(),
+                )
         elif "Start VPN" in label:
             dialog = Gtk.MessageDialog(
                 transient_for=self.get_toplevel(),
@@ -264,7 +276,10 @@ class VPNPanel(Gtk.Box):
             response = dialog.run()
             dialog.destroy()
             if response == Gtk.ResponseType.OK:
-                self.run_async(self.operator.start_service, callback=lambda _: self.refresh_state())
+                self.run_async(
+                    lambda: self.actions.call("vpn_start_service"),
+                    callback=lambda _: self.refresh_state(),
+                )
         else:
             self.refresh_state()
 
@@ -290,7 +305,13 @@ class VPNPanel(Gtk.Box):
             if not name:
                 self._show_error("Invalid Name", "Please enter a client name.")
                 return
-            self.run_async(self.operator.add_client, name, callback=lambda _: self.run_async(self.operator.list_clients, callback=self.update_client_list))
+            self.run_async(
+                lambda: self.actions.call("vpn_create_client", {"name": name}),
+                callback=lambda _: self.run_async(
+                    lambda: self.actions.call("vpn_list_clients"),
+                    callback=self.update_client_list,
+                ),
+            )
 
     def on_revoke_client(self, widget):
         selection = self.tree_view.get_selection()
@@ -313,7 +334,9 @@ class VPNPanel(Gtk.Box):
 
         if response == Gtk.ResponseType.OK:
             self.run_async(
-                self.operator.revoke_client,
-                name,
-                callback=lambda _: self.run_async(self.operator.list_clients, callback=self.update_client_list),
+                lambda: self.actions.call("vpn_revoke_client", {"name": name}),
+                callback=lambda _: self.run_async(
+                    lambda: self.actions.call("vpn_list_clients"),
+                    callback=self.update_client_list,
+                ),
             )

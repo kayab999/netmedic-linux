@@ -21,7 +21,7 @@ def test_audit_record_writes_json_line(tmp_path, monkeypatch):
     )
     line = json.loads(get_audit_log_path().read_text().strip())
     assert line["action"] == "flush_dns"
-    assert line["peer_uid"] == 1000
+    assert line["peer_uid"] == os.getuid()
     assert line["outcome"] == "ok"
     assert line["params"]["session_token"] == "<redacted>"
     assert get_audit_log_path().stat().st_mode & 0o777 == 0o600
@@ -46,7 +46,7 @@ def test_privileged_dispatch_writes_audit_entry(mock_vpn_cls, tmp_path, monkeypa
     assert result["status"] == "ok"
     entry = json.loads(get_audit_log_path().read_text().strip())
     assert entry["action"] == "flush_dns"
-    assert entry["peer_uid"] == 1000
+    assert entry["peer_uid"] == os.getuid()
     assert entry["peer_pid"] == 99
     assert entry["outcome"] == "ok"
 

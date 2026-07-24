@@ -55,3 +55,25 @@ def test_partial_two_of_three():
     assert result.success is False
     assert "2/3" in result.message
     assert "review log" in result.message.lower()
+
+
+def test_skip_renew_when_gateway_not_found():
+    """Mirrors ui.py Smart Repair gate on diagnostic message text."""
+    diag_ok = NetResult(
+        "Diagnostics",
+        False,
+        "Gateway Not Found | DNS Resolution Failed | No Internet Access",
+    )
+    assert "Gateway Not Found" in diag_ok.message
+    skip_renew = "Gateway Not Found" in (diag_ok.message or "")
+    assert skip_renew is True
+
+
+def test_do_not_skip_renew_when_gateway_unreachable():
+    diag = NetResult(
+        "Diagnostics",
+        False,
+        "Gateway Unreachable | DNS Resolution OK | Internet Access OK",
+    )
+    skip_renew = "Gateway Not Found" in (diag.message or "")
+    assert skip_renew is False

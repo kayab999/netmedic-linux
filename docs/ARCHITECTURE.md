@@ -63,17 +63,19 @@ class BaseOperator(ABC):
 
 VPN operator (`AngristanOperator`) pins script SHA256 before any execution.
 
-## IPC Security Model (v1.4)
+## IPC Security Model (v1.4+)
 
-1. On startup, `IPCSession` issues a random token stored at `~/.local/state/netmedic/ipc.token` (mode 600).
-2. Safe actions execute without confirmation; see [IPC_API.md](IPC_API.md) for the full contract.
-3. Privileged actions require:
-   - Peer UID matching the daemon owner (`ipc_peer.py`)
+1. On startup, `IPCSession` issues a random token stored at `~/.local/state/netmedic/ipc.token` (mode 600, atomic create).
+2. **All** actions require peer UID matching the daemon owner (`SO_PEERCRED`).
+3. Safe actions need no confirmation/token/polkit; see [IPC_API.md](IPC_API.md).
+4. Privileged actions require (order):
+   - Peer UID match
    - `confirmed: true` (strict boolean)
-   - Polkit authorization for the mapped action ID
-   - Matching `session_token` in params
-4. Action IDs and classifications live in `action_catalog.py`; exported schema in `ipc_schema.py`.
-5. Privileged attempts are recorded in `audit.log`; polkit prompts are triggered server-side.
+   - Matching `session_token` (checked **before** polkit)
+   - Polkit authorization (`new_for_owner(pid, start_time, uid)` / `pkcheck`)
+5. Action IDs and classifications live in `action_catalog.py`; exported schema in `ipc_schema.py`.
+6. Privileged IPC attempts are recorded in `audit.log`.
+7. **GUI → IPC bridge** (`gui_actions.GuiActionBridge`): repair/infrastructure and all VPN catalog ops (status, list, create, revoke, install, start, reconnect) call the daemon over the Unix socket so they share peer/token/polkit/audit with MCP/AI. Residual local elevation: virtual-iface cleanup on exit only.
 
 See [THREAT_MODEL.md](THREAT_MODEL.md) for actor and residual-risk analysis.
 

@@ -1,7 +1,10 @@
 import logging
+import os
 import re
 import hashlib
-from netmedic.models import NetResult
+from pathlib import Path
+
+from netmedic.models import CommandResult, NetResult
 from netmedic.operators.vpn.base import VPNOperator, VPNClient
 from netmedic.operators.base import OperatorStatus
 from netmedic.config import Config
@@ -45,26 +48,113 @@ class AngristanOperator(VPNOperator):
     def script_path(self):
         return Config.get_operators_dir() / "openvpn-install.sh"
 
+    def _hash_file_fd(self, fd: int) -> str:
+        sha256_hash = hashlib.sha256()
+        os.lseek(fd, 0, os.SEEK_SET)
+        while True:
+            block = os.read(fd, 65536)
+            if not block:
+                break
+            sha256_hash.update(block)
+        os.lseek(fd, 0, os.SEEK_SET)
+        return sha256_hash.hexdigest()
+
     def _verify_integrity(self) -> bool:
-        """Calcula el SHA256 del script local y lo compara con el esperado."""
+        """SHA256 of the local installer must match the pinned expected digest."""
         if not self.script_path.exists():
             return False
-        
-        sha256_hash = hashlib.sha256()
         try:
-            with open(self.script_path, "rb") as f:
-                # Leer en bloques para eficiencia
-                for byte_block in iter(lambda: f.read(4096), b""):
-                    sha256_hash.update(byte_block)
-            
-            actual_hash = sha256_hash.hexdigest()
+            fd = os.open(str(self.script_path), os.O_RDONLY)
+        except OSError as exc:
+            logger.error("Cannot open VPN script for integrity check: %s", exc)
+            return False
+        try:
+            actual_hash = self._hash_file_fd(fd)
             if actual_hash != self.EXPECTED_SHA256:
-                logger.error(f"SHA256 mismatch for {self.slug}. Expected {self.EXPECTED_SHA256}, got {actual_hash}")
+                logger.error(
+                    "SHA256 mismatch for %s. Expected %s, got %s",
+                    self.slug,
+                    self.EXPECTED_SHA256,
+                    actual_hash,
+                )
                 return False
             return True
         except Exception as e:
-            logger.error(f"Error calculating hash for {self.slug}: {e}")
+            logger.error("Error calculating hash for %s: %s", self.slug, e)
             return False
+        finally:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+
+    def _execute_verified_script(self, env_vars: list, timeout: int) -> CommandResult:
+        """Re-hash via open FD, stage a sealed copy, re-hash, then elevate.
+
+        Narrows path-based TOCTOU on the user-writable operators directory by:
+        1) hashing the open FD, 2) writing exclusively to XDG_RUNTIME_DIR,
+        3) re-hashing the sealed path immediately before pkexec.
+        Same-UID residual risk remains (documented in threat model).
+        """
+        import tempfile
+
+        try:
+            fd = os.open(str(self.script_path), os.O_RDONLY)
+        except OSError as exc:
+            return CommandResult(False, -1, "", f"Cannot open script: {exc}", [])
+
+        sealed_path = None
+        try:
+            if self._hash_file_fd(fd) != self.EXPECTED_SHA256:
+                return CommandResult(False, 126, "", "Security abort: Script integrity failure.", [])
+
+            runtime = os.environ.get("XDG_RUNTIME_DIR") or tempfile.gettempdir()
+            sealed_dir = Path(runtime) / "netmedic"
+            sealed_dir.mkdir(mode=0o700, exist_ok=True)
+            try:
+                os.chmod(sealed_dir, 0o700)
+            except OSError:
+                pass
+
+            sealed_path = sealed_dir / f"openvpn-install.{os.getpid()}.{os.getuid()}.sh"
+            if sealed_path.exists():
+                sealed_path.unlink()
+            out_fd = os.open(
+                str(sealed_path),
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+                0o700,
+            )
+            try:
+                while True:
+                    block = os.read(fd, 65536)
+                    if not block:
+                        break
+                    os.write(out_fd, block)
+                os.fsync(out_fd)
+            finally:
+                os.close(out_fd)
+
+            sealed_fd = os.open(str(sealed_path), os.O_RDONLY)
+            try:
+                if self._hash_file_fd(sealed_fd) != self.EXPECTED_SHA256:
+                    return CommandResult(
+                        False, 126, "", "Security abort: Sealed script integrity failure.", []
+                    )
+            finally:
+                os.close(sealed_fd)
+
+            cmd = ["env"] + list(env_vars) + [str(sealed_path)]
+            return CommandRunner.run(cmd, require_root=True, timeout=timeout)
+        finally:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+            if sealed_path is not None:
+                try:
+                    sealed_path.unlink(missing_ok=True)
+                except OSError:
+                    pass
 
     def check_status(self) -> NetResult:
         try:
@@ -103,7 +193,8 @@ class AngristanOperator(VPNOperator):
                 first_line = f.readline().strip()
                 if not first_line.startswith("#!") or "bash" not in first_line:
                      return NetResult("Download Script", False, "Invalid script header")
-            self.script_path.chmod(0o700)
+            # Owner-only execute/read — reduces casual overwrite without chmod.
+            self.script_path.chmod(0o500)
         except Exception as e:
              return NetResult("Download Script", False, "Validation failed", details=str(e))
 
@@ -113,7 +204,6 @@ class AngristanOperator(VPNOperator):
         dl_res = self._download_script()
         if not dl_res.success: return dl_res
 
-        # Variables para instalación desatendida (Decisiones documentadas en diseño)
         env_vars = [
             "APPROVE_INSTALL=y",
             "APPROVE_IP=y",
@@ -124,15 +214,9 @@ class AngristanOperator(VPNOperator):
             "COMPRESSION_ENABLED=n",
             "CUSTOMIZE_ENC=n"
         ]
-        
-        # Verificación final de hash antes de ejecutar como root
-        if not self._verify_integrity():
-            return NetResult(self.name, False, "Security abort: Script tampered before execution.")
 
-        cmd = ["env"] + env_vars + [str(self.script_path)]
-        logger.info(f"Starting installation of {self.slug}")
-        
-        res = CommandRunner.run(cmd, require_root=True, timeout=300)
+        logger.info("Starting installation of %s", self.slug)
+        res = self._execute_verified_script(env_vars, timeout=300)
         
         if not res.success:
             return NetResult(self.name, False, "Installation failed", details=res.stderr)
@@ -203,22 +287,13 @@ class AngristanOperator(VPNOperator):
                 if c.name == name and c.active:
                     return NetResult(self.name, False, f"Client '{name}' already exists")
 
-        # Verificación de integridad antes de manipulación
-        if not self._verify_integrity():
-            return NetResult(self.name, False, "Security abort: Script integrity failure.")
-
-        # Ejecutar script modo menú: 1) Add new user
-        # Variables: MENU_OPTION="1", CLIENT="name", PASS="1" (No password)
         env_vars = [
             "MENU_OPTION=1",
             f"CLIENT={name}",
-            "PASS=1"
+            "PASS=1",
         ]
-        
-        cmd = ["env"] + env_vars + [str(self.script_path)]
-        logger.info(f"Adding VPN client: {name}")
-        
-        res = CommandRunner.run(cmd, require_root=True, timeout=60)
+        logger.info("Adding VPN client: %s", name)
+        res = self._execute_verified_script(env_vars, timeout=60)
         
         if not res.success:
             return NetResult(self.name, False, "Failed to execute add-client script", details=res.stderr)
@@ -236,21 +311,12 @@ class AngristanOperator(VPNOperator):
         if not self._validate_client_name(name):
             return NetResult(self.name, False, "Invalid client name (use a-z, 0-9, -, _)")
 
-        # Verificación de integridad antes de manipulación
-        if not self._verify_integrity():
-            return NetResult(self.name, False, "Security abort: Script integrity failure.")
-
-        # Ejecutar script modo menú: 2) Revoke existing user
-        # Variables: MENU_OPTION="2", CLIENT="name"
         env_vars = [
             "MENU_OPTION=2",
-            f"CLIENT={name}"
+            f"CLIENT={name}",
         ]
-        
-        cmd = ["env"] + env_vars + [str(self.script_path)]
-        logger.info(f"Revoking VPN client: {name}")
-        
-        res = CommandRunner.run(cmd, require_root=True, timeout=60)
+        logger.info("Revoking VPN client: %s", name)
+        res = self._execute_verified_script(env_vars, timeout=60)
 
         if not res.success:
             return NetResult(self.name, False, "Failed to revoke client", details=res.stderr)

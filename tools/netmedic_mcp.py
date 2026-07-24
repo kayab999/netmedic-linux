@@ -58,11 +58,11 @@ def get_vpn_status() -> str:
 
 @mcp.tool()
 def list_vpn_clients() -> str:
-    """List all configured VPN clients and their active status."""
-    blocked = _require_instance()
+    """List all configured VPN clients and their active status (privileged)."""
+    blocked = _require_mutating("list_vpn_clients") or _require_instance()
     if blocked:
         return blocked
-    res = ipc.request("vpn_list_clients")
+    res = ipc.request("vpn_list_clients", confirmed=True)
     if res.get("status") != "ok":
         return f"Error: {res.get('message')} ({res.get('details') or 'None'})"
 

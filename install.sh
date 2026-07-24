@@ -85,12 +85,29 @@ if [ "$INSTALL_AI" -eq 1 ]; then
 fi
 
 echo -e "${BLUE}[4/6] Installing polkit policy, icon, and desktop launcher...${NC}"
-POLKIT_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/polkit-1/actions"
-mkdir -p "$POLKIT_DIR"
-cp assets/com.kayab.netmedic.policy "$POLKIT_DIR/com.kayab.netmedic.policy"
+# Polkit only loads actions from system paths on most distros — user XDG paths
+# are not sufficient. Prefer system install; fall back to sudo.
+POLKIT_SYSTEM="/usr/share/polkit-1/actions/com.kayab.netmedic.policy"
 if [ -w /usr/share/polkit-1/actions ] 2>/dev/null; then
-    cp assets/com.kayab.netmedic.policy /usr/share/polkit-1/actions/com.kayab.netmedic.policy 2>/dev/null || true
+    cp assets/com.kayab.netmedic.policy "$POLKIT_SYSTEM"
+elif command -v sudo >/dev/null 2>&1; then
+    echo -e "${BLUE}Installing polkit policy system-wide (sudo required)...${NC}"
+    sudo cp assets/com.kayab.netmedic.policy "$POLKIT_SYSTEM" || {
+        echo -e "${RED}WARNING: Failed to install polkit policy to $POLKIT_SYSTEM${NC}"
+        echo "Privileged IPC will fail until the policy is installed."
+    }
+else
+    echo -e "${RED}WARNING: Cannot install polkit policy (no write access / no sudo).${NC}"
 fi
+if command -v pkaction >/dev/null 2>&1; then
+    if pkaction --action-id com.kayab.netmedic.flush-dns >/dev/null 2>&1; then
+        echo -e "${GREEN}Polkit actions registered (com.kayab.netmedic.*).${NC}"
+    else
+        echo -e "${RED}WARNING: pkaction does not see com.kayab.netmedic.flush-dns yet.${NC}"
+        echo "You may need to re-login or restart polkit after installing the policy."
+    fi
+fi
+
 ICON_THEME_ROOT="${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor"
 for size in 48 128 256; do
     mkdir -p "${ICON_THEME_ROOT}/${size}x${size}/apps"
@@ -98,10 +115,12 @@ for size in 48 128 256; do
 done
 gtk-update-icon-cache -f -t "${ICON_THEME_ROOT}" 2>/dev/null || true
 
+DESKTOP_TMP="$(mktemp "${TMPDIR:-/tmp}/netmedic.desktop.XXXXXX")"
 sed -e "s|@EXEC@|${REPO_ROOT}/venv/bin/netmedic|g" \
-    assets/netmedic.desktop.in > /tmp/netmedic.desktop
+    assets/netmedic.desktop.in > "$DESKTOP_TMP"
 mkdir -p ~/.local/share/applications
-cp /tmp/netmedic.desktop ~/.local/share/applications/netmedic.desktop
+cp "$DESKTOP_TMP" ~/.local/share/applications/netmedic.desktop
+rm -f "$DESKTOP_TMP"
 chmod +x ~/.local/share/applications/netmedic.desktop
 update-desktop-database ~/.local/share/applications 2>/dev/null || true
 

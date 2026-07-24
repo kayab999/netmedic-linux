@@ -5,7 +5,7 @@ import logging
 import os
 import shutil
 import subprocess
-from typing import Optional
+from typing import Optional, Tuple
 
 from netmedic.action_catalog import polkit_action_for
 
@@ -22,6 +22,37 @@ def skip_polkit() -> bool:
         "NETMEDIC_SKIP_POLKIT is set but ignored outside NETMEDIC_TEST_MODE (fail-closed)."
     )
     return False
+
+
+def process_start_time(pid: int) -> Optional[int]:
+    """Return Linux process starttime ticks from /proc/<pid>/stat, or None."""
+    if pid <= 0:
+        return None
+    try:
+        with open(f"/proc/{pid}/stat", "r", encoding="utf-8") as handle:
+            data = handle.read()
+        # comm may contain spaces/parens; starttime is field 22 after ") ".
+        close_paren = data.rfind(")")
+        if close_paren < 0:
+            return None
+        fields = data[close_paren + 2 :].split()
+        # After ")": state is fields[0] → starttime is fields[19] (stat field 22).
+        if len(fields) < 20:
+            return None
+        return int(fields[19])
+    except (OSError, ValueError, IndexError):
+        return None
+
+
+def _process_subject_spec(pid: int, uid: int) -> Tuple[str, Optional[int]]:
+    """Build pkcheck --process value and optional start_time for GI.
+
+    pkcheck accepts ``pid`` or ``pid,start_time`` or ``pid,start_time,uid``.
+    """
+    start_time = process_start_time(pid)
+    if start_time is None:
+        return str(pid), None
+    return f"{pid},{start_time},{uid}", start_time
 
 
 def check_authorization(
@@ -42,6 +73,8 @@ def check_authorization(
     if uid < 0 or pid < 0:
         return False, "Missing peer credentials for polkit authorization."
 
+    process_spec, start_time = _process_subject_spec(pid, uid)
+
     try:
         import gi
 
@@ -49,8 +82,10 @@ def check_authorization(
         from gi.repository import Polkit
 
         authority = Polkit.Authority.get_sync(None)
+        # Signature: new_for_owner(pid, start_time, uid). start_time=0 → look up.
+        gi_start = 0 if start_time is None else start_time
         try:
-            subject = Polkit.UnixProcess.new_for_owner(pid, uid, -1)
+            subject = Polkit.UnixProcess.new_for_owner(pid, gi_start, uid)
         except (AttributeError, TypeError):
             subject = Polkit.UnixProcess.new(pid)
         flags = (
@@ -69,9 +104,19 @@ def check_authorization(
     if not pkcheck:
         return False, "Polkit unavailable (pkcheck not found)."
 
+    cmd = [
+        pkcheck,
+        "--action-id",
+        action_id,
+        "--process",
+        process_spec,
+    ]
+    if allow_interaction:
+        cmd.append("--allow-user-interaction")
+
     try:
         proc = subprocess.run(
-            [pkcheck, "--action-id", action_id, "--process", str(pid), "--uid", str(uid)],
+            cmd,
             capture_output=True,
             text=True,
             timeout=60 if allow_interaction else 5,

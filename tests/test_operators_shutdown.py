@@ -5,20 +5,20 @@ from netmedic.operators.vpn.angristan import AngristanOperator
 from netmedic.operators.vpn.base import VPNClient
 
 
-@patch("netmedic.system.CommandRunner.run")
-def test_revoke_client_verification(mock_run):
+def test_revoke_client_verification():
     op = AngristanOperator()
 
-    with patch.object(op, "_verify_integrity", return_value=True):
-        with patch.object(op, "check_status", return_value=MagicMock(message="running")):
-            with patch.object(op, "list_clients") as mock_list:
-                mock_list.return_value = MagicMock(
-                    success=True,
-                    data=[VPNClient(name="revoked-client", active=False)],
-                )
-                mock_run.return_value = MagicMock(success=True, stdout="", stderr="")
-
-                result = op.revoke_client("revoked-client")
+    with patch.object(
+        op,
+        "_execute_verified_script",
+        return_value=MagicMock(success=True, stdout="", stderr=""),
+    ):
+        with patch.object(op, "list_clients") as mock_list:
+            mock_list.return_value = MagicMock(
+                success=True,
+                data=[VPNClient(name="revoked-client", active=False)],
+            )
+            result = op.revoke_client("revoked-client")
 
     assert result.success is True
     assert "verified" in result.message.lower()

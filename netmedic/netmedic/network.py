@@ -10,6 +10,9 @@ from typing import List, Optional, Set, Tuple
 _DNS_IP_RE = re.compile(
     r"^(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)$"
 )
+# Virtual adapters created by NetMedic only — never delete arbitrary iface names from state files.
+_MEDIC_IFACE_RE = re.compile(r"^medic[0-9a-f]{6}$")
+_IFACE_TOKEN_RE = re.compile(r"^[A-Za-z0-9._@+-]+$")
 
 from netmedic.models import NetResult
 from netmedic.system import CommandRunner
@@ -43,25 +46,45 @@ class NetworkMedic:
 
         self._initialized = True
 
+    @staticmethod
+    def is_medic_virtual_iface(iface: str) -> bool:
+        """True only for NetMedic-owned dummy names (medic + 6 hex digits)."""
+        return isinstance(iface, str) and bool(_MEDIC_IFACE_RE.fullmatch(iface))
+
+    @staticmethod
+    def _sanitize_iface_list(raw) -> Set[str]:
+        """Parse state payload and keep only valid medic* interface names."""
+        if not isinstance(raw, list):
+            return set()
+        allowed: Set[str] = set()
+        for item in raw:
+            if NetworkMedic.is_medic_virtual_iface(item):
+                allowed.add(item)
+            else:
+                logger.warning("Ignoring non-medic interface name in state: %r", item)
+        return allowed
+
     def _save_state(self):
-        """Guarda la lista de interfaces creadas en disco."""
+        """Persist created interface list to disk (mode 0600)."""
         try:
-            with open(self._state_file, "w") as f:
-                json.dump(list(self._created_ifaces), f)
+            flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
+            fd = os.open(str(self._state_file), flags, 0o600)
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                json.dump(sorted(self._created_ifaces), handle)
             os.chmod(self._state_file, 0o600)
         except Exception as e:
-            logger.error(f"Error guardando estado de interfaces: {e}")
+            logger.error("Error saving interface state: %s", e)
 
     def _load_state(self):
-        """Carga la lista de interfaces creadas desde el disco."""
+        """Load created interfaces; reject non-medic names (poisoned state)."""
         if not self._state_file.exists():
             return
         try:
-            with open(self._state_file, "r") as f:
+            with open(self._state_file, "r", encoding="utf-8") as f:
                 ifaces = json.load(f)
-                self._created_ifaces = set(ifaces)
+                self._created_ifaces = self._sanitize_iface_list(ifaces)
         except Exception as e:
-            logger.error(f"Error cargando estado de interfaces: {e}")
+            logger.error("Error loading interface state: %s", e)
 
     @staticmethod
     def _is_process_alive(pid: int) -> bool:
@@ -70,6 +93,15 @@ class NetworkMedic:
             return True
         except OSError:
             return False
+
+    @staticmethod
+    def _delete_medic_iface(iface: str) -> bool:
+        """Delete a virtual iface only if its name matches the medic* allowlist."""
+        if not NetworkMedic.is_medic_virtual_iface(iface):
+            logger.error("Refusing to delete non-medic interface: %r", iface)
+            return False
+        res = CommandRunner.run(["ip", "link", "del", iface], require_root=True)
+        return res.success
 
     def _reap_orphan_iface_state(self):
         """Remove virtual interfaces tracked by dead NetMedic processes."""
@@ -82,9 +114,9 @@ class NetworkMedic:
             if pid == os.getpid() or self._is_process_alive(pid):
                 continue
             try:
-                ifaces = json.loads(path.read_text())
-                for iface in ifaces:
-                    CommandRunner.run(["ip", "link", "del", iface], require_root=True)
+                raw = json.loads(path.read_text(encoding="utf-8"))
+                for iface in self._sanitize_iface_list(raw):
+                    self._delete_medic_iface(iface)
                 path.unlink(missing_ok=True)
                 logger.info("Reaped orphan interface state from PID %d", pid)
             except Exception as exc:
@@ -186,17 +218,19 @@ class NetworkMedic:
 
         failed = []
         for iface in to_clean:
-            res = CommandRunner.run(["ip", "link", "del", iface], require_root=True)
-            if not res.success:
+            if not self._delete_medic_iface(iface):
                 failed.append(iface)
                 with self._state_lock:
-                    self._created_ifaces.add(iface)
+                    if self.is_medic_virtual_iface(iface):
+                        self._created_ifaces.add(iface)
 
-        # Actualizar persistencia tras limpieza
         self._save_state()
 
-        return NetResult("Cleanup", len(failed) == 0, 
-                         "Cleanup completed" if not failed else f"Failed on: {failed}")
+        return NetResult(
+            "Cleanup",
+            len(failed) == 0,
+            "Cleanup completed" if not failed else f"Failed on: {failed}",
+        )
 
     def run_diagnostics(self) -> NetResult:
         """
@@ -292,7 +326,9 @@ class NetworkMedic:
         iface = self.get_default_interface()
         if not iface:
             return NetResult("Renew IP", False, "No interface detected")
-        
+        if not _IFACE_TOKEN_RE.fullmatch(iface):
+            return NetResult("Renew IP", False, f"Refusing invalid interface name: {iface!r}")
+
         # Modern NetworkManager fallback
         nm_error = ""
         if shutil.which("nmcli"):
@@ -343,7 +379,9 @@ class NetworkMedic:
         iface = self.get_default_interface()
         if not iface:
             return NetResult("Restart Adapter", False, "No interface detected")
-        
+        if not _IFACE_TOKEN_RE.fullmatch(iface):
+            return NetResult("Restart Adapter", False, f"Refusing invalid interface name: {iface!r}")
+
         down = CommandRunner.run(["ip", "link", "set", iface, "down"], require_root=True)
         if not down.success:
             return NetResult("Restart Adapter", False, f"Failed to bring {iface} down", details=down.stderr)
@@ -379,8 +417,13 @@ class NetworkMedic:
         current = self.get_firewall_status()
         if current not in ("ON", "OFF"):
             return NetResult("Firewall", False, f"Cannot determine UFW status (got: {current})")
-        action = "enable" if current == "OFF" else "disable"
-        res = CommandRunner.run(["ufw", action], require_root=True)
+        # Non-interactive: stock `ufw enable` may prompt and hang under pkexec.
+        if current == "OFF":
+            res = CommandRunner.run(["ufw", "--force", "enable"], require_root=True)
+            action = "enable"
+        else:
+            res = CommandRunner.run(["ufw", "disable"], require_root=True)
+            action = "disable"
         if not res.success:
             return NetResult("Firewall", False, f"ufw {action} failed", details=res.stderr)
 

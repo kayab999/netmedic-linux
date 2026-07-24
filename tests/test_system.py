@@ -56,12 +56,12 @@ def test_command_runner_timeout(mock_popen, mock_kill):
 def test_command_runner_root_elevation(mock_popen, mock_which, mock_geteuid):
     mock_popen.return_value = _mock_popen(stdout="root")
 
-    res = CommandRunner.run(["whoami"], require_root=True)
+    res = CommandRunner.run(["ip", "link", "show"], require_root=True)
 
     assert res.success is True
     called_cmd = mock_popen.call_args[0][0]
     assert called_cmd[0] == "pkexec"
-    assert called_cmd[1] == "whoami"
+    assert called_cmd[1] == "ip"
 
 
 @patch("os.geteuid", return_value=1000)
@@ -73,7 +73,7 @@ def test_command_runner_root_cancellation(mock_popen, mock_which, mock_geteuid):
         stderr="Error executing command as another user: Request dismissed",
     )
 
-    res = CommandRunner.run(["whoami"], require_root=True)
+    res = CommandRunner.run(["ip", "link", "show"], require_root=True)
 
     assert res.success is False
     assert res.returncode == 126

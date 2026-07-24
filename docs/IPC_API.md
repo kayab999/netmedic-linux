@@ -27,25 +27,31 @@ Errors include `"status": "error"` and a `"message"`. Privileged denials may add
 
 ## Authorization tiers
 
+### Transport peer check
+
+**Every** action requires peer UID matching the NetMedic process owner (`SO_PEERCRED`). Missing or foreign credentials fail closed with `requires_peer_auth`.
+
 ### Safe actions
 
-No confirmation, token, or polkit required:
+No confirmation, token, or polkit required (peer UID still required):
 
 - `network_status`, `wifi_diagnostics`, `firewall_status`
-- `vpn_status`, `vpn_list_clients`
+- `vpn_status`
 - `get_session_token` (same-owner peer only)
 - `user_intent`, `donate`
 
 ### Privileged actions
 
-Require **all** of:
+Require **all** of (checked in this order — cheap checks first):
 
-1. `confirmed: true` (strict boolean — not `"true"` or `1`)
-2. Valid `session_token` from `get_session_token`
-3. PolicyKit authorization for the mapped action ID
-4. Peer UID matching the NetMedic process owner
+1. Peer UID matching the NetMedic process owner
+2. `confirmed: true` (strict boolean — not `"true"` or `1`)
+3. Valid `session_token` from `get_session_token` (**before** polkit, to avoid prompt spam)
+4. PolicyKit authorization for the mapped action ID
 
-Privileged actions: `flush_dns`, `renew_ip`, `change_dns`, `restart_adapter`, `reset_tcp_ip_stack`, `toggle_firewall`, `vpn_reconnect`, `vpn_create_client`, `vpn_revoke_client`.
+Privileged actions: `flush_dns`, `renew_ip`, `change_dns`, `restart_adapter`, `reset_tcp_ip_stack`, `toggle_firewall`, `vpn_reconnect`, `vpn_create_client`, `vpn_revoke_client`, `vpn_list_clients`, `vpn_install`, `vpn_start_service`.
+
+Note: `vpn_list_clients` is privileged because it elevates to read the EasyRSA PKI index. `vpn_install` / `vpn_start_service` elevate installer and systemd unit control.
 
 Policy definitions: `assets/com.kayab.netmedic.policy`.
 
@@ -97,5 +103,15 @@ Privileged attempts (granted and denied) append JSON lines to `~/.local/state/ne
 3. Call `get_session_token` before privileged operations.
 4. Pass `confirmed: true` and `session_token` for privileged actions.
 5. Handle polkit prompts (GUI agent or `pkttyagent` for headless mutation).
+6. Install the system polkit policy once:
+   `./scripts/install-polkit-policy.sh`
+   (or `sudo cp assets/com.kayab.netmedic.policy /usr/share/polkit-1/actions/`).
+
+## GUI bridge
+
+The desktop UI uses `netmedic.gui_actions.GuiActionBridge` (SyncIPCClient) for
+repair, infrastructure, and all VPN catalog actions (including install/start) so
+GUI clicks share the same token/polkit/audit path as MCP and AI. Residual local
+elevation: virtual-interface cleanup on exit only.
 
 See [THREAT_MODEL.md](THREAT_MODEL.md) for trust boundaries and residual risks.

@@ -1,6 +1,7 @@
 from gi.repository import Gtk, GLib
 from .ipc_client import PilotClient
 from .sensors import get_network_snapshot
+from .action_catalog import is_disruptive
 import logging
 
 class AIConsoleController:
@@ -11,12 +12,25 @@ class AIConsoleController:
         self.revealer = None
         self.entry = None
         self.preview_box = None
+        self._execute_in_flight = False
+        self._intent_in_flight = False
 
     def mount(self, overlay: Gtk.Overlay):
         """Attaches the AI command palette as an overlay on the main window."""
         self.overlay = overlay
 
-        self.revealer = Gtk.Revealer(transition_type=Gtk.RevealerTransitionType.CROSSFADE, transition_duration=200)
+        self.revealer = Gtk.Revealer(
+            transition_type=Gtk.RevealerTransitionType.CROSSFADE,
+            transition_duration=200,
+        )
+        # Keep the palette at the top; do not expand to fill the whole window.
+        # A full-size overlay child (default FILL) steals all pointer events even
+        # when the child is not revealed — especially with CROSSFADE, which keeps
+        # the allocation while only changing opacity.
+        self.revealer.set_halign(Gtk.Align.FILL)
+        self.revealer.set_valign(Gtk.Align.START)
+        self.revealer.set_hexpand(True)
+        self.revealer.set_vexpand(False)
         self.overlay.add_overlay(self.revealer)
 
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
@@ -33,7 +47,7 @@ class AIConsoleController:
         box.pack_start(self.preview_box, False, False, 0)
 
         self.revealer.add(box)
-        self.revealer.set_reveal_child(False)
+        self._set_palette_visible(False)
 
         accel_group = Gtk.AccelGroup()
         self.main_window.add_accel_group(accel_group)
@@ -42,6 +56,19 @@ class AIConsoleController:
         escape_key, escape_mod = Gtk.accelerator_parse("Escape")
         accel_group.connect(escape_key, escape_mod, Gtk.AccelFlags.VISIBLE, self._dismiss_palette)
 
+    def _set_palette_visible(self, visible: bool):
+        """Show/hide the palette and toggle overlay hit-testing.
+
+        Gtk.Overlay children participate in hit-testing for their full allocation
+        unless pass-through is enabled. Without this, an invisible CROSSFADE
+        revealer blocks every click on the main window content.
+        """
+        if self.revealer is None:
+            return
+        self.revealer.set_reveal_child(visible)
+        if self.overlay is not None:
+            self.overlay.set_overlay_pass_through(self.revealer, not visible)
+
     def set_sensitive(self, sensitive: bool):
         if self.revealer is not None:
             self.revealer.set_sensitive(sensitive)
@@ -49,8 +76,7 @@ class AIConsoleController:
             self.entry.set_sensitive(sensitive)
 
     def _dismiss_palette(self, *args):
-        if self.revealer is not None:
-            self.revealer.set_reveal_child(False)
+        self._set_palette_visible(False)
         return True
 
     def _toggle_palette(self, *args):
@@ -59,8 +85,10 @@ class AIConsoleController:
         if not self.revealer.get_sensitive():
             return True
         revealed = self.revealer.get_reveal_child()
-        self.revealer.set_reveal_child(not revealed)
-        if not revealed:
+        if revealed:
+            self._set_palette_visible(False)
+        else:
+            self._set_palette_visible(True)
             self.entry.grab_focus()
             for child in self.preview_box.get_children():
                 self.preview_box.remove(child)
@@ -70,14 +98,21 @@ class AIConsoleController:
         user_input = entry.get_text().strip()
         if not user_input:
             return
+        if self._intent_in_flight:
+            return
         entry.set_text("")
+        self._intent_in_flight = True
 
         snapshot = get_network_snapshot()
+
+        def _done(result):
+            self._intent_in_flight = False
+            self._handle_pilot_response(result)
 
         self.client.ask(
             action="user_intent",
             params={"user_request": user_input, "network_state": snapshot},
-            callback=self._handle_pilot_response
+            callback=_done,
         )
 
         for child in self.preview_box.get_children():
@@ -154,7 +189,7 @@ class AIConsoleController:
         execute_btn.connect("clicked", lambda b: self._confirm_and_execute(action, params))
 
         cancel_btn = Gtk.Button(label="Dismiss")
-        cancel_btn.connect("clicked", lambda b: self.revealer.set_reveal_child(False))
+        cancel_btn.connect("clicked", lambda b: self._set_palette_visible(False))
 
         btn_box.pack_start(execute_btn, True, True, 0)
         btn_box.pack_start(cancel_btn, True, True, 0)
@@ -178,7 +213,7 @@ class AIConsoleController:
         box.pack_start(err_label, False, False, 0)
         
         close_btn = Gtk.Button(label="Close")
-        close_btn.connect("clicked", lambda b: self.revealer.set_reveal_child(False))
+        close_btn.connect("clicked", lambda b: self._set_palette_visible(False))
         box.pack_start(close_btn, False, False, 0)
         
         preview.add(box)
@@ -186,26 +221,48 @@ class AIConsoleController:
         self.preview_box.show_all()
 
     def _confirm_and_execute(self, action, params):
-        self.revealer.set_reveal_child(False)
+        if self._execute_in_flight:
+            return
+        self._set_palette_visible(False)
 
         if action == "donate":
             if hasattr(self.main_window, "_spawn_browser"):
                 self.main_window._spawn_browser("https://buymeacoffee.com/kayabsoftware")
             return
 
-        # Engage the main window's busy system so concurrent GUI actions are blocked
+        # Second chance for high blast-radius actions (matches Infrastructure tab UX).
+        if is_disruptive(action):
+            ask = getattr(self.main_window, "ask_confirmation", None)
+            if callable(ask):
+                title = f"Authorize AI action: {action}?"
+                message = (
+                    "This operation can disrupt network connectivity or security settings. "
+                    "Continue only if you trust this proposal."
+                )
+                if not ask(title, message):
+                    return
+
+        self._execute_in_flight = True
         self.main_window.set_busy(True, f"AI: {action}...")
 
         def on_result(result):
-            if getattr(self.main_window, "is_destroyed", False):
-                return
-            self.main_window.set_busy(False)
-            logging.info("AI execution result: %s", result)
-            if hasattr(self.main_window, "append_log"):
-                if result.get("status") == "error":
-                    self.main_window.append_log(f"❌ AI [{action}]: {result.get('message', 'Error')}")
-                else:
-                    msg = result.get("message") or result.get("data") or "Completed"
-                    self.main_window.append_log(f"🤖 AI [{action}]: {msg}")
+            try:
+                if getattr(self.main_window, "is_destroyed", False):
+                    return
+                logging.info("AI execution result: %s", result)
+                if hasattr(self.main_window, "append_log"):
+                    if result.get("status") == "error":
+                        self.main_window.append_log(
+                            f"❌ AI [{action}]: {result.get('message', 'Error')}"
+                        )
+                    else:
+                        msg = result.get("message") or result.get("data") or "Completed"
+                        self.main_window.append_log(f"🤖 AI [{action}]: {msg}")
+            finally:
+                self._execute_in_flight = False
+                try:
+                    self.main_window.set_busy(False)
+                except Exception:
+                    logging.debug("set_busy(False) after AI execute failed", exc_info=True)
 
         self.client.ask(action, params, on_result, confirmed=True)

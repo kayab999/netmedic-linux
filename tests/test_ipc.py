@@ -22,7 +22,12 @@ def test_ipc_dispatcher_network_status(mock_run):
     session.issue_token()
     medic = NetworkMedic()
     dispatch = create_action_dispatcher(medic, session)
-    result = dispatch("network_status", {})
+    result = dispatch(
+        "network_status",
+        {},
+        peer_uid=os.getuid(),
+        peer_pid=os.getpid(),
+    )
 
     assert result["status"] == "ok"
     assert result["success"] is True
@@ -37,7 +42,12 @@ def test_ipc_privileged_requires_confirmation(tmp_path, monkeypatch):
     from netmedic.network import NetworkMedic
 
     dispatch = create_action_dispatcher(NetworkMedic(), session)
-    result = dispatch("flush_dns", {})
+    result = dispatch(
+        "flush_dns",
+        {},
+        peer_uid=os.getuid(),
+        peer_pid=os.getpid(),
+    )
 
     assert result["status"] == "error"
     assert result.get("requires_confirmation") is True
@@ -94,3 +104,16 @@ def test_ipc_bridge_strips_trailing_newline(tmp_path, monkeypatch):
 
     assert payload["status"] == "ok"
     assert payload["action"] == "network_status"
+
+
+def test_ipc_bridge_rejects_non_object_params(tmp_path, monkeypatch):
+    monkeypatch.setattr("netmedic.config.Config.get_state_dir", lambda: tmp_path)
+    lifecycle = LifecycleManager()
+    server = NetMedicIPCServer(lambda *a, **k: {"status": "ok"}, lifecycle)
+    payload = server._handle_payload(
+        b'{"action": "network_status", "params": []}',
+        peer_pid=1,
+        peer_uid=os.getuid(),
+    )
+    assert payload["status"] == "error"
+    assert "shape" in payload["message"].lower()

@@ -29,6 +29,50 @@ def _validate_action(action: str) -> Optional[Dict[str, Any]]:
     return {"status": "error", "message": f"Unknown action: {action}"}
 
 
+def _validate_dispatch_params(action: str, params: Dict[str, Any]) -> Optional[str]:
+    """Server-side param checks shared by IPC (AI package optional)."""
+    # Strip auth-only keys before tool-specific validation.
+    tool_params = {
+        k: v
+        for k, v in params.items()
+        if k not in ("confirmed", "session_token")
+    }
+
+    try:
+        from netmedic_ai.param_validation import validate_tool_params  # type: ignore[import-untyped]
+        from netmedic_ai.toolkit import registry  # type: ignore[import-untyped]
+
+        if registry.is_registered(action):
+            return validate_tool_params(action, tool_params)
+    except ImportError:
+        pass
+
+    if action == "change_dns":
+        server = tool_params.get("server", "1.1.1.1")
+        if not isinstance(server, str):
+            return "Parameter 'server' must be a string."
+        import re
+
+        if not re.fullmatch(
+            r"(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)",
+            server,
+        ):
+            return f"Invalid DNS server IP: {server}"
+    if action in ("vpn_create_client", "vpn_revoke_client"):
+        name = tool_params.get("name", "")
+        if not isinstance(name, str) or not name:
+            return "Parameter 'name' is required."
+        import re
+
+        if not re.fullmatch(r"[a-zA-Z0-9_-]+", name):
+            return "Invalid client name (use a-z, 0-9, -, _)"
+    if action == "user_intent":
+        req = tool_params.get("user_request", "")
+        if not isinstance(req, str) or not req.strip():
+            return "Empty request."
+    return None
+
+
 def _audit_dispatch(
     action: str,
     params: Dict[str, Any],
@@ -105,10 +149,17 @@ def create_action_dispatcher(
         started = time.monotonic()
         privileged = False
         try:
+            if not isinstance(action, str) or not action:
+                return {"status": "error", "message": "Invalid request shape: action must be a non-empty string."}
+            if not isinstance(params, dict):
+                return {"status": "error", "message": "Invalid request shape: params must be an object."}
+
+            # Defense in depth: peer UID on every action (docs claim transport peer check).
+            peer_error = validate_peer_identity(peer_uid, peer_pid)
+            if peer_error:
+                return peer_error
+
             if action == "get_session_token":
-                peer_error = validate_peer_identity(peer_uid, peer_pid)
-                if peer_error:
-                    return peer_error
                 token = session.get_token()
                 if not token:
                     return {"status": "error", "message": "IPC session token not yet available."}
@@ -135,6 +186,14 @@ def create_action_dispatcher(
                         outcome="denied",
                     )
                 return auth_error
+
+            param_err = _validate_dispatch_params(action, params)
+            if param_err:
+                result = {"status": "error", "message": param_err}
+                return _finish_privileged(
+                    action, params, result,
+                    peer_uid=peer_uid, peer_pid=peer_pid, started=started, privileged=privileged,
+                )
 
             if action == "user_intent":
                 return _handle_user_intent(params)
@@ -199,7 +258,10 @@ def create_action_dispatcher(
                 return _result_payload(vpn.check_status())
 
             if action == "vpn_list_clients":
-                return _result_payload(vpn.list_clients())
+                return _finish_privileged(
+                    action, params, _result_payload(vpn.list_clients()),
+                    peer_uid=peer_uid, peer_pid=peer_pid, started=started, privileged=privileged,
+                )
 
             if action == "vpn_create_client":
                 name = params.get("name", "")
@@ -212,6 +274,18 @@ def create_action_dispatcher(
                 name = params.get("name", "")
                 return _finish_privileged(
                     action, params, _result_payload(vpn.revoke_client(name)),
+                    peer_uid=peer_uid, peer_pid=peer_pid, started=started, privileged=privileged,
+                )
+
+            if action == "vpn_install":
+                return _finish_privileged(
+                    action, params, _result_payload(vpn.install()),
+                    peer_uid=peer_uid, peer_pid=peer_pid, started=started, privileged=privileged,
+                )
+
+            if action == "vpn_start_service":
+                return _finish_privileged(
+                    action, params, _result_payload(vpn.start_service()),
                     peer_uid=peer_uid, peer_pid=peer_pid, started=started, privileged=privileged,
                 )
 

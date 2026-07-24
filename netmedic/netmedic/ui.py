@@ -14,6 +14,7 @@ from netmedic.models import NetResult, TaskResult
 from netmedic.ui_vpn import VPNPanel  # Nuevo panel modular
 from netmedic.theme import apply_theme
 from netmedic.ai_console import AIConsoleController
+from netmedic.gui_actions import GuiActionBridge
 from netmedic.integration import shutdown_operators
 from netmedic.teardown import register as register_teardown
 from . import __version__
@@ -27,6 +28,8 @@ class MainWindow(Gtk.Window):
         apply_theme()
         self.medic = NetworkMedic()
         self.wifi_op = WifiOperator()
+        # Privileged/safe repair actions go through IPC (auth + audit).
+        self.actions = GuiActionBridge()
         self.executor = ThreadPoolExecutor(max_workers=3)
         self._log_lock = threading.Lock()
         self._busy_count = 0
@@ -309,13 +312,12 @@ class MainWindow(Gtk.Window):
             PilotClient().shutdown()
         except Exception as exc:
             logging.debug("PilotClient shutdown skipped: %s", exc)
-        def _deferred_cleanup():
-            try:
-                res = self.medic.cleanup()
-                logging.info("Final cleanup: %s", res.message)
-            except Exception as e:
-                logging.error("Error in final cleanup: %s", e)
-        threading.Thread(target=_deferred_cleanup, daemon=True).start()
+        # Best-effort iface cleanup before quitting (avoid silent daemon-thread loss).
+        try:
+            res = self.medic.cleanup()
+            logging.info("Final cleanup: %s", res.message)
+        except Exception as e:
+            logging.error("Error in final cleanup: %s", e)
         Gtk.main_quit()
 
     def append_log(self, text):
@@ -389,42 +391,48 @@ class MainWindow(Gtk.Window):
 
     # --- Handlers ---
 
+    def _ipc_action(self, action: str, params=None, *, confirmed=None):
+        """Run a catalog action via IPC (worker-thread safe)."""
+        return self.actions.call(action, params, confirmed=confirmed)
+
     def on_smart_repair(self, _):
-        # No confirmation needed for safe repair
+        # Privileged steps use IPC so polkit + audit cover the repair path.
         def sequence():
             self.append_log("--- Starting Smart Repair ---")
             repair_ctx = self.status_bar.get_context_id("repair")
             results = []
             diag_res = None
             steps = [
-                (self.medic.run_diagnostics, "Diagnosing..."),
-                (self.medic.flush_dns, "Flushing DNS..."),
+                ("network_status", "Diagnosing..."),
+                ("flush_dns", "Flushing DNS..."),
             ]
-            for step_func, step_msg in steps:
+            for action, step_msg in steps:
                 GLib.idle_add(lambda m=step_msg: self.status_bar.push(repair_ctx, m))
                 try:
-                    res = step_func()
-                    if step_func == self.medic.run_diagnostics:
+                    res = self._ipc_action(action)
+                    if action == "network_status":
                         diag_res = res
                     results.append(res)
                     self.append_log(res.to_log_entry())
                 finally:
                     GLib.idle_add(lambda: self.status_bar.pop(repair_ctx))
 
-            skip_renew = False
-            if diag_res and diag_res.success and "Gateway" not in diag_res.message:
-                skip_renew = True
-                self.append_log("Smart Repair: skipping IP renewal (no default gateway detected).")
+            # Diagnostics always include the word "Gateway" in the message string
+            # ("Gateway Reachable|Unreachable|Not Found"). Skip renew only when
+            # no default route exists.
+            skip_renew = bool(
+                diag_res is not None
+                and "Gateway Not Found" in (diag_res.message or "")
+            )
+            if skip_renew:
+                self.append_log(
+                    "Smart Repair: skipping IP renewal (no default gateway detected)."
+                )
 
             if not skip_renew:
-                steps = [(self.medic.renew_ip, "Renewing IP...")]
-            else:
-                steps = []
-
-            for step_func, step_msg in steps:
-                GLib.idle_add(lambda m=step_msg: self.status_bar.push(repair_ctx, m))
+                GLib.idle_add(lambda: self.status_bar.push(repair_ctx, "Renewing IP..."))
                 try:
-                    res = step_func()
+                    res = self._ipc_action("renew_ip")
                     results.append(res)
                     self.append_log(res.to_log_entry())
                 finally:
@@ -438,27 +446,52 @@ class MainWindow(Gtk.Window):
             else:
                 summary = f"Smart Repair: {succeeded}/{total} steps succeeded — review log for failures"
             return NetResult("Smart Repair", overall, summary)
-            
+
         self.run_async_task(sequence, "Repairing Network...")
 
-    def on_diagnostics(self, _): self.run_async_task(self.medic.run_diagnostics, "Diagnosing...")
-    def on_flush_dns(self, _): self.run_async_task(self.medic.flush_dns, "Flushing DNS...")
-    def on_renew_ip(self, _): self.run_async_task(self.medic.renew_ip, "Renewing IP...")
-    def on_scan_wifi(self, _): self.run_async_task(self.wifi_op.scan_congestion, "Scanning Wi-Fi...")
+    def on_diagnostics(self, _):
+        self.run_async_task(lambda: self._ipc_action("network_status"), "Diagnosing...")
+
+    def on_flush_dns(self, _):
+        self.run_async_task(lambda: self._ipc_action("flush_dns"), "Flushing DNS...")
+
+    def on_renew_ip(self, _):
+        self.run_async_task(lambda: self._ipc_action("renew_ip"), "Renewing IP...")
+
+    def on_scan_wifi(self, _):
+        self.run_async_task(lambda: self._ipc_action("wifi_diagnostics"), "Scanning Wi-Fi...")
 
     # --- Dangerous Handlers (Protected) ---
 
-    def on_reset_tcp_ip(self, _): 
-        if self.ask_confirmation("Reset TCP/IP Stack?", "This will restart NetworkManager. You will lose connection momentarily."):
-            self.run_async_task(self.medic.reset_tcp_ip_stack, "Resetting Stack...")
+    def on_reset_tcp_ip(self, _):
+        if self.ask_confirmation(
+            "Reset TCP/IP Stack?",
+            "This will restart NetworkManager. You will lose connection momentarily.",
+        ):
+            self.run_async_task(
+                lambda: self._ipc_action("reset_tcp_ip_stack"),
+                "Resetting Stack...",
+            )
 
-    def on_restart_adapter(self, _): 
-        if self.ask_confirmation("Restart Network Adapter?", "The default interface will be brought DOWN and then UP. SSH connections may drop."):
-            self.run_async_task(self.medic.restart_adapter, "Restarting Adapter...")
+    def on_restart_adapter(self, _):
+        if self.ask_confirmation(
+            "Restart Network Adapter?",
+            "The default interface will be brought DOWN and then UP. SSH connections may drop.",
+        ):
+            self.run_async_task(
+                lambda: self._ipc_action("restart_adapter"),
+                "Restarting Adapter...",
+            )
 
-    def on_toggle_firewall(self, _): 
-        if self.ask_confirmation("Toggle Firewall?", "Changing firewall rules may expose your system or block connections."):
-            self.run_async_task(self.medic.toggle_firewall, "Toggling Firewall...")
+    def on_toggle_firewall(self, _):
+        if self.ask_confirmation(
+            "Toggle Firewall?",
+            "Changing firewall rules may expose your system or block connections.",
+        ):
+            self.run_async_task(
+                lambda: self._ipc_action("toggle_firewall"),
+                "Toggling Firewall...",
+            )
 
     def _spawn_browser(self, url: str):
         import subprocess

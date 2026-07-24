@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import socket
+import stat
 import struct
 import threading
 from concurrent.futures import ThreadPoolExecutor
@@ -36,18 +37,42 @@ class NetMedicIPCServer:
         self._pool = ThreadPoolExecutor(max_workers=_MAX_WORKERS, thread_name_prefix="IPCWorker")
 
     def start(self):
-        if os.path.exists(self.sock_file):
-            os.remove(self.sock_file)
+        self._remove_stale_socket()
 
-        self.server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        self.server.bind(self.sock_file)
-        os.chmod(self.sock_file, 0o600)
+        old_umask = os.umask(0o177)
+        try:
+            self.server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            self.server.bind(self.sock_file)
+        finally:
+            os.umask(old_umask)
+
+        try:
+            os.chmod(self.sock_file, 0o600)
+        except OSError:
+            logger.warning("Failed to chmod IPC socket to 0600", exc_info=True)
+
         self.server.listen(5)
         self.running = True
 
         self.thread = threading.Thread(target=self._listen_loop, daemon=True, name="IPCListener")
         self.thread.start()
         logger.info("IPC server listening on %s", self.sock_file)
+
+    def _remove_stale_socket(self) -> None:
+        """Remove a leftover socket only if it is a socket owned by this user."""
+        if not os.path.lexists(self.sock_file):
+            return
+        try:
+            st = os.lstat(self.sock_file)
+            if not stat.S_ISSOCK(st.st_mode):
+                logger.error("Refusing to remove non-socket path at IPC location: %s", self.sock_file)
+                raise RuntimeError(f"IPC path is not a socket: {self.sock_file}")
+            if st.st_uid != os.getuid():
+                logger.error("Refusing to remove IPC socket owned by uid %s", st.st_uid)
+                raise RuntimeError(f"IPC socket not owned by current user: {self.sock_file}")
+            os.unlink(self.sock_file)
+        except FileNotFoundError:
+            pass
 
     def _listen_loop(self):
         while self.running and self.server:
@@ -83,8 +108,14 @@ class NetMedicIPCServer:
     def _handle_payload(self, data: bytes, *, peer_pid: int, peer_uid: int) -> Dict[str, Any]:
         try:
             payload = json.loads(data.decode("utf-8").strip())
+            if not isinstance(payload, dict):
+                return {"status": "error", "message": "Invalid request shape."}
             action = payload.get("action")
             params = payload.get("params", {})
+            if not isinstance(action, str) or not action:
+                return {"status": "error", "message": "Invalid request shape: action must be a non-empty string."}
+            if not isinstance(params, dict):
+                return {"status": "error", "message": "Invalid request shape: params must be an object."}
             return self.action_dispatcher(
                 action, params, peer_pid=peer_pid, peer_uid=peer_uid
             )

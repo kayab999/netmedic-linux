@@ -4,6 +4,31 @@ All notable changes to NetMedic Linux are documented here.
 
 ## [Unreleased]
 
+### Security
+- Fix polkit GI subject construction: `new_for_owner(pid, start_time, uid)` (was miswired as uid/starttime)
+- Pass process start_time to `pkcheck --process`; enable `--allow-user-interaction`
+- Auth order: peer → confirmed → **session token** → polkit (blocks prompt spam)
+- Peer UID required for **all** IPC actions, not only privileged
+- Atomic restrictive create for IPC socket (umask) and session token (`O_CREAT|0600`)
+- State/data directory ownership verification
+- `medic[0-9a-f]{6}` allowlist before any privileged `ip link del` (orphan/state poison)
+- VPN installer: FD re-hash, sealed runtime staging, mode `0500` after download
+- `CommandRunner` elevated binary allowlist
+- `vpn_list_clients` reclassified privileged (`com.kayab.netmedic.vpn-list`)
+- AI disruptive actions require second confirmation; execute single-flight
+- Smart Repair correctly skips IP renew on `Gateway Not Found`
+- Installer installs polkit policy system-wide (sudo); safer desktop temp file
+
+### Fixed
+- AI palette overlay no longer steals content clicks when hidden (pass-through + alignment)
+- GUI repair/infrastructure/VPN catalog actions route through IPC (`GuiActionBridge`) for shared polkit + audit
+- VPN install and start service exposed as privileged IPC (`vpn_install`, `vpn_start_service`)
+- Synchronous virtual-iface cleanup on window destroy
+
+### Ops
+- Installer prefers system-wide polkit policy; if install was skipped, run:
+  `sudo cp assets/com.kayab.netmedic.policy /usr/share/polkit-1/actions/`
+
 ## [1.4.0] — 2026-07-16
 
 ### Added

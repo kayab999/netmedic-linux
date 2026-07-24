@@ -86,6 +86,11 @@ class LifecycleManager:
         logger.info("Limpieza centralizada finalizada.")
 
     def write_pid(self):
-        with open(self.pid_file, 'w') as f:
-            f.write(str(os.getpid()))
-        os.chmod(self.pid_file, 0o600)
+        flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
+        fd = os.open(str(self.pid_file), flags, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(str(os.getpid()))
+        try:
+            os.chmod(self.pid_file, 0o600)
+        except OSError:
+            pass

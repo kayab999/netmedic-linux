@@ -95,4 +95,34 @@
       <allow_active>auth_admin_keep</allow_active>
     </defaults>
   </action>
+
+  <action id="com.kayab.netmedic.vpn-list">
+    <description>List VPN clients</description>
+    <message>NetMedic needs permission to read the VPN client certificate index</message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+  </action>
+
+  <action id="com.kayab.netmedic.vpn-install">
+    <description>Install OpenVPN server</description>
+    <message>NetMedic needs permission to install and configure the OpenVPN server</message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+  </action>
+
+  <action id="com.kayab.netmedic.vpn-start">
+    <description>Start OpenVPN service</description>
+    <message>NetMedic needs permission to start the OpenVPN service</message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+  </action>
 </policyconfig>
