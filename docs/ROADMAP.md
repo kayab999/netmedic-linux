@@ -60,7 +60,8 @@ NetMedic aims to be a sovereign, open-source network management platform for Lin
 - [x] Production call sites use `run_elevated` (network + VPN operators)
 - [x] Auto-enable helper when `/usr/libexec/netmedic/helper` is installed
 - [x] Phase D: helper-only production elevation; single polkit prompt; system-owned helper lib
-- [ ] Distro packages (deb/rpm)
+- [x] `netmedic --status` health CLI + SECURITY.md
+- [ ] Distro packages (deb/rpm) — skeleton under `packaging/`
 
 ## v2.0.0 — Framework (Future)
 

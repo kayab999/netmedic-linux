@@ -4,6 +4,12 @@ All notable changes to NetMedic Linux are documented here.
 
 ## [Unreleased]
 
+### Added
+- `netmedic --status` / `--status-json` install health CLI
+- GUI startup install-health log line
+- `SECURITY.md` disclosure and hardening checklist
+- Debian packaging skeleton under `packaging/debian/`
+
 ## [1.5.0] — 2026-07-25
 
 ### Added

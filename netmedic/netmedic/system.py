@@ -170,9 +170,10 @@ class CommandRunner:
                 126,
                 "",
                 (
-                    "Privileged helper required. Install with: "
-                    "./scripts/install-polkit-policy.sh "
-                    "(or set NETMEDIC_USE_HELPER=1 with a helper path)."
+                    "Privileged helper required for this operation. "
+                    "Run: ./scripts/install-polkit-policy.sh "
+                    "then: netmedic --status "
+                    "(helper provides fixed-verb root elevation)."
                 ),
                 [verb],
             )

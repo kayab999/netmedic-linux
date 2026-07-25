@@ -11,14 +11,17 @@ export NETMEDIC_TEST_MODE=1
 export NETMEDIC_SKIP_POLKIT=1
 export NETMEDIC_USE_HELPER=0
 
-echo "[1/5] Version import"
+echo "[1/6] Version import"
 python3 - <<'PY'
 from netmedic import __version__
 print("netmedic", __version__)
 assert __version__
 PY
 
-echo "[2/5] Helper dry-run / list-verbs"
+echo "[2/6] netmedic --status"
+python3 -m netmedic.app --status || true
+
+echo "[3/6] Helper dry-run / list-verbs"
 if [[ -x /usr/libexec/netmedic/helper ]]; then
   /usr/libexec/netmedic/helper --list-verbs | head -c 200
   echo
@@ -30,7 +33,7 @@ else
   echo "(system helper not installed — using module path)"
 fi
 
-echo "[3/5] Polkit actions (if pkaction available)"
+echo "[4/6] Polkit actions (if pkaction available)"
 if command -v pkaction >/dev/null 2>&1; then
   count="$(pkaction 2>/dev/null | grep -c 'com.kayab.netmedic' || true)"
   echo "kayab actions visible: ${count}"
@@ -41,10 +44,10 @@ else
   echo "pkaction not found — skip"
 fi
 
-echo "[4/5] Policy file present"
+echo "[5/6] Policy file present"
 test -f assets/com.kayab.netmedic.policy
 
-echo "[5/5] Test suite"
+echo "[6/6] Test suite"
 python3 -m pytest tests/ -q --tb=line
 
 echo "OK: smoke_release passed"

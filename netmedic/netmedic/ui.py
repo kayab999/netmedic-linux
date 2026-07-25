@@ -195,6 +195,29 @@ class MainWindow(Gtk.Window):
         self.ai_console = AIConsoleController(self)
         self.ai_console.mount(self._root_overlay)
         register_teardown(self.emergency_shutdown)
+        # Non-blocking install health note (helper / polkit).
+        GLib.idle_add(self._report_install_health)
+
+    def _report_install_health(self):
+        """Append one log line if privileged path is not production-ready."""
+        try:
+            from netmedic.status import collect_status
+
+            report = collect_status()
+            if report.get("production_ready"):
+                self.append_log(
+                    f"Install health: OK (helper={'on' if report.get('helper_mode') else 'off'})"
+                )
+            else:
+                self.append_log(
+                    "Install health: incomplete — run `netmedic --status` "
+                    "and ./scripts/install-polkit-policy.sh if needed."
+                )
+                for hint in report.get("hints") or []:
+                    self.append_log(f"  hint: {hint}")
+        except Exception as exc:
+            logging.debug("Install health check skipped: %s", exc)
+        return False
 
     def _on_tab_switch(self, notebook, page, page_num):
         """Defer VPN refresh until Infrastructure tab is first shown."""

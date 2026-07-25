@@ -49,6 +49,13 @@ chmod +x install.sh
 systemctl --user enable --now netmedic-headless.service
 ```
 
+### Health check
+
+```bash
+netmedic --status          # human-readable
+netmedic --status-json     # machine-readable
+```
+
 ### Polkit policy + privileged helper
 
 System-wide policy and helper wrapper are required for least-privilege elevation:

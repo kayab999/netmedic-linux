@@ -1,0 +1,24 @@
+#!/usr/bin/make -f
+export DH_VERBOSE = 1
+export PYBUILD_NAME = netmedic
+
+%:
+	dh $@ --with python3 --buildsystem=pybuild
+
+override_dh_auto_install:
+	dh_auto_install
+	# Install helper library + wrapper + polkit policy (Phase D layout).
+	install -d debian/netmedic/usr/lib/netmedic/netmedic
+	install -m 644 netmedic/netmedic/helper_main.py debian/netmedic/usr/lib/netmedic/netmedic/
+	install -m 644 netmedic/netmedic/helper_verbs.py debian/netmedic/usr/lib/netmedic/netmedic/
+	printf '%s\n' '"""NetMedic helper package."""' > debian/netmedic/usr/lib/netmedic/netmedic/__init__.py
+	install -d debian/netmedic/usr/libexec/netmedic
+	printf '%s\n' \
+	  '#!/bin/sh' \
+	  'export PYTHONPATH="/usr/lib/netmedic$${PYTHONPATH:+:$$PYTHONPATH}"' \
+	  'exec python3 -s -m netmedic.helper_main "$$@"' \
+	  > debian/netmedic/usr/libexec/netmedic/helper
+	chmod 755 debian/netmedic/usr/libexec/netmedic/helper
+	install -d debian/netmedic/usr/share/polkit-1/actions
+	install -m 644 assets/com.kayab.netmedic.policy \
+	  debian/netmedic/usr/share/polkit-1/actions/com.kayab.netmedic.policy

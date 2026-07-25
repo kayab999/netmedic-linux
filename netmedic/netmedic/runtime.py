@@ -177,10 +177,25 @@ def shutdown():
 def parse_args(argv=None):
     parser = argparse.ArgumentParser(description="NetMedic: Network Diagnostic & Repair Tool")
     parser.add_argument("--headless", action="store_true", help="Run without GUI (background mode)")
+    parser.add_argument(
+        "--status",
+        action="store_true",
+        help="Print install/runtime health and exit (no daemon)",
+    )
+    parser.add_argument(
+        "--status-json",
+        action="store_true",
+        help="Same as --status but JSON output",
+    )
     return parser.parse_args(argv)
 
 
-def run(headless: bool = False):
+def run(headless: bool = False, *, status: bool = False, status_json: bool = False):
+    if status or status_json:
+        from netmedic.status import print_status
+
+        sys.exit(print_status(as_json=bool(status_json)))
+
     signal.signal(signal.SIGINT, handle_signals)
     signal.signal(signal.SIGTERM, handle_signals)
     signal.signal(signal.SIGHUP, handle_signals)
