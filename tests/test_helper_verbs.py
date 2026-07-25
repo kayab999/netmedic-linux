@@ -127,7 +127,7 @@ def test_cli_list_verbs(capsys):
 
 
 def test_run_elevated_legacy_uses_planned_argv(monkeypatch):
-    monkeypatch.delenv("NETMEDIC_USE_HELPER", raising=False)
+    monkeypatch.setenv("NETMEDIC_USE_HELPER", "0")
     calls = []
 
     def fake_run(command, require_root=False, timeout=None):

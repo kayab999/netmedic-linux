@@ -9,6 +9,14 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        helper_mode: ["0", "1"]
+    env:
+      NETMEDIC_TEST_MODE: "1"
+      NETMEDIC_SKIP_POLKIT: "1"
+      NETMEDIC_USE_HELPER: ${{ matrix.helper_mode }}
     steps:
       - uses: actions/checkout@v4
 
@@ -36,10 +44,40 @@ jobs:
           pip install -e netmedic_ai/
 
       - name: Lint
+        if: matrix.helper_mode == '0'
         run: ruff check netmedic/ netmedic_ai/ tools/ tests/
 
-      - name: Test
+      - name: Test (legacy elevation NETMEDIC_USE_HELPER=0)
+        if: matrix.helper_mode == '0'
         run: python -m pytest tests/ -q
+
+      - name: Test (helper-mode unit contracts NETMEDIC_USE_HELPER=1)
+        if: matrix.helper_mode == '1'
+        run: |
+          # Full suite with helper forced on; fixtures still force 0 via autouse
+          # unless tests opt in. Contract + helper verb tests are the focus.
+          python -m pytest tests/test_helper_verbs.py tests/test_policy_and_catalog_contract.py -q
+
+  smoke:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-gi gir1.2-gtk-3.0 \
+            libcairo2-dev libgirepository-2.0-dev pkg-config policykit-1
+          python -m pip install --upgrade pip wheel setuptools pytest
+          pip install -e netmedic/ --config-settings editable_mode=strict
+          pip install -e netmedic_ai/
+      - name: Release smoke
+        run: |
+          chmod +x scripts/smoke_release.sh
+          ./scripts/smoke_release.sh
 
   build-smoke:
     runs-on: ubuntu-latest

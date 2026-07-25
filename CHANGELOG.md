@@ -9,6 +9,7 @@ All notable changes to NetMedic Linux are documented here.
 - `CommandRunner.run_elevated(verb, args)` with opt-in / auto helper mode
 - Phase C: polkit `exec.path` annotations + `/usr/libexec/netmedic/helper` install wrapper
 - Network/VPN elevated operations migrate to fixed helper verbs (legacy argv if helper off)
+- Scorecard P0: catalog/polkit/verb contract tests, `scripts/smoke_release.sh`, CI helper matrix
 
 ### Docs
 - Privileged helper design for v1.5 (`docs/PRIVILEGED_HELPER.md`); Phase B/C progress

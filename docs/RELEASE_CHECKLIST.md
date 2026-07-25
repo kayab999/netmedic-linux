@@ -4,9 +4,11 @@ Use this checklist before tagging a public release.
 
 ## 1. Code Quality
 
+- [ ] Automated smoke: `./scripts/smoke_release.sh` (version, helper dry-run, pytest)
 - [ ] All tests pass: `venv/bin/python -m pytest tests/ -v`
 - [ ] Linter clean: `venv/bin/ruff check netmedic/ netmedic_ai/ tests/`
 - [ ] Version aligned in `netmedic/pyproject.toml`, `netmedic_ai/`, `CHANGELOG.md`, `README.md`, `docs/RELEASE_NOTES.md`
+- [ ] Policy contract: privileged actions ⊆ polkit XML with helper `exec.path` annotate
 
 ## 2. Installation
 
@@ -38,6 +40,8 @@ Use this checklist before tagging a public release.
 - [ ] Privileged IPC writes structured lines to `~/.local/state/netmedic/audit.log`
 - [ ] Privileged IPC rejects peers whose UID does not match the daemon owner
 - [ ] `NETMEDIC_SKIP_POLKIT` has no effect without `NETMEDIC_TEST_MODE=1`
+- [ ] Helper install (optional but recommended): `./scripts/install-polkit-policy.sh`
+- [ ] `pkaction | grep kayab` shows actions; `/usr/libexec/netmedic/helper flush-dns --dry-run` works
 - [ ] Polkit policy installed (`com.kayab.netmedic.policy`)
 - [ ] VPN service remains running after app close
 
