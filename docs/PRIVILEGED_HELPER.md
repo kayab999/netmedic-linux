@@ -144,21 +144,22 @@ pkexec --disable-internal-agent /usr/libexec/netmedic/helper flush-dns
 4. ✅ Auto-enable helper when system wrapper exists (`NETMEDIC_USE_HELPER` unset)
 5. AppImage note: helper still needs host install for elevation (AppImage cannot ship setuid)
 
-### Phase D — Cutover (remaining)
+### Phase D — Cutover ✅ (v1.5.0)
 
-1. Remove unused legacy direct `pkexec <tool>` paths where still reachable
-2. Harden helper install for distro packages (deb/rpm ownership)
-3. Optional: drop binary allowlist once no production path uses raw elevation
+1. ✅ Production elevation only via helper; `require_root=True` blocked without `NETMEDIC_ALLOW_LEGACY_ELEVATION`
+2. ✅ Single interactive polkit: IPC skips polkit when helper active; `pkexec helper` is the prompt
+3. ✅ System install copies helper modules to `/usr/lib/netmedic` (no venv/repo path)
+4. ✅ VPN `vpn-run-script` re-hashes under helper before exec
+5. ⏳ deb/rpm packaging still open (Phase packaging track)
 
 ## Threat model impact
 
-| Residual today | After helper |
-|----------------|--------------|
-| Same-UID drives IPC → polkit → generic pkexec | Same-UID still needs user polkit approval, but argv is fixed |
-| VPN script TOCTOU on user path | Helper re-opens + re-hashes under root before exec |
-| GUI/local cleanup `ip link del` | Verb `iface-del` with medic* only |
-
-Unchanged: same-UID + user-approved polkit remains the primary residual (single-user desktop).
+| Residual | After Phase D |
+|----------|---------------|
+| Same-UID + user polkit approve | Still possible (desktop model) |
+| Generic `pkexec nmcli…` | Blocked in production |
+| Double polkit prompt | Avoided (helper-only interactive) |
+| Helper tied to git checkout | Fixed via `/usr/lib/netmedic` |
 
 ## Testing strategy
 

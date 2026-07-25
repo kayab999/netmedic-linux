@@ -63,7 +63,7 @@ class BaseOperator(ABC):
 
 VPN operator (`AngristanOperator`) pins script SHA256 before any execution.
 
-## IPC Security Model (v1.4+)
+## IPC Security Model (v1.5)
 
 1. On startup, `IPCSession` issues a random token stored at `~/.local/state/netmedic/ipc.token` (mode 600, atomic create).
 2. **All** actions require peer UID matching the daemon owner (`SO_PEERCRED`).
@@ -71,15 +71,14 @@ VPN operator (`AngristanOperator`) pins script SHA256 before any execution.
 4. Privileged actions require (order):
    - Peer UID match
    - `confirmed: true` (strict boolean)
-   - Matching `session_token` (checked **before** polkit)
-   - Polkit authorization (`new_for_owner(pid, start_time, uid)` / `pkcheck`)
-5. Action IDs and classifications live in `action_catalog.py`; exported schema in `ipc_schema.py`.
+   - Matching `session_token`
+   - **Elevation:** `CommandRunner.run_elevated(verb)` → `pkexec /usr/libexec/netmedic/helper <verb>`  
+     (IPC interactive polkit skipped when helper is active — single user prompt)
+5. Action IDs / verbs / polkit IDs live in `action_catalog.py` + `helper_verbs.py`.
 6. Privileged IPC attempts are recorded in `audit.log`.
-7. **GUI → IPC bridge** (`gui_actions.GuiActionBridge`): repair/infrastructure and all VPN catalog ops (status, list, create, revoke, install, start, reconnect) call the daemon over the Unix socket so they share peer/token/polkit/audit with MCP/AI. Residual local elevation: virtual-iface cleanup on exit only.
+7. **GUI → IPC bridge** (`gui_actions.GuiActionBridge`) for all catalog ops.
 
-See [THREAT_MODEL.md](THREAT_MODEL.md) for actor and residual-risk analysis.
-
-Planned elevation cutover: [PRIVILEGED_HELPER.md](PRIVILEGED_HELPER.md) (v1.5) replaces generic `pkexec <argv>` with a fixed-verb helper.
+See [THREAT_MODEL.md](THREAT_MODEL.md) and [PRIVILEGED_HELPER.md](PRIVILEGED_HELPER.md).
 
 ## AI Pilot (Optional)
 

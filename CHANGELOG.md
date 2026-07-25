@@ -4,15 +4,22 @@ All notable changes to NetMedic Linux are documented here.
 
 ## [Unreleased]
 
+## [1.5.0] — 2026-07-25
+
 ### Added
-- Phase B privileged helper prototype: `netmedic-helper` CLI, verb registry, dry-run planning
-- `CommandRunner.run_elevated(verb, args)` with opt-in / auto helper mode
-- Phase C: polkit `exec.path` annotations + `/usr/libexec/netmedic/helper` install wrapper
-- Network/VPN elevated operations migrate to fixed helper verbs (legacy argv if helper off)
-- Scorecard P0: catalog/polkit/verb contract tests, `scripts/smoke_release.sh`, CI helper matrix
+- Phase D privileged helper cutover: production root work only via `netmedic-helper`
+- System-owned helper package at `/usr/lib/netmedic` (install script; no venv/repo path)
+- Single interactive polkit prompt when helper is active (IPC skips duplicate polkit)
+- `NETMEDIC_ALLOW_LEGACY_ELEVATION` for tests/emergency only
+- Phase B/C helper verbs, `run_elevated`, polkit annotations, catalog contract tests
+- `scripts/smoke_release.sh`, CI helper matrix
+
+### Changed
+- Direct `CommandRunner.run(..., require_root=True)` fails closed in production
+- Version 1.5.0
 
 ### Docs
-- Privileged helper design for v1.5 (`docs/PRIVILEGED_HELPER.md`); Phase B/C progress
+- Threat model / architecture / PRIVILEGED_HELPER updated for Phase D
 
 ## [1.4.1] — 2026-07-24
 

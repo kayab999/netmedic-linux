@@ -16,6 +16,7 @@ def _skip_polkit_in_tests(monkeypatch):
     """Tests mock polkit explicitly; default to skip for direct dispatch calls."""
     monkeypatch.setenv("NETMEDIC_TEST_MODE", "1")
     monkeypatch.setenv("NETMEDIC_SKIP_POLKIT", "1")
-    # Host may have /usr/libexec/netmedic/helper installed (auto-on). Force
-    # legacy elevation unless a test explicitly opts into helper mode.
+    # Host may have system helper installed (auto-on). Force legacy elevation
+    # for unit tests unless a test explicitly opts into helper mode.
     monkeypatch.setenv("NETMEDIC_USE_HELPER", "0")
+    monkeypatch.setenv("NETMEDIC_ALLOW_LEGACY_ELEVATION", "1")

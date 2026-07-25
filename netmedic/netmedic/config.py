@@ -58,14 +58,16 @@ class Config:
         return 300
 
     SYSTEM_HELPER_PATH = Path("/usr/libexec/netmedic/helper")
+    SYSTEM_HELPER_LIB = Path("/usr/lib/netmedic")
 
     @staticmethod
     def use_privileged_helper() -> bool:
-        """When true, CommandRunner.run_elevated uses netmedic-helper via pkexec.
+        """When true, elevated work goes through netmedic-helper via pkexec.
 
+        Phase D: helper is the production path.
         - NETMEDIC_USE_HELPER=1/true → force on
-        - NETMEDIC_USE_HELPER=0/false → force off (legacy)
-        - unset → auto-on when system helper is installed (Phase C)
+        - NETMEDIC_USE_HELPER=0/false → force off (legacy only if allow_legacy_elevation)
+        - unset → auto-on when system helper is installed
         """
         raw = os.environ.get("NETMEDIC_USE_HELPER", "").lower()
         if raw in ("0", "false", "no"):
@@ -73,6 +75,19 @@ class Config:
         if raw in ("1", "true", "yes"):
             return True
         return Config.SYSTEM_HELPER_PATH.is_file()
+
+    @staticmethod
+    def allow_legacy_elevation() -> bool:
+        """Permit raw pkexec <tool> argv (tests / emergency only).
+
+        Production must not set this. Tests set NETMEDIC_ALLOW_LEGACY_ELEVATION=1
+        together with NETMEDIC_USE_HELPER=0.
+        """
+        return os.environ.get("NETMEDIC_ALLOW_LEGACY_ELEVATION", "").lower() in (
+            "1",
+            "true",
+            "yes",
+        )
 
     @staticmethod
     def get_helper_path() -> Path:

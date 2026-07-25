@@ -104,6 +104,16 @@ class IPCSession:
                 "message": "Invalid or missing IPC session token.",
             }
 
+        # Phase D single-prompt model: when the privileged helper is in use,
+        # interactive polkit is deferred to `pkexec netmedic-helper` (annotated
+        # exec.path). IPC still enforces peer + token + confirmed.
+        if Config.use_privileged_helper():
+            logger.debug(
+                "Skipping IPC interactive polkit for %s (helper elevation path)",
+                action,
+            )
+            return None
+
         authorized, polkit_error = check_authorization(action, peer_uid, peer_pid)
         if not authorized:
             return {

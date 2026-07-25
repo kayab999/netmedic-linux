@@ -2,7 +2,7 @@
 
 Professional network diagnostics, repair, and infrastructure management for Linux. NetMedic combines a GTK3 interface with a hardened privileged IPC core, optional AI orchestration, and VPN lifecycle management.
 
-**Version:** 1.4.1 · **License:** [MIT](LICENSE)
+**Version:** 1.5.0 · **License:** [MIT](LICENSE)
 
 ---
 

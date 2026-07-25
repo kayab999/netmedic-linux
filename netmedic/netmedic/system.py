@@ -123,10 +123,11 @@ class CommandRunner:
         *,
         timeout: Optional[int] = None,
     ) -> CommandResult:
-        """Run a fixed helper verb, or expand to legacy argv when helper is off.
+        """Run a fixed helper verb (Phase D production path).
 
-        Opt-in: NETMEDIC_USE_HELPER=1 → pkexec netmedic-helper <verb> --json ...
-        Default: plan_verb() → execute first/only command chain via legacy run().
+        Production: pkexec netmedic-helper <verb> --execute --json ...
+        Legacy (tests only): NETMEDIC_USE_HELPER=0 + NETMEDIC_ALLOW_LEGACY_ELEVATION=1
+        expands plan_verb() to raw tool argv under pkexec.
         """
         if timeout is None:
             timeout = Config.get_default_timeout()
@@ -142,9 +143,8 @@ class CommandRunner:
                 final_cmd = CommandRunner._helper_invocation(verb, args, timeout=timeout)
             except FileNotFoundError as exc:
                 return CommandResult(False, 127, "", str(exc), [verb])
-            # Helper already elevates; do not double-wrap with require_root.
+            # Helper elevates via pkexec; do not double-wrap.
             result = CommandRunner.run(final_cmd, require_root=False, timeout=timeout)
-            # Prefer helper JSON: operational stdout lives in details; errors in message.
             if result.stdout:
                 try:
                     payload = json.loads(result.stdout.splitlines()[-1])
@@ -152,7 +152,6 @@ class CommandRunner:
                         ok = bool(payload.get("ok"))
                         msg = str(payload.get("message") or "")
                         details = payload.get("details")
-                        # Surface cat/tool stdout for callers that parse stdout (e.g. vpn-list).
                         out = "" if details is None else str(details)
                         return CommandResult(
                             ok,
@@ -165,17 +164,33 @@ class CommandRunner:
                     pass
             return result
 
-        # Legacy path: run planned argv sequence with require_root.
+        if not Config.allow_legacy_elevation():
+            return CommandResult(
+                False,
+                126,
+                "",
+                (
+                    "Privileged helper required. Install with: "
+                    "./scripts/install-polkit-policy.sh "
+                    "(or set NETMEDIC_USE_HELPER=1 with a helper path)."
+                ),
+                [verb],
+            )
+
+        # Legacy path (tests / emergency): planned argv via raw pkexec.
         last = CommandResult(False, -1, "", "No commands planned", [verb])
         for argv in plan.commands:
             if argv and argv[0] == "__vpn_script__":
-                # Reconstruct env + script for legacy elevation.
                 script = argv[1]
                 env_pairs = argv[3:]
                 legacy = ["env", *env_pairs, script]
-                last = CommandRunner.run(legacy, require_root=True, timeout=timeout)
+                last = CommandRunner.run(
+                    legacy, require_root=True, timeout=timeout, _legacy_ok=True
+                )
             else:
-                last = CommandRunner.run(argv, require_root=True, timeout=timeout)
+                last = CommandRunner.run(
+                    argv, require_root=True, timeout=timeout, _legacy_ok=True
+                )
             if not last.success:
                 return last
         return last
@@ -185,9 +200,15 @@ class CommandRunner:
         command: List[str],
         require_root: bool = False,
         timeout: Optional[int] = None,
+        *,
+        _legacy_ok: bool = False,
     ) -> CommandResult:
         """
         Execute commands with timeout, optional elevation, and sanitized logging.
+
+        Phase D: require_root=True is blocked unless NETMEDIC_ALLOW_LEGACY_ELEVATION
+        (or internal _legacy_ok from run_elevated's legacy branch). Production
+        elevation must use run_elevated() → netmedic-helper.
         """
         if timeout is None:
             timeout = Config.get_default_timeout()
@@ -195,6 +216,13 @@ class CommandRunner:
         final_cmd = list(command)
 
         if require_root and os.geteuid() != 0:
+            if not (_legacy_ok or Config.allow_legacy_elevation()):
+                msg = (
+                    "Direct root elevation is disabled. Use CommandRunner.run_elevated "
+                    "with a fixed helper verb, or install the system helper."
+                )
+                logger.error(msg)
+                return CommandResult(False, 126, "", msg, final_cmd)
             allow_err = CommandRunner._assert_root_command_allowed(final_cmd)
             if allow_err:
                 logger.error(allow_err)

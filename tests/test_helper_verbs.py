@@ -128,10 +128,11 @@ def test_cli_list_verbs(capsys):
 
 def test_run_elevated_legacy_uses_planned_argv(monkeypatch):
     monkeypatch.setenv("NETMEDIC_USE_HELPER", "0")
+    monkeypatch.setenv("NETMEDIC_ALLOW_LEGACY_ELEVATION", "1")
     calls = []
 
-    def fake_run(command, require_root=False, timeout=None):
-        calls.append((list(command), require_root))
+    def fake_run(command, require_root=False, timeout=None, _legacy_ok=False):
+        calls.append((list(command), require_root, _legacy_ok))
         from netmedic.models import CommandResult
 
         return CommandResult(True, 0, "ok", "", list(command))
@@ -139,7 +140,23 @@ def test_run_elevated_legacy_uses_planned_argv(monkeypatch):
     monkeypatch.setattr(CommandRunner, "run", staticmethod(fake_run))
     res = CommandRunner.run_elevated("flush-dns", {})
     assert res.success is True
-    assert calls == [(["resolvectl", "flush-caches"], True)]
+    assert calls == [(["resolvectl", "flush-caches"], True, True)]
+
+
+def test_run_elevated_without_helper_or_legacy_fails(monkeypatch):
+    monkeypatch.setenv("NETMEDIC_USE_HELPER", "0")
+    monkeypatch.setenv("NETMEDIC_ALLOW_LEGACY_ELEVATION", "0")
+    res = CommandRunner.run_elevated("flush-dns", {})
+    assert res.success is False
+    assert "helper required" in res.stderr.lower()
+
+
+def test_direct_require_root_blocked_without_legacy(monkeypatch):
+    monkeypatch.setenv("NETMEDIC_ALLOW_LEGACY_ELEVATION", "0")
+    monkeypatch.setattr("os.geteuid", lambda: 1000)
+    res = CommandRunner.run(["resolvectl", "flush-caches"], require_root=True)
+    assert res.success is False
+    assert "run_elevated" in res.stderr.lower() or "disabled" in res.stderr.lower()
 
 
 def test_run_elevated_helper_mode_builds_pkexec(monkeypatch):
