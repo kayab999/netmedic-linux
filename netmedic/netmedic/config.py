@@ -57,13 +57,22 @@ class Config:
         """Timeout for heavy installs/downloads (300s)."""
         return 300
 
+    SYSTEM_HELPER_PATH = Path("/usr/libexec/netmedic/helper")
+
     @staticmethod
     def use_privileged_helper() -> bool:
         """When true, CommandRunner.run_elevated uses netmedic-helper via pkexec.
 
-        Opt-in via NETMEDIC_USE_HELPER=1 until Phase D cutover (default legacy).
+        - NETMEDIC_USE_HELPER=1/true → force on
+        - NETMEDIC_USE_HELPER=0/false → force off (legacy)
+        - unset → auto-on when system helper is installed (Phase C)
         """
-        return os.environ.get("NETMEDIC_USE_HELPER", "").lower() in ("1", "true", "yes")
+        raw = os.environ.get("NETMEDIC_USE_HELPER", "").lower()
+        if raw in ("0", "false", "no"):
+            return False
+        if raw in ("1", "true", "yes"):
+            return True
+        return Config.SYSTEM_HELPER_PATH.is_file()
 
     @staticmethod
     def get_helper_path() -> Path:
@@ -71,6 +80,8 @@ class Config:
         override = os.environ.get("NETMEDIC_HELPER_PATH")
         if override:
             return Path(override)
+        if Config.SYSTEM_HELPER_PATH.is_file():
+            return Config.SYSTEM_HELPER_PATH
         which = __import__("shutil").which("netmedic-helper")
         if which:
             return Path(which)

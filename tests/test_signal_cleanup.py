@@ -11,9 +11,9 @@ def test_network_medic_singleton():
     assert medic1 is medic2
 
 
-@patch("netmedic.system.CommandRunner.run")
-def test_cleanup_on_signal(mock_run):
-    mock_run.return_value = MagicMock(success=True)
+@patch("netmedic.system.CommandRunner.run_elevated")
+def test_cleanup_on_signal(mock_elevated):
+    mock_elevated.return_value = MagicMock(success=True)
 
     medic = NetworkMedic()
     with medic._state_lock:
@@ -25,7 +25,7 @@ def test_cleanup_on_signal(mock_run):
 
     assert res.success is True
     assert "medicabcdef" not in medic._created_ifaces
-    mock_run.assert_called_with(["ip", "link", "del", "medicabcdef"], require_root=True)
+    mock_elevated.assert_called_with("iface-del", {"iface": "medicabcdef"})
 
 
 def test_signal_handler_registration():

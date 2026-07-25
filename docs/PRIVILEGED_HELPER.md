@@ -136,16 +136,19 @@ pkexec --disable-internal-agent /usr/libexec/netmedic/helper flush-dns
 
    Entry point: `netmedic-helper` (setuptools console script).
 
-### Phase C — Packaging
+### Phase C — Packaging + call-site migration ✅ (in progress toward D)
 
-1. install.sh / deb/rpm install helper to libexec + system polkit policy with annotations.
-2. AppImage note: helper still needs host install for elevation (AppImage cannot ship setuid).
+1. ✅ `scripts/install-polkit-policy.sh` installs `/usr/libexec/netmedic/helper` wrapper + annotated policy
+2. ✅ Polkit actions annotate `org.freedesktop.policykit.exec.path` → helper
+3. ✅ Production call sites in `network.py` / VPN operator use `CommandRunner.run_elevated`
+4. ✅ Auto-enable helper when system wrapper exists (`NETMEDIC_USE_HELPER` unset)
+5. AppImage note: helper still needs host install for elevation (AppImage cannot ship setuid)
 
-### Phase D — Cutover
+### Phase D — Cutover (remaining)
 
-1. Default helper on for new installs.
-2. Deprecate raw `pkexec nmcli …` path.
-3. Remove binary-only allowlist elevation once verbs cover all call sites.
+1. Remove unused legacy direct `pkexec <tool>` paths where still reachable
+2. Harden helper install for distro packages (deb/rpm ownership)
+3. Optional: drop binary allowlist once no production path uses raw elevation
 
 ## Threat model impact
 

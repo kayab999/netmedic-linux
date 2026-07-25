@@ -143,8 +143,21 @@ class AngristanOperator(VPNOperator):
             finally:
                 os.close(sealed_fd)
 
-            cmd = ["env"] + list(env_vars) + [str(sealed_path)]
-            return CommandRunner.run(cmd, require_root=True, timeout=timeout)
+            env_map = {}
+            for item in env_vars:
+                if not isinstance(item, str) or "=" not in item:
+                    return CommandResult(False, 2, "", f"Invalid env entry: {item!r}", [])
+                key, value = item.split("=", 1)
+                env_map[key] = value
+            return CommandRunner.run_elevated(
+                "vpn-run-script",
+                {
+                    "script": str(sealed_path),
+                    "expected_sha256": self.EXPECTED_SHA256,
+                    "env": env_map,
+                },
+                timeout=timeout,
+            )
         finally:
             try:
                 os.close(fd)
@@ -237,8 +250,8 @@ class AngristanOperator(VPNOperator):
         if status.message == OperatorStatus.NOT_INSTALLED.value:
             return NetResult(self.name, False, "VPN not installed")
 
-        # Leemos el archivo protegido (requiere root)
-        res = CommandRunner.run(["cat", self.INDEX_TXT_PATH], require_root=True)
+        # Privileged PKI index read via fixed helper verb.
+        res = CommandRunner.run_elevated("vpn-list", {"index_path": self.INDEX_TXT_PATH})
         if not res.success:
             # Si falla cat, quizás no se ha creado PKI aún
             return NetResult(self.name, False, "Cannot read PKI index", details=res.stderr)
@@ -341,10 +354,14 @@ class AngristanOperator(VPNOperator):
             return NetResult(self.name, False, OperatorStatus.ERROR.value, details="Script integrity check failed.")
 
         service = self.get_service_name()
-        res = CommandRunner.run(["systemctl", "start", service], require_root=True, timeout=60)
+        res = CommandRunner.run_elevated(
+            "vpn-start-service", {"service": service}, timeout=60
+        )
         if CommandRunner.is_service_active(service):
             return NetResult(self.name, True, "VPN service started")
-        return NetResult(self.name, False, "Failed to start VPN service", details=res.stderr)
+        return NetResult(
+            self.name, False, "Failed to start VPN service", details=res.stderr or res.stdout
+        )
 
     def restart_service(self) -> NetResult:
         """Restarts the OpenVPN systemd unit without touching NetworkManager."""
@@ -354,10 +371,14 @@ class AngristanOperator(VPNOperator):
             return NetResult(self.name, False, OperatorStatus.ERROR.value, details="Script integrity check failed.")
 
         service = self.get_service_name()
-        res = CommandRunner.run(["systemctl", "restart", service], require_root=True, timeout=60)
+        res = CommandRunner.run_elevated(
+            "vpn-restart-service", {"service": service}, timeout=60
+        )
         if CommandRunner.is_service_active(service):
             return NetResult(self.name, True, "VPN tunnel restarted")
-        return NetResult(self.name, False, "Failed to restart VPN service", details=res.stderr)
+        return NetResult(
+            self.name, False, "Failed to restart VPN service", details=res.stderr or res.stdout
+        )
 
     def stop(self) -> None:
         """Releases operator resources without stopping the system VPN service."""

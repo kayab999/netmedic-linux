@@ -56,9 +56,10 @@ NetMedic aims to be a sovereign, open-source network management platform for Lin
 ## v1.5.0 — Privileged Helper (In progress)
 
 - [x] Phase B: in-tree `netmedic-helper` verbs + dry-run + `run_elevated` flag ([PRIVILEGED_HELPER.md](PRIVILEGED_HELPER.md))
-- [ ] Polkit annotations bound to helper binary/verbs
-- [ ] Cut over production call sites from generic `pkexec <tool>` to helper verbs
-- [ ] VPN script re-hash under elevated helper context (helper path; installer still sealed)
+- [x] Phase C: polkit path annotations + libexec wrapper install script
+- [x] Production call sites use `run_elevated` (network + VPN operators)
+- [x] Auto-enable helper when `/usr/libexec/netmedic/helper` is installed
+- [ ] Phase D: remove residual raw `pkexec <tool>` elevation; distro packages
 
 ## v2.0.0 — Framework (Future)
 

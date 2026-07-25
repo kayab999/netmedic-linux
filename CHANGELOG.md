@@ -6,10 +6,12 @@ All notable changes to NetMedic Linux are documented here.
 
 ### Added
 - Phase B privileged helper prototype: `netmedic-helper` CLI, verb registry, dry-run planning
-- `CommandRunner.run_elevated(verb, args)` with opt-in `NETMEDIC_USE_HELPER=1`
+- `CommandRunner.run_elevated(verb, args)` with opt-in / auto helper mode
+- Phase C: polkit `exec.path` annotations + `/usr/libexec/netmedic/helper` install wrapper
+- Network/VPN elevated operations migrate to fixed helper verbs (legacy argv if helper off)
 
 ### Docs
-- Privileged helper design for v1.5 (`docs/PRIVILEGED_HELPER.md`); Phase B checklist updated
+- Privileged helper design for v1.5 (`docs/PRIVILEGED_HELPER.md`); Phase B/C progress
 
 ## [1.4.1] — 2026-07-24
 

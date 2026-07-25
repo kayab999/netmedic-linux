@@ -144,17 +144,20 @@ class CommandRunner:
                 return CommandResult(False, 127, "", str(exc), [verb])
             # Helper already elevates; do not double-wrap with require_root.
             result = CommandRunner.run(final_cmd, require_root=False, timeout=timeout)
-            # Prefer helper JSON message when present.
+            # Prefer helper JSON: operational stdout lives in details; errors in message.
             if result.stdout:
                 try:
                     payload = json.loads(result.stdout.splitlines()[-1])
-                    if isinstance(payload, dict) and "message" in payload:
-                        msg = str(payload["message"])
-                        ok = bool(payload.get("ok", result.success))
+                    if isinstance(payload, dict) and "ok" in payload:
+                        ok = bool(payload.get("ok"))
+                        msg = str(payload.get("message") or "")
+                        details = payload.get("details")
+                        # Surface cat/tool stdout for callers that parse stdout (e.g. vpn-list).
+                        out = "" if details is None else str(details)
                         return CommandResult(
                             ok,
-                            0 if ok else result.returncode,
-                            result.stdout,
+                            0 if ok else (result.returncode or 1),
+                            out if ok else result.stdout,
                             "" if ok else msg,
                             result.command,
                         )

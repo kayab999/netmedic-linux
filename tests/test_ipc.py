@@ -54,10 +54,10 @@ def test_ipc_privileged_requires_confirmation(tmp_path, monkeypatch):
 
 
 @patch("netmedic.system.CommandRunner.is_service_active", return_value=True)
-@patch("netmedic.system.CommandRunner.run")
-def test_ipc_privileged_with_token(mock_run, mock_active, tmp_path, monkeypatch):
+@patch("netmedic.system.CommandRunner.run_elevated")
+def test_ipc_privileged_with_token(mock_elevated, mock_active, tmp_path, monkeypatch):
     monkeypatch.setattr("netmedic.config.Config.get_state_dir", lambda: tmp_path)
-    mock_run.return_value = MagicMock(success=True, stdout="", stderr="")
+    mock_elevated.return_value = MagicMock(success=True, stdout="", stderr="")
 
     from netmedic.network import NetworkMedic
 
@@ -72,6 +72,7 @@ def test_ipc_privileged_with_token(mock_run, mock_active, tmp_path, monkeypatch)
         peer_pid=os.getpid(),
     )
     assert result["status"] == "ok"
+    mock_elevated.assert_called_with("flush-dns")
 
 
 def test_ipc_bridge_handles_invalid_json(tmp_path, monkeypatch):

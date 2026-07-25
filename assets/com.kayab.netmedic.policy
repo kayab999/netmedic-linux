@@ -6,6 +6,12 @@
   <vendor>Kayab Software</vendor>
   <vendor_url>https://github.com/kayab999/netmedic-linux</vendor_url>
 
+  <!--
+    Phase C: annotate helper path so polkit elevates netmedic-helper, not
+    arbitrary argv. Install wrapper at /usr/libexec/netmedic/helper via
+    scripts/install-polkit-policy.sh.
+  -->
+
   <action id="com.kayab.netmedic.flush-dns">
     <description>Flush DNS resolver cache</description>
     <message>NetMedic needs permission to flush the DNS cache</message>
@@ -14,6 +20,8 @@
       <allow_inactive>auth_admin</allow_inactive>
       <allow_active>auth_admin_keep</allow_active>
     </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/netmedic/helper</annotate>
+    <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
   </action>
 
   <action id="com.kayab.netmedic.renew-ip">
@@ -24,6 +32,8 @@
       <allow_inactive>auth_admin</allow_inactive>
       <allow_active>auth_admin_keep</allow_active>
     </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/netmedic/helper</annotate>
+    <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
   </action>
 
   <action id="com.kayab.netmedic.change-dns">
@@ -34,6 +44,8 @@
       <allow_inactive>auth_admin</allow_inactive>
       <allow_active>auth_admin_keep</allow_active>
     </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/netmedic/helper</annotate>
+    <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
   </action>
 
   <action id="com.kayab.netmedic.restart-adapter">
@@ -44,6 +56,8 @@
       <allow_inactive>auth_admin</allow_inactive>
       <allow_active>auth_admin_keep</allow_active>
     </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/netmedic/helper</annotate>
+    <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
   </action>
 
   <action id="com.kayab.netmedic.reset-stack">
@@ -54,6 +68,8 @@
       <allow_inactive>auth_admin</allow_inactive>
       <allow_active>auth_admin_keep</allow_active>
     </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/netmedic/helper</annotate>
+    <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
   </action>
 
   <action id="com.kayab.netmedic.toggle-firewall">
@@ -64,6 +80,8 @@
       <allow_inactive>auth_admin</allow_inactive>
       <allow_active>auth_admin_keep</allow_active>
     </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/netmedic/helper</annotate>
+    <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
   </action>
 
   <action id="com.kayab.netmedic.vpn-create">
@@ -74,6 +92,8 @@
       <allow_inactive>auth_admin</allow_inactive>
       <allow_active>auth_admin_keep</allow_active>
     </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/netmedic/helper</annotate>
+    <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
   </action>
 
   <action id="com.kayab.netmedic.vpn-revoke">
@@ -84,6 +104,8 @@
       <allow_inactive>auth_admin</allow_inactive>
       <allow_active>auth_admin_keep</allow_active>
     </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/netmedic/helper</annotate>
+    <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
   </action>
 
   <action id="com.kayab.netmedic.vpn-reconnect">
@@ -94,6 +116,8 @@
       <allow_inactive>auth_admin</allow_inactive>
       <allow_active>auth_admin_keep</allow_active>
     </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/netmedic/helper</annotate>
+    <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
   </action>
 
   <action id="com.kayab.netmedic.vpn-list">
@@ -104,6 +128,8 @@
       <allow_inactive>auth_admin</allow_inactive>
       <allow_active>auth_admin_keep</allow_active>
     </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/netmedic/helper</annotate>
+    <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
   </action>
 
   <action id="com.kayab.netmedic.vpn-install">
@@ -114,6 +140,8 @@
       <allow_inactive>auth_admin</allow_inactive>
       <allow_active>auth_admin_keep</allow_active>
     </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/netmedic/helper</annotate>
+    <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
   </action>
 
   <action id="com.kayab.netmedic.vpn-start">
@@ -124,5 +152,7 @@
       <allow_inactive>auth_admin</allow_inactive>
       <allow_active>auth_admin_keep</allow_active>
     </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/netmedic/helper</annotate>
+    <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
   </action>
 </policyconfig>

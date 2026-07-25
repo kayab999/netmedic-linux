@@ -49,14 +49,17 @@ chmod +x install.sh
 systemctl --user enable --now netmedic-headless.service
 ```
 
-### Polkit policy (privileged IPC)
+### Polkit policy + privileged helper
 
-System-wide policy is required for privileged actions (GUI, MCP, AI):
+System-wide policy and helper wrapper are required for least-privilege elevation:
 
 ```bash
 ./scripts/install-polkit-policy.sh
-# or: sudo cp assets/com.kayab.netmedic.policy /usr/share/polkit-1/actions/
+# installs:
+#   /usr/share/polkit-1/actions/com.kayab.netmedic.policy
+#   /usr/libexec/netmedic/helper  → netmedic-helper console script
 pkaction --action-id com.kayab.netmedic.flush-dns
+# helper is auto-used when the libexec path exists; force off with NETMEDIC_USE_HELPER=0
 ```
 
 ---

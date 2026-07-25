@@ -146,9 +146,11 @@ def test_run_elevated_helper_mode_builds_pkexec(monkeypatch):
     monkeypatch.setenv("NETMEDIC_USE_HELPER", "1")
     monkeypatch.setattr("os.geteuid", lambda: 1000)
     monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/pkexec" if name == "pkexec" else None)
+    from pathlib import Path
+
     monkeypatch.setattr(
         "netmedic.config.Config.get_helper_path",
-        staticmethod(lambda: type("P", (), {"__str__": lambda self: "/usr/libexec/netmedic/helper"})()),
+        staticmethod(lambda: Path("/usr/libexec/netmedic/helper")),
     )
     captured = {}
 
@@ -157,7 +159,7 @@ def test_run_elevated_helper_mode_builds_pkexec(monkeypatch):
         captured["require_root"] = require_root
         from netmedic.models import CommandResult
 
-        payload = json.dumps({"ok": True, "message": "flushed"})
+        payload = json.dumps({"ok": True, "message": "flushed", "details": None})
         return CommandResult(True, 0, payload, "", list(command))
 
     monkeypatch.setattr(CommandRunner, "run", staticmethod(fake_run))
@@ -168,6 +170,46 @@ def test_run_elevated_helper_mode_builds_pkexec(monkeypatch):
     assert captured["cmd"][1] == "/usr/libexec/netmedic/helper"
     assert "flush-dns" in captured["cmd"]
     assert "--execute" in captured["cmd"]
+
+
+def test_run_elevated_helper_surfaces_details_as_stdout(monkeypatch):
+    monkeypatch.setenv("NETMEDIC_USE_HELPER", "1")
+    monkeypatch.setattr("os.geteuid", lambda: 0)
+    from pathlib import Path
+
+    monkeypatch.setattr(
+        "netmedic.config.Config.get_helper_path",
+        staticmethod(lambda: Path("/usr/libexec/netmedic/helper")),
+    )
+
+    def fake_run(command, require_root=False, timeout=None):
+        from netmedic.models import CommandResult
+
+        payload = json.dumps(
+            {
+                "ok": True,
+                "message": "read VPN PKI index",
+                "details": "V\t0\t\t01\tunknown\t/CN=laptop",
+            }
+        )
+        return CommandResult(True, 0, payload, "", list(command))
+
+    monkeypatch.setattr(CommandRunner, "run", staticmethod(fake_run))
+    res = CommandRunner.run_elevated("vpn-list", {})
+    assert res.success is True
+    assert "CN=laptop" in res.stdout
+
+
+def test_use_helper_auto_when_system_path_exists(tmp_path, monkeypatch):
+    monkeypatch.delenv("NETMEDIC_USE_HELPER", raising=False)
+    fake = tmp_path / "helper"
+    fake.write_text("#!/bin/sh\n")
+    monkeypatch.setattr("netmedic.config.Config.SYSTEM_HELPER_PATH", fake)
+    from netmedic.config import Config
+
+    assert Config.use_privileged_helper() is True
+    monkeypatch.setenv("NETMEDIC_USE_HELPER", "0")
+    assert Config.use_privileged_helper() is False
 
 
 def test_run_elevated_rejects_bad_verb():

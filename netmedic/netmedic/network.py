@@ -100,7 +100,7 @@ class NetworkMedic:
         if not NetworkMedic.is_medic_virtual_iface(iface):
             logger.error("Refusing to delete non-medic interface: %r", iface)
             return False
-        res = CommandRunner.run(["ip", "link", "del", iface], require_root=True)
+        res = CommandRunner.run_elevated("iface-del", {"iface": iface})
         return res.success
 
     def _reap_orphan_iface_state(self):
@@ -273,9 +273,13 @@ class NetworkMedic:
             return NetResult("Flush DNS", False, "Missing 'resolvectl' (systemd-resolved not detected)")
 
         if CommandRunner.is_service_active("systemd-resolved"):
-            res = CommandRunner.run(["resolvectl", "flush-caches"], require_root=True)
-            return NetResult("Flush DNS", res.success, "systemd-resolved cache flushed" if res.success else res.stderr)
-        
+            res = CommandRunner.run_elevated("flush-dns")
+            return NetResult(
+                "Flush DNS",
+                res.success,
+                "systemd-resolved cache flushed" if res.success else (res.stderr or res.stdout),
+            )
+
         return NetResult("Flush DNS", False, "systemd-resolved service is not active")
 
     def change_dns(self, server: str = "1.1.1.1") -> NetResult:
@@ -297,21 +301,12 @@ class NetworkMedic:
             return NetResult("Change DNS", False, "No active NetworkManager connection found")
 
         conn_name, device = active
-        mod_res = CommandRunner.run(
-            [
-                "nmcli", "con", "mod", conn_name,
-                "ipv4.dns", server,
-                "ipv4.ignore-auto-dns", "yes",
-            ],
-            require_root=True,
+        res = CommandRunner.run_elevated(
+            "change-dns",
+            {"server": server, "connection": conn_name},
         )
-        if not mod_res.success:
-            return NetResult("Change DNS", False, mod_res.stderr)
-
-        up_res = CommandRunner.run(["nmcli", "con", "up", conn_name], require_root=True)
-        if not up_res.success:
-            return NetResult("Change DNS", False, up_res.stderr)
-
+        if not res.success:
+            return NetResult("Change DNS", False, res.stderr or res.stdout)
         return NetResult("Change DNS", True, f"DNS set to {server} on {conn_name} ({device})")
 
     def renew_ip(self) -> NetResult:
@@ -329,10 +324,12 @@ class NetworkMedic:
         if not _IFACE_TOKEN_RE.fullmatch(iface):
             return NetResult("Renew IP", False, f"Refusing invalid interface name: {iface!r}")
 
-        # Modern NetworkManager fallback
+        # Prefer NetworkManager; fall back to dhclient via helper verb modes.
         nm_error = ""
         if shutil.which("nmcli"):
-            res = CommandRunner.run(["nmcli", "device", "reapply", iface], require_root=True)
+            res = CommandRunner.run_elevated(
+                "renew-ip", {"iface": iface, "mode": "nmcli"}
+            )
             if res.success:
                 return NetResult("Renew IP", True, f"IP renewed via NetworkManager on {iface}")
             nm_error = res.stderr or res.stdout
@@ -341,18 +338,16 @@ class NetworkMedic:
             detail = nm_error or "dhclient not available"
             return NetResult("Renew IP", False, f"DHCP renewal failed on {iface}", details=detail)
 
-        release_res = CommandRunner.run(["dhclient", "-r", iface], require_root=True, timeout=10)
-        if not release_res.success:
-            logger.warning("dhclient release failed on %s: %s", iface, release_res.stderr)
-        res = CommandRunner.run(["dhclient", iface], require_root=True, timeout=15)
-        
+        res = CommandRunner.run_elevated(
+            "renew-ip", {"iface": iface, "mode": "dhclient"}, timeout=30
+        )
         if not res.success:
             logger.error("DHCP renewal failed for %s: %s", iface, res.stderr)
             return NetResult(
                 "Renew IP",
                 False,
                 f"DHCP renewal failed on {iface}. Try Infrastructure tab for a full stack reset.",
-                details=res.stderr,
+                details=res.stderr or nm_error,
             )
 
         return NetResult("Renew IP", True, f"IP renewed on {iface}")
@@ -365,8 +360,12 @@ class NetworkMedic:
         Tiempo: 5s - 15s.
         Reversibilidad: Sí (El servicio vuelve a subir automáticamente).
         """
-        res = CommandRunner.run(["systemctl", "restart", "NetworkManager"], require_root=True)
-        return NetResult("Reset Stack", res.success, "Stack reset successful" if res.success else res.stderr)
+        res = CommandRunner.run_elevated("reset-stack")
+        return NetResult(
+            "Reset Stack",
+            res.success,
+            "Stack reset successful" if res.success else (res.stderr or res.stdout),
+        )
 
     def restart_adapter(self) -> NetResult:
         """
@@ -382,16 +381,15 @@ class NetworkMedic:
         if not _IFACE_TOKEN_RE.fullmatch(iface):
             return NetResult("Restart Adapter", False, f"Refusing invalid interface name: {iface!r}")
 
-        down = CommandRunner.run(["ip", "link", "set", iface, "down"], require_root=True)
-        if not down.success:
-            return NetResult("Restart Adapter", False, f"Failed to bring {iface} down", details=down.stderr)
-        res = CommandRunner.run(["ip", "link", "set", iface, "up"], require_root=True)
-        return NetResult(
-            "Restart Adapter",
-            res.success,
-            f"Adapter {iface} restarted" if res.success else "Failed to bring interface up",
-            details=res.stderr if not res.success else None,
-        )
+        res = CommandRunner.run_elevated("restart-adapter", {"iface": iface})
+        if not res.success:
+            return NetResult(
+                "Restart Adapter",
+                False,
+                f"Failed to restart {iface}",
+                details=res.stderr or res.stdout,
+            )
+        return NetResult("Restart Adapter", True, f"Adapter {iface} restarted")
 
     @staticmethod
     def read_firewall_status() -> str:
@@ -417,15 +415,15 @@ class NetworkMedic:
         current = self.get_firewall_status()
         if current not in ("ON", "OFF"):
             return NetResult("Firewall", False, f"Cannot determine UFW status (got: {current})")
-        # Non-interactive: stock `ufw enable` may prompt and hang under pkexec.
-        if current == "OFF":
-            res = CommandRunner.run(["ufw", "--force", "enable"], require_root=True)
-            action = "enable"
-        else:
-            res = CommandRunner.run(["ufw", "disable"], require_root=True)
-            action = "disable"
+        action = "enable" if current == "OFF" else "disable"
+        res = CommandRunner.run_elevated("toggle-firewall", {"action": action})
         if not res.success:
-            return NetResult("Firewall", False, f"ufw {action} failed", details=res.stderr)
+            return NetResult(
+                "Firewall",
+                False,
+                f"ufw {action} failed",
+                details=res.stderr or res.stdout,
+            )
 
         # Validación post-operación: No confiar solo en el exit code
         final_status = self.get_firewall_status()
@@ -445,7 +443,7 @@ class NetworkMedic:
         Reversibilidad: Sí (Usar método cleanup()).
         """
         iface = f"medic{uuid.uuid4().hex[:6]}"
-        res = CommandRunner.run(["ip", "link", "add", iface, "type", "dummy"], require_root=True)
+        res = CommandRunner.run_elevated("iface-add-dummy", {"iface": iface})
         if res.success:
             with self._state_lock:
                 self._created_ifaces.add(iface)

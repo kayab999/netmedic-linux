@@ -22,19 +22,18 @@ def test_sanitize_iface_list_drops_poison():
 
 
 def test_delete_medic_iface_refuses_non_medic():
-    with patch("netmedic.network.CommandRunner.run") as mock_run:
+    with patch("netmedic.network.CommandRunner.run_elevated") as mock_run:
         ok = NetworkMedic._delete_medic_iface("eth0")
         assert ok is False
         mock_run.assert_not_called()
 
 
 def test_delete_medic_iface_allows_medic_name():
-    with patch("netmedic.network.CommandRunner.run") as mock_run:
+    with patch("netmedic.network.CommandRunner.run_elevated") as mock_run:
         mock_run.return_value.success = True
         ok = NetworkMedic._delete_medic_iface("medicabcdef")
         assert ok is True
-        mock_run.assert_called_once()
-        assert mock_run.call_args[0][0] == ["ip", "link", "del", "medicabcdef"]
+        mock_run.assert_called_once_with("iface-del", {"iface": "medicabcdef"})
 
 
 def test_reap_orphan_ignores_poisoned_state(tmp_path, monkeypatch):
