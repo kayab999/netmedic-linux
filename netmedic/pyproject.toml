@@ -17,6 +17,7 @@ dependencies = [
 
 [project.scripts]
 netmedic = "netmedic.app:main"
+netmedic-helper = "netmedic.helper_main:main"
 
 [project.optional-dependencies]
 ai = [

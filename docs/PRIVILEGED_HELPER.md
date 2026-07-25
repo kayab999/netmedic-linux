@@ -121,18 +121,20 @@ pkexec --disable-internal-agent /usr/libexec/netmedic/helper flush-dns
 - Verb list locked to current IPC privileged set.
 - JSON I/O schema frozen.
 
-### Phase B — Helper prototype (in-tree)
+### Phase B — Helper prototype (in-tree) ✅
 
-1. Add `tools/netmedic_helper.py` (or `netmedic/netmedic/helper_main.py`) runnable as user for dry-run.
-2. Unit tests for validation + verb dispatch **without** root.
-3. `CommandRunner.run_elevated(verb, args)` feature-flagged:
+1. ✅ `netmedic/helper_main.py` + `helper_verbs.py` — CLI with `--dry-run` / `--execute`
+2. ✅ Unit tests (`tests/test_helper_verbs.py`) — validation + dispatch **without** root
+3. ✅ `CommandRunner.run_elevated(verb, args)` feature-flagged:
 
    ```python
-   if Config.use_privileged_helper():
+   if Config.use_privileged_helper():  # NETMEDIC_USE_HELPER=1
        return run helper via pkexec
    else:
-       legacy pkexec + argv  # current path
+       legacy pkexec + planned argv  # current path
    ```
+
+   Entry point: `netmedic-helper` (setuptools console script).
 
 ### Phase C — Packaging
 

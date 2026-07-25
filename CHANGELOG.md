@@ -4,8 +4,12 @@ All notable changes to NetMedic Linux are documented here.
 
 ## [Unreleased]
 
+### Added
+- Phase B privileged helper prototype: `netmedic-helper` CLI, verb registry, dry-run planning
+- `CommandRunner.run_elevated(verb, args)` with opt-in `NETMEDIC_USE_HELPER=1`
+
 ### Docs
-- Privileged helper design for v1.5 (`docs/PRIVILEGED_HELPER.md`)
+- Privileged helper design for v1.5 (`docs/PRIVILEGED_HELPER.md`); Phase B checklist updated
 
 ## [1.4.1] — 2026-07-24
 

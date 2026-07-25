@@ -1,8 +1,14 @@
 import logging
 import os
+import sys
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
+
+
+def sys_executable_helper_module() -> str:
+    """Return a marker path meaning 'invoke via python -m netmedic.helper_main'."""
+    return f"{sys.executable}|-m|netmedic.helper_main"
 
 
 class Config:
@@ -50,6 +56,26 @@ class Config:
     def get_long_timeout() -> int:
         """Timeout for heavy installs/downloads (300s)."""
         return 300
+
+    @staticmethod
+    def use_privileged_helper() -> bool:
+        """When true, CommandRunner.run_elevated uses netmedic-helper via pkexec.
+
+        Opt-in via NETMEDIC_USE_HELPER=1 until Phase D cutover (default legacy).
+        """
+        return os.environ.get("NETMEDIC_USE_HELPER", "").lower() in ("1", "true", "yes")
+
+    @staticmethod
+    def get_helper_path() -> Path:
+        """Resolve netmedic-helper executable path."""
+        override = os.environ.get("NETMEDIC_HELPER_PATH")
+        if override:
+            return Path(override)
+        which = __import__("shutil").which("netmedic-helper")
+        if which:
+            return Path(which)
+        # Development fallback: python -m netmedic.helper_main
+        return Path(sys_executable_helper_module())
 
     @staticmethod
     def _ensure_dir(path: Path):

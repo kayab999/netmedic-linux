@@ -53,12 +53,12 @@ NetMedic aims to be a sovereign, open-source network management platform for Lin
 - [x] Overlay click-steal fix; UI wiring regression suite
 - [x] Polkit install script and installer system-path install
 
-## v1.5.0 — Privileged Helper (Planned)
+## v1.5.0 — Privileged Helper (In progress)
 
-- [ ] `netmedic-helper` fixed-argv elevation path (see [PRIVILEGED_HELPER.md](PRIVILEGED_HELPER.md))
+- [x] Phase B: in-tree `netmedic-helper` verbs + dry-run + `run_elevated` flag ([PRIVILEGED_HELPER.md](PRIVILEGED_HELPER.md))
 - [ ] Polkit annotations bound to helper binary/verbs
-- [ ] Cut over `CommandRunner` from generic `pkexec <tool>` to helper verbs
-- [ ] VPN script re-hash under elevated helper context
+- [ ] Cut over production call sites from generic `pkexec <tool>` to helper verbs
+- [ ] VPN script re-hash under elevated helper context (helper path; installer still sealed)
 
 ## v2.0.0 — Framework (Future)
 
