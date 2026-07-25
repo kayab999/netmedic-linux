@@ -79,6 +79,8 @@ VPN operator (`AngristanOperator`) pins script SHA256 before any execution.
 
 See [THREAT_MODEL.md](THREAT_MODEL.md) for actor and residual-risk analysis.
 
+Planned elevation cutover: [PRIVILEGED_HELPER.md](PRIVILEGED_HELPER.md) (v1.5) replaces generic `pkexec <argv>` with a fixed-verb helper.
+
 ## AI Pilot (Optional)
 
 ```

@@ -87,6 +87,7 @@ netmedic-linux/
 | [Architecture](docs/ARCHITECTURE.md) | System design overview |
 | [IPC API](docs/IPC_API.md) | Integration guide for automation clients |
 | [Threat Model](docs/THREAT_MODEL.md) | Trust boundaries and residual risks |
+| [Privileged Helper](docs/PRIVILEGED_HELPER.md) | v1.5 design: fixed-argv elevation |
 | [Contributing](CONTRIBUTING.md) | Contribution guidelines |
 | [Changelog](CHANGELOG.md) | Version history |
 | [Roadmap](docs/ROADMAP.md) | Future plans |

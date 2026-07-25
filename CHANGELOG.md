@@ -4,6 +4,9 @@ All notable changes to NetMedic Linux are documented here.
 
 ## [Unreleased]
 
+### Docs
+- Privileged helper design for v1.5 (`docs/PRIVILEGED_HELPER.md`)
+
 ## [1.4.1] — 2026-07-24
 
 ### Security
