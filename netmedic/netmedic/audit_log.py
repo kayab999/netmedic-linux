@@ -29,6 +29,36 @@ def _sanitize_params(params: Dict[str, Any]) -> Dict[str, Any]:
     return safe
 
 
+_MAX_AUDIT_BYTES = 1_048_576
+_MAX_AUDIT_BACKUPS = 3
+
+
+def _rotate_audit_if_needed(path) -> None:
+    try:
+        if path.exists() and path.stat().st_size > _MAX_AUDIT_BYTES:
+            # Rotate audit.log -> audit.log.1 -> .2 -> .3
+            for i in range(_MAX_AUDIT_BACKUPS, 0, -1):
+                src = path.with_name(f"{path.name}.{i}")
+                dst = path.with_name(f"{path.name}.{i+1}")
+                if src.exists():
+                    if i == _MAX_AUDIT_BACKUPS:
+                        try:
+                            src.unlink()
+                        except OSError:
+                            pass
+                    else:
+                        try:
+                            src.rename(dst)
+                        except OSError:
+                            pass
+            try:
+                path.rename(path.with_name(f"{path.name}.1"))
+            except OSError:
+                pass
+    except OSError:
+        pass
+
+
 def record(
     *,
     action: str,
@@ -56,11 +86,14 @@ def record(
         entry["requires_polkit"] = True
     if result.get("requires_confirmation"):
         entry["requires_confirmation"] = True
+    if result.get("requires_helper"):
+        entry["requires_helper"] = True
 
     line = json.dumps(entry, separators=(",", ":"), ensure_ascii=False)
     path = get_audit_log_path()
     try:
         with _lock:
+            _rotate_audit_if_needed(path)
             with open(path, "a", encoding="utf-8") as handle:
                 handle.write(line + "\n")
             os.chmod(path, 0o600)

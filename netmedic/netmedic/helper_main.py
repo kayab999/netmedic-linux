@@ -116,7 +116,7 @@ def _execute_vpn_script(marker_cmd: List[str], timeout: Optional[int]) -> Dict[s
         }
     err = (proc.stderr or proc.stdout or "").strip()
     if "dismissed" in err.lower():
-        return {"ok": False, "message": "Authentication cancelled by user", "details": err}
+        return {"ok": False, "message": "Authentication cancelled by user", "details": err, "code": "cancelled"}
     return {
         "ok": False,
         "message": err or f"VPN script failed (exit {proc.returncode})",
@@ -145,6 +145,7 @@ def execute_plan(plan: VerbPlan, *, timeout: Optional[int] = None) -> Dict[str, 
                     "ok": False,
                     "message": "Authentication cancelled by user",
                     "details": err,
+                    "code": "cancelled",
                 }
             return {
                 "ok": False,
@@ -226,9 +227,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if result.get("ok"):
         return _emit(result, EXIT_OK)
     message = (result.get("message") or "").lower()
-    if "integrity" in message or "security abort" in message:
+    if "integrity" in message or "security abort" in message:  # sf-str: allow exit-code mapping from helper payload, low-risk internal
         return _emit(result, EXIT_INTEGRITY)
-    if "cancel" in message or "dismissed" in message:
+    if "cancel" in message or "dismissed" in message:  # sf-str: allow helper payload code fallback, primary is code==cancelled
         return _emit(result, EXIT_CANCELLED)
     return _emit(result, EXIT_OP_FAIL)
 

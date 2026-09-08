@@ -10,7 +10,7 @@ from netmedic.action_catalog import (
 )
 from netmedic.config import Config
 
-IPC_API_VERSION = "1.0"
+IPC_API_VERSION = "1.1"  # + code field (additive, ResultCode), probes now TCP-only + PARTIAL
 
 _ACTION_PARAMS: Dict[str, Dict[str, str]] = {
     "change_dns": {"server": "optional string (default 1.1.1.1)"},

@@ -4,7 +4,7 @@ import re
 import hashlib
 from pathlib import Path
 
-from netmedic.models import CommandResult, NetResult
+from netmedic.models import CommandResult, NetResult, ResultCode
 from netmedic.operators.vpn.base import VPNOperator, VPNClient
 from netmedic.operators.base import OperatorStatus
 from netmedic.config import Config
@@ -215,7 +215,7 @@ class AngristanOperator(VPNOperator):
 
     def install(self) -> NetResult:
         dl_res = self._download_script()
-        if not dl_res.success: return dl_res
+        if dl_res.code != ResultCode.OK: return dl_res
 
         env_vars = [
             "APPROVE_INSTALL=y",
@@ -295,7 +295,7 @@ class AngristanOperator(VPNOperator):
         
         # Verificar duplicados
         current_clients = self.list_clients()
-        if current_clients.success and current_clients.data:
+        if current_clients.code == ResultCode.OK and current_clients.data:
             for c in current_clients.data:
                 if c.name == name and c.active:
                     return NetResult(self.name, False, f"Client '{name}' already exists")
@@ -313,7 +313,7 @@ class AngristanOperator(VPNOperator):
 
         # Validación post-operación: Verificar que el cliente aparezca en el índice
         verify_res = self.list_clients()
-        if verify_res.success and verify_res.data:
+        if verify_res.code == ResultCode.OK and verify_res.data:
             for c in verify_res.data:
                 if c.name == name and c.active:
                     return NetResult(self.name, True, f"Client '{name}' created and verified")
@@ -335,7 +335,7 @@ class AngristanOperator(VPNOperator):
             return NetResult(self.name, False, "Failed to revoke client", details=res.stderr)
 
         verify_res = self.list_clients()
-        if verify_res.success and verify_res.data:
+        if verify_res.code == ResultCode.OK and verify_res.data:
             for client in verify_res.data:
                 if client.name == name and not client.active:
                     return NetResult(self.name, True, f"Client '{name}' revoked and verified")

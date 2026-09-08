@@ -59,6 +59,12 @@ class Config:
 
     SYSTEM_HELPER_PATH = Path("/usr/libexec/netmedic/helper")
     SYSTEM_HELPER_LIB = Path("/usr/lib/netmedic")
+    # Debian alternative location; some distros use /usr/lib instead of /usr/libexec
+    SYSTEM_HELPER_ALT_PATH = Path("/usr/lib/netmedic/helper")
+
+    @staticmethod
+    def _any_helper_exists() -> bool:
+        return Config.SYSTEM_HELPER_PATH.is_file() or Config.SYSTEM_HELPER_ALT_PATH.is_file()
 
     @staticmethod
     def use_privileged_helper() -> bool:
@@ -74,7 +80,7 @@ class Config:
             return False
         if raw in ("1", "true", "yes"):
             return True
-        return Config.SYSTEM_HELPER_PATH.is_file()
+        return Config._any_helper_exists()
 
     @staticmethod
     def allow_legacy_elevation() -> bool:
@@ -97,6 +103,8 @@ class Config:
             return Path(override)
         if Config.SYSTEM_HELPER_PATH.is_file():
             return Config.SYSTEM_HELPER_PATH
+        if Config.SYSTEM_HELPER_ALT_PATH.is_file():
+            return Config.SYSTEM_HELPER_ALT_PATH
         which = __import__("shutil").which("netmedic-helper")
         if which:
             return Path(which)

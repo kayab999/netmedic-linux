@@ -148,7 +148,8 @@ def test_run_elevated_without_helper_or_legacy_fails(monkeypatch):
     monkeypatch.setenv("NETMEDIC_ALLOW_LEGACY_ELEVATION", "0")
     res = CommandRunner.run_elevated("flush-dns", {})
     assert res.success is False
-    assert "helper required" in res.stderr.lower()
+    assert "helper" in res.stderr.lower()
+    assert "install-polkit-policy" in res.stderr.lower()
 
 
 def test_direct_require_root_blocked_without_legacy(monkeypatch):

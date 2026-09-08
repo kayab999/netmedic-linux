@@ -7,13 +7,17 @@ from netmedic.network import NetworkMedic
 @patch("netmedic.network.CommandRunner.run")
 @patch("netmedic.network.shutil.which", return_value="/usr/bin/nmcli")
 def test_change_dns_success(mock_which, mock_run, mock_elevated):
-    mock_run.side_effect = [
-        MagicMock(
-            success=True,
-            stdout="docker0:docker0:bridge\nhome:wlan0:802-11-wireless\n",
-            stderr="",
-        ),
-    ]
+    def _run(cmd, *a, **kw):
+        if cmd[:3] == ["nmcli", "-t", "-f"]:
+            return MagicMock(success=True, stdout="docker0:docker0:bridge\nhome:wlan0:802-11-wireless\n", stderr="")
+        if cmd[:3] == ["nmcli", "con", "show"]:
+            return MagicMock(success=True, stdout="connection.id: home\nipv4.dns: 1.1.1.1\n", stderr="")
+        if cmd[0] == "getent":
+            return MagicMock(success=True)
+        if cmd[0] == "curl":
+            return MagicMock(success=True)
+        return MagicMock(success=True)
+    mock_run.side_effect = _run
     mock_elevated.return_value = MagicMock(success=True, stdout="", stderr="")
 
     medic = NetworkMedic()

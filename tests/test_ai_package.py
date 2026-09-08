@@ -41,7 +41,9 @@ def test_interpret_intent_without_llama():
 
     result = interpret_intent("check network", {"internet": True})
     assert result["status"] == "error"
-    assert "llama" in result["message"].lower() or "instal" in result["message"].lower()
+    # Model missing also triggers error; accept any install/model/llama hint
+    msg = result["message"].lower()
+    assert any(k in msg for k in ("llama", "instal", "model", "missing"))
 
 
 from unittest.mock import MagicMock, patch

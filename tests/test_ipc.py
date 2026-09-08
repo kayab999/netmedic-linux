@@ -9,12 +9,13 @@ from netmedic.lifecycle import LifecycleManager
 
 @patch("netmedic.system.CommandRunner.run")
 def test_ipc_dispatcher_network_status(mock_run):
-    mock_run.side_effect = [
-        MagicMock(success=True, stdout="default via 192.168.1.1 dev eth0", stderr=""),
-        MagicMock(success=True, stdout="", stderr=""),
-        MagicMock(success=True, stdout="", stderr=""),
-        MagicMock(success=True, stdout="", stderr=""),
-    ]
+    def _run(cmd, *a, **kw):
+        if cmd[0] == "ip" and "default" in cmd:
+            return MagicMock(success=True, stdout="default via 192.168.1.1 dev eth0", stderr="")
+        if cmd[0] in ("ping", "getent", "curl"):
+            return MagicMock(success=True, stdout="ok", stderr="")
+        return MagicMock(success=True, stdout="", stderr="")
+    mock_run.side_effect = _run
 
     from netmedic.network import NetworkMedic
 

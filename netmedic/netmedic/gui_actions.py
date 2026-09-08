@@ -34,9 +34,16 @@ _ACTION_OPERATION: Dict[str, str] = {
 
 def payload_to_net_result(action: str, payload: Dict[str, Any]) -> NetResult:
     """Map an IPC JSON response into a NetResult for existing UI logging paths."""
+    from netmedic.models import ResultCode
     operation = _ACTION_OPERATION.get(action, action)
     status = payload.get("status")
     success = status == "ok"
+    # Prefer explicit code when present (PR2)
+    code_raw = payload.get("code")
+    try:
+        code = ResultCode(code_raw) if code_raw else (ResultCode.OK if success else ResultCode.FAILED)
+    except ValueError:
+        code = ResultCode.OK if success else ResultCode.FAILED
     message = payload.get("message") or ("OK" if success else "IPC error")
     details = payload.get("details")
     data = payload.get("data")
@@ -55,7 +62,7 @@ def payload_to_net_result(action: str, payload: Dict[str, Any]) -> NetResult:
         data = clients
 
     if not success and details is None:
-        # Surface polkit / confirmation hints in the log when present.
+        # Surface polkit / confirmation / helper hints in the log when present.
         hints = []
         if payload.get("requires_polkit"):
             hints.append("polkit required")
@@ -63,8 +70,18 @@ def payload_to_net_result(action: str, payload: Dict[str, Any]) -> NetResult:
             hints.append("confirmation required")
         if payload.get("requires_peer_auth"):
             hints.append("peer auth failed")
+        msg_low = (message or "").lower()
+        if "helper-missing" in msg_low or "helper not installed" in msg_low:
+            hints.append("helper missing: run ./scripts/install-polkit-policy.sh")
+        elif payload.get("requires_helper"):
+            hints.append("helper missing")
         if hints:
             details = ", ".join(hints)
+    # Also surface helper-missing even when details already present — append hint
+    if not success and details is not None:
+        msg_low = (message or "").lower() + " " + (details or "").lower()
+        if "helper-missing" in msg_low and "helper missing" not in (details or "").lower():
+            details = f"{details} (helper missing: run ./scripts/install-polkit-policy.sh)"
 
     return NetResult(
         operation=operation,
@@ -72,6 +89,7 @@ def payload_to_net_result(action: str, payload: Dict[str, Any]) -> NetResult:
         message=message,
         details=details,
         data=data,
+        code=code,
     )
 
 

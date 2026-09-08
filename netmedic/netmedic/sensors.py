@@ -5,12 +5,11 @@ import subprocess
 from typing import Any, Dict, List
 
 from netmedic.system import CommandRunner
+from netmedic.constants import VIRTUAL_IFACE_MARKERS
 
 logger = logging.getLogger(__name__)
 
-_VIRTUAL_IFACE_MARKERS = (
-    "docker", "br-", "veth", "vnet", "virbr", "tun", "wg", "tailscale", "lo",
-)
+_VIRTUAL_IFACE_MARKERS = VIRTUAL_IFACE_MARKERS
 
 
 def _is_physical_interface(name: str) -> bool:
@@ -65,7 +64,7 @@ def _rfkill_blocked() -> bool:
     res = CommandRunner.run(["rfkill", "list", "wifi"])
     if not res.success:
         return False
-    return "Soft blocked: yes" in res.stdout or "Hard blocked: yes" in res.stdout
+    return "Soft blocked: yes" in res.stdout or "Hard blocked: yes" in res.stdout  # sf-str: allow rfkill output not localized, low-risk display parse
 
 
 def _nm_active_connection() -> Dict[str, str]:
@@ -129,7 +128,13 @@ def get_network_snapshot() -> Dict[str, Any]:
                 snapshot["default_iface"] = name
                 break
 
+    # Use shared internet probe (DIV-01 single source of truth) but keep latency via ping
     try:
+        from netmedic.probes import check_internet_access
+        ok, per, label = check_internet_access()
+        snapshot["internet"] = ok
+        snapshot["internet_probes"] = per
+        # Latency via ping for backwards compat
         ping_res = subprocess.run(
             ["ping", "-c", "1", "-W", "1", "8.8.8.8"],
             capture_output=True,
@@ -138,11 +143,10 @@ def get_network_snapshot() -> Dict[str, Any]:
             check=False,
         )
         if ping_res.returncode == 0:
-            snapshot["internet"] = True
             match = re.search(r"time[=<]([\d.]+)", ping_res.stdout)
             if match:
                 snapshot["latency_ms"] = float(match.group(1))
-    except (subprocess.SubprocessError, ValueError, OSError):
+    except (subprocess.SubprocessError, ValueError, OSError, Exception):
         pass
 
     try:

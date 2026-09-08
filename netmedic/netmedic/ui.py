@@ -374,21 +374,61 @@ class MainWindow(Gtk.Window):
     def on_task_done(self, future):
         self.set_busy(False)
         try:
+            from netmedic.models import ResultCode
             res = future.result()
-            if res.success:
+            if res.success:  # TaskResult.success — not deprecated
                 net_res = res.data
                 self.append_log(net_res.to_log_entry())
+                if net_res.details and not isinstance(net_res.details, dict):
+                    pass
                 
-                # Unified auth cancellation detection (message + details)
-                if not net_res.success:
-                    text = (net_res.message + " " + (net_res.details or "")).lower()
-                    if any(w in text for w in ("cancel", "dismissed")):
+                # PR2: code-driven detection, not locale-sensitive substring
+                code = net_res.code
+                if isinstance(code, str):
+                    try:
+                        code = ResultCode(code)
+                    except ValueError:
+                        code = None
+                if code in (ResultCode.FAILED, ResultCode.ERROR, ResultCode.CANCELLED, ResultCode.PARTIAL):
+                    # Normalize string code
+                    if isinstance(code, str):
+                        try:
+                            code = ResultCode(code)
+                        except ValueError:
+                            code = None
+                    if code == ResultCode.CANCELLED:
                         self.append_log("⚠️ Operation cancelled by the user (missing privileges).")
                         GLib.idle_add(lambda: self._show_error_dialog(
                             "Authentication Required",
                             "This operation requires administrator privileges. "
                             "Please enter your password when prompted."
                         ))
+                    elif code == ResultCode.ERROR and net_res.details and "helper-missing" in str(net_res.details).lower():
+                        self.append_log("⚠️ Privileged helper not installed — run ./scripts/install-polkit-policy.sh then netmedic --status")
+                        GLib.idle_add(lambda: self._show_error_dialog(
+                            "Helper Not Installed",
+                            "Privileged helper not installed.\n\n"
+                            "Run: ./scripts/install-polkit-policy.sh (requires sudo)\n"
+                            "Then: netmedic --status"
+                        ))
+                    else:
+                        # Fallback text check for legacy payloads without code
+                        text = (net_res.message + " " + str(net_res.details or "")).lower()
+                        if "helper-missing" in text or "helper not installed" in text:
+                            self.append_log("⚠️ Privileged helper not installed — run ./scripts/install-polkit-policy.sh then netmedic --status")
+                            GLib.idle_add(lambda: self._show_error_dialog(
+                                "Helper Not Installed",
+                                "Privileged helper not installed.\n\n"
+                                "Run: ./scripts/install-polkit-policy.sh (requires sudo)\n"
+                                "Then: netmedic --status"
+                            ))
+                        elif any(w in text for w in ("cancel", "dismissed")):
+                            self.append_log("⚠️ Operation cancelled by the user (missing privileges).")
+                            GLib.idle_add(lambda: self._show_error_dialog(
+                                "Authentication Required",
+                                "This operation requires administrator privileges. "
+                                "Please enter your password when prompted."
+                            ))
             else:
                 self.append_log(f"❌ System Error: {res.error}")
                 GLib.idle_add(lambda: self._show_error_dialog("Unexpected Error", res.error))
@@ -418,57 +458,199 @@ class MainWindow(Gtk.Window):
         """Run a catalog action via IPC (worker-thread safe)."""
         return self.actions.call(action, params, confirmed=confirmed)
 
+    def _wait_for_settle(self, iface: str | None, timeout: int = 8):
+        """PR3: poll settle instead of blind sleep. Checks IP + NM activated state."""
+        import time
+        import logging
+        from netmedic.system import CommandRunner
+        start = time.monotonic()
+        if not iface:
+            # No iface to wait for; short sleep
+            time.sleep(1)
+            logging.info("settle: no iface, slept 1s")
+            return
+        for i in range(max(1, timeout)):
+            # Check IPv4 present
+            res = CommandRunner.run(["ip", "-4", "addr", "show", iface])
+            has_ip = res.success and "inet " in (res.stdout or "")
+            # Check NM device state activated (best-effort)
+            nm = CommandRunner.run(["nmcli", "-t", "-f", "GENERAL.STATE", "device", "show", iface])
+            nm_ok = nm.success and "activated" in (nm.stdout or "").lower()
+            if has_ip and (nm_ok or not nm.success):
+                # If nmcli not available, has_ip alone is enough
+                logging.info("settle: iface %s ready after %ss (has_ip=%s nm_ok=%s)", iface, round(time.monotonic() - start, 2), has_ip, nm_ok)
+                return
+            time.sleep(1)
+        logging.info("settle: iface %s timeout after %ss", iface, round(time.monotonic() - start, 2))
+        # Timeout: don't fail, just proceed to post-check
+
     def on_smart_repair(self, _):
         # Privileged steps use IPC so polkit + audit cover the repair path.
         def sequence():
+            from netmedic.models import ResultCode
+            import os
+            # POST_REPAIR_VERIFY flag (PR3) default ON
+            do_verify = os.environ.get("NETMEDIC_POST_REPAIR_VERIFY", "1").lower() not in ("0", "false", "no")
             self.append_log("--- Starting Smart Repair ---")
             repair_ctx = self.status_bar.get_context_id("repair")
-            results = []
             diag_res = None
-            steps = [
-                ("network_status", "Diagnosing..."),
-                ("flush_dns", "Flushing DNS..."),
-            ]
-            for action, step_msg in steps:
-                GLib.idle_add(lambda m=step_msg: self.status_bar.push(repair_ctx, m))
-                try:
-                    res = self._ipc_action(action)
-                    if action == "network_status":
-                        diag_res = res
-                    results.append(res)
-                    self.append_log(res.to_log_entry())
-                finally:
-                    GLib.idle_add(lambda: self.status_bar.pop(repair_ctx))
+            repairs = []
 
-            # Diagnostics always include the word "Gateway" in the message string
-            # ("Gateway Reachable|Unreachable|Not Found"). Skip renew only when
-            # no default route exists.
-            skip_renew = bool(
-                diag_res is not None
-                and "Gateway Not Found" in (diag_res.message or "")
-            )
+            # Step 1: pre-repair diagnostics (informational, not counted as repair)
+            GLib.idle_add(lambda: self.status_bar.push(repair_ctx, "Diagnosing..."))
+            try:
+                diag_res = self._ipc_action("network_status")
+                self.append_log(diag_res.to_log_entry())
+                if diag_res.details:
+                    self.append_log(f"  ↳ {diag_res.details}")
+            finally:
+                GLib.idle_add(lambda: self.status_bar.pop(repair_ctx))
+
+            # Structured skip check: no gateway => gateway_ok false
+            skip_renew = False
+            iface_for_settle = None
+            if diag_res is not None:
+                # PR2: use structured details/data, not substring
+                if diag_res.data and isinstance(diag_res.data, dict):
+                    skip_renew = not diag_res.data.get("gateway_ok", False)
+                    iface_for_settle = diag_res.data.get("gateway") and None  # placeholder
+                    # Prefer data gateway check; also extract iface from details if available
+                    if diag_res.details and isinstance(diag_res.details, dict):
+                        gw = diag_res.details.get("gateway")
+                        skip_renew = gw in (None, "none") or not diag_res.details.get("gateway_ok", False)
+                else:
+                    skip_renew = "Gateway Not Found" in (diag_res.message or "")  # sf-str: allow legacy compat for payloads without details.code
+                # Also try to get default iface for settle wait
+                try:
+                    from netmedic.network import NetworkMedic
+                    iface_for_settle = NetworkMedic().get_default_interface()
+                except Exception:
+                    iface_for_settle = None
             if skip_renew:
                 self.append_log(
                     "Smart Repair: skipping IP renewal (no default gateway detected)."
                 )
 
+            # R4 short-circuit: if network already healthy, don't elevate
+            is_healthy = False
+            if diag_res and diag_res.data and isinstance(diag_res.data, dict):
+                is_healthy = bool(diag_res.data.get("gateway_ok") and diag_res.data.get("dns_ok") and diag_res.data.get("internet_ok"))
+            elif diag_res:
+                # Fallback to code OK
+                try:
+                    from netmedic.models import ResultCode as _RC
+                    is_healthy = diag_res.code == _RC.OK
+                except Exception:
+                    is_healthy = diag_res.success
+            if is_healthy:
+                self.append_log("Smart Repair: network healthy, nothing to repair — skipped privileged actions.")
+                # No repairs needed; still optionally verify post (should remain OK)
+                if do_verify:
+                    GLib.idle_add(lambda: self.status_bar.push(repair_ctx, "Verifying repair..."))
+                    try:
+                        post_res = self._ipc_action("network_status")
+                        self.append_log(f"[Post-Repair] {post_res.to_log_entry()}")
+                    finally:
+                        GLib.idle_add(lambda: self.status_bar.pop(repair_ctx))
+                else:
+                    post_res = None
+                from netmedic.models import ResultCode as _RC2
+                return NetResult("Smart Repair", False, "SKIPPED — network healthy, nothing to repair", data={"pre": diag_res.data if diag_res else None, "post": post_res.data if post_res else None}, code=_RC2.SKIPPED)
+
+            # Step 2: flush DNS (always) — EXECUTED expected
+            GLib.idle_add(lambda: self.status_bar.push(repair_ctx, "Flushing DNS..."))
+            try:
+                res = self._ipc_action("flush_dns")
+                repairs.append(res)
+                self.append_log(res.to_log_entry())
+                if res.details:
+                    self.append_log(f"  ↳ {res.details}")
+            finally:
+                GLib.idle_add(lambda: self.status_bar.pop(repair_ctx))
+
+            # Step 3: renew IP (conditionally)
             if not skip_renew:
                 GLib.idle_add(lambda: self.status_bar.push(repair_ctx, "Renewing IP..."))
                 try:
                     res = self._ipc_action("renew_ip")
-                    results.append(res)
+                    repairs.append(res)
                     self.append_log(res.to_log_entry())
+                    if res.details:
+                        self.append_log(f"  ↳ {res.details}")
                 finally:
                     GLib.idle_add(lambda: self.status_bar.pop(repair_ctx))
 
-            succeeded = sum(1 for res in results if res.success)
-            total = len(results)
-            overall = succeeded == total
-            if overall:
-                summary = f"Smart Repair finished: all {total} steps succeeded"
+            # Step 4: post-repair verification
+            if do_verify:
+                GLib.idle_add(lambda: self.status_bar.push(repair_ctx, "Verifying repair..."))
+                try:
+                    # PR3 settle poll, not blind sleep
+                    self._wait_for_settle(iface_for_settle, timeout=8)
+                    post_res = self._ipc_action("network_status")
+                    self.append_log(f"[Post-Repair] {post_res.to_log_entry()}")
+                    if post_res.details:
+                        self.append_log(f"  ↳ {post_res.details}")
+                        if isinstance(post_res.details, dict) and post_res.details.get("captive_portal_hint"):
+                            self.append_log(f"  ↳ Hint: {post_res.details.get('captive_portal_hint')}")
+                finally:
+                    GLib.idle_add(lambda: self.status_bar.pop(repair_ctx))
             else:
-                summary = f"Smart Repair: {succeeded}/{total} steps succeeded — review log for failures"
-            return NetResult("Smart Repair", overall, summary)
+                # Verification disabled — treat as unknown
+                post_res = None
+
+            # Distinguish repair execution vs network recovery with delta (PR3) — code-driven
+            from netmedic.models import ResultCode as _RC2
+            def _is_ok_or_executed(r):
+                c = r.code
+                if isinstance(c, str):
+                    try:
+                        c = _RC2(c)
+                    except ValueError:
+                        return False
+                return c in (_RC2.OK, _RC2.EXECUTED)
+            repairs_ok = all(_is_ok_or_executed(r) for r in repairs) if repairs else True
+            repairs_total = len(repairs)
+            repairs_succeeded = sum(1 for r in repairs if _is_ok_or_executed(r))
+            # pre/post healthy means code OK (not PARTIAL/FAILED)
+            pre_ok = (diag_res.code == _RC2.OK) if diag_res and diag_res.code else False
+            post_ok = (post_res.code == _RC2.OK) if post_res and post_res.code else False
+            # Extract per-target booleans for delta
+            pre_dns = (diag_res.data or {}).get("dns_ok") if diag_res and diag_res.data else None
+            pre_net = (diag_res.data or {}).get("internet_ok") if diag_res and diag_res.data else None
+            post_dns = (post_res.data or {}).get("dns_ok") if post_res and post_res.data else None
+            post_net = (post_res.data or {}).get("internet_ok") if post_res and post_res.data else None
+            # PR2: code-driven overall
+            if not do_verify:
+                overall_code = ResultCode.OK if repairs_ok else ResultCode.FAILED
+                summary = f"Repairs executed: {repairs_succeeded}/{repairs_total} ✓ — initial diagnostics {'OK' if pre_ok else 'failed'}; Post-repair verification: not implemented yet."
+                overall = repairs_ok
+            elif repairs_ok and post_ok:
+                if not pre_ok:
+                    summary = f"Smart Repair: SUCCESS (verified) — repairs {repairs_succeeded}/{repairs_total} ok | pre=FAIL post=OK"
+                else:
+                    summary = f"Smart Repair finished: all {repairs_total} repairs succeeded — network still healthy | pre=OK post=OK"
+                overall = True
+                overall_code = ResultCode.OK
+            elif repairs_ok and not post_ok:
+                # Partial recovery detection
+                if post_dns and not post_net:
+                    summary = f"Smart Repair: repairs {repairs_succeeded}/{repairs_total} executed; network NOT recovered. Gateway OK, WAN down → likely upstream/ISP/captive portal. Suggestions: check router uplink, or run manual probes (MANUAL §Troubleshooting). | pre={'OK' if pre_ok else 'FAIL'} post=FAIL"
+                    overall_code = ResultCode.PARTIAL
+                elif post_dns is False and post_net is False and pre_dns is False and pre_net is False:
+                    summary = f"Smart Repair: repairs {repairs_succeeded}/{repairs_total} executed; network NOT recovered. Gateway OK, WAN down → likely upstream/ISP/captive portal. | pre=FAIL post=FAIL"
+                    overall_code = ResultCode.FAILED
+                elif not pre_ok and post_ok is False:
+                    summary = f"Smart Repair: repairs {repairs_succeeded}/{repairs_total} ok — network still down (upstream outage suspected) | pre=FAIL post=FAIL"
+                    overall_code = ResultCode.FAILED
+                else:
+                    summary = f"Smart Repair: repairs {repairs_succeeded}/{repairs_total} ok — new fault detected post-repair | pre={'OK' if pre_ok else 'FAIL'} post=FAIL"
+                    overall_code = ResultCode.FAILED
+                overall = False
+            else:
+                summary = f"Smart Repair: repairs {repairs_succeeded}/{repairs_total} succeeded — review log for failures | pre={'OK' if pre_ok else 'FAIL'} post={'OK' if post_ok else 'FAIL'}"
+                overall = False
+                overall_code = ResultCode.FAILED
+            return NetResult("Smart Repair", overall, summary, data={"pre": diag_res.data if diag_res else None, "post": post_res.data if post_res else None, "repairs_ok": repairs_ok}, code=overall_code)
 
         self.run_async_task(sequence, "Repairing Network...")
 

@@ -7,6 +7,9 @@ netmedic/app.py
 netmedic/audit_log.py
 netmedic/config.py
 netmedic/gui.py
+netmedic/gui_actions.py
+netmedic/helper_main.py
+netmedic/helper_verbs.py
 netmedic/ipc_actions.py
 netmedic/ipc_bridge.py
 netmedic/ipc_client.py
@@ -22,6 +25,7 @@ netmedic/paths.py
 netmedic/polkit_auth.py
 netmedic/runtime.py
 netmedic/sensors.py
+netmedic/status.py
 netmedic/system.py
 netmedic/teardown.py
 netmedic/theme.py

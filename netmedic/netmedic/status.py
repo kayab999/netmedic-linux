@@ -76,8 +76,9 @@ def collect_status() -> Dict[str, Any]:
 
     helper_path = Config.get_helper_path()
     helper_system = Config.SYSTEM_HELPER_PATH
+    helper_alt = Config.SYSTEM_HELPER_ALT_PATH
     helper_on = Config.use_privileged_helper()
-    helper_exists = _file_ok(helper_system) or (
+    helper_exists = _file_ok(helper_system) or _file_ok(helper_alt) or (
         helper_path.exists() if hasattr(helper_path, "exists") else False
     )
     # Marker path "python|-m|..." is not a real file.
@@ -87,7 +88,7 @@ def collect_status() -> Dict[str, Any]:
 
     lib_ok = (Config.SYSTEM_HELPER_LIB / "netmedic" / "helper_main.py").is_file()
     helper_ready = helper_on and (
-        (helper_system.is_file() and lib_ok) or helper_marker
+        ((helper_system.is_file() or helper_alt.is_file()) and lib_ok) or helper_marker
     )
     checks.append(
         CheckResult(
@@ -97,7 +98,7 @@ def collect_status() -> Dict[str, Any]:
                 f"mode={'on' if helper_on else 'off'} path={helper_path}"
                 + (
                     ""
-                    if helper_system.is_file() and lib_ok
+                    if (helper_system.is_file() or helper_alt.is_file()) and lib_ok
                     else " (re-run ./scripts/install-polkit-policy.sh for system lib)"
                 )
             ),

@@ -2,9 +2,21 @@
 
 All notable changes to NetMedic Linux are documented here.
 
+## [1.6.0] — 2026-09-08 — RC1 v1.6.0-rc1
+
+> **SemVer:** breaking (Smart Repair contract, `NetResult.code`, IPC 1.1). Minor bump, not patch. Previous `v1.5.1-rc1` deleted — use `v1.6.0-rc1`.
+
 ## [Unreleased]
 
+### Breaking
+- **Smart Repair semantics reverted with cause (replaces 1.1.1 ratio):** pre-diag no longer counts in repairs ratio; repairs `2/2` + `pre/post` delta, `SKIPPED` when healthy, `PARTIAL` distinct (docs: VERBS.md §5). Update tests in same PR (contract change).
+- **NetResult contract:** `code: ResultCode` is source of truth, `success` shim deprecated (`DeprecationWarning`, `filterwarnings=error`). Consumers in `tools/` + `netmedic_ai/` migrated to `code`. Bump `IPC_API_VERSION` 1.0→1.1 (additive `code` field).
+
 ### Added
+- `VERBS.md` live contract + `tests/test_verbs_doc.py` + `tests/test_no_string_flow.py` + `tests/test_success_shim_guard.py` (guardian 1/2/3, ratchets)
+- `netmedic/probes.py` shared DNS+TCP+https+captive portal probes (single source, parallel, TCP-only `internet_ok`, PARTIAL `TCP blocked ICMP ok`)
+- `netmedic/constants.py` unified `VIRTUAL_IFACE_MARKERS`
+- `tools/netmedic-sim/` + `scripts/netns-golden.sh` + `tests/test_golden_replay_ns.py` (`-m netns`, 2 scenarios, `nmsim-*` prefix, trap EXIT, state reap)
 - `netmedic --status` / `--status-json` install health CLI
 - GUI startup install-health log line
 - `SECURITY.md` disclosure and hardening checklist

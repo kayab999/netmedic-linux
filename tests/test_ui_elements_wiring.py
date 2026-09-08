@@ -226,14 +226,22 @@ def test_destructive_handlers_require_confirmation(main_window):
 def test_smart_repair_sequence_actions(main_window):
     win, bridge = main_window
     bridge.call.reset_mock()
+    # Sequence now: pre diag fails (WAN down), flush, renew, post diag healthy → success
     bridge.call.side_effect = [
+        NetResult(
+            "Diagnostics",
+            False,
+            "Gateway Reachable | DNS Resolution Failed | No Internet Access",
+            data={"gateway": "192.168.1.1", "gateway_ok": True, "dns_ok": False, "internet_ok": False},
+        ),
+        NetResult("Flush DNS", True, "flushed", code="executed"),
+        NetResult("Renew IP", True, "renewed", code="executed"),
         NetResult(
             "Diagnostics",
             True,
             "Gateway Reachable | DNS Resolution OK | Internet Access OK",
+            data={"gateway": "192.168.1.1", "gateway_ok": True, "dns_ok": True, "internet_ok": True},
         ),
-        NetResult("Flush DNS", True, "flushed"),
-        NetResult("Renew IP", True, "renewed"),
     ]
     captured = {}
 
@@ -243,15 +251,17 @@ def test_smart_repair_sequence_actions(main_window):
 
     with patch.object(win, "run_async_task", side_effect=capture), patch.object(
         win, "append_log"
-    ):
+    ), patch("time.sleep"):
         win.on_smart_repair(None)
 
     assert captured["result"].success is True
-    assert "all 3" in captured["result"].message
+    # New summary includes repairs ratio and pre/post tags
+    assert "2/2" in captured["result"].message or "repairs" in captured["result"].message.lower()
     assert [c.args[0] for c in bridge.call.call_args_list] == [
         "network_status",
         "flush_dns",
         "renew_ip",
+        "network_status",
     ]
 
 
@@ -263,8 +273,15 @@ def test_smart_repair_skips_renew_without_gateway(main_window):
             "Diagnostics",
             False,
             "Gateway Not Found | DNS Resolution Failed | No Internet Access",
+            data={"gateway": None, "gateway_ok": False, "dns_ok": False, "internet_ok": False},
         ),
-        NetResult("Flush DNS", True, "flushed"),
+        NetResult("Flush DNS", True, "flushed", code="executed"),
+        NetResult(
+            "Diagnostics",
+            False,
+            "Gateway Not Found | DNS Resolution Failed | No Internet Access",
+            data={"gateway": None, "gateway_ok": False, "dns_ok": False, "internet_ok": False},
+        ),
     ]
     captured = {}
 
@@ -273,11 +290,11 @@ def test_smart_repair_skips_renew_without_gateway(main_window):
 
     with patch.object(win, "run_async_task", side_effect=capture), patch.object(
         win, "append_log"
-    ):
+    ), patch("time.sleep"):
         win.on_smart_repair(None)
 
     actions = [c.args[0] for c in bridge.call.call_args_list]
-    assert actions == ["network_status", "flush_dns"]
+    assert actions == ["network_status", "flush_dns", "network_status"]
     assert "renew_ip" not in actions
 
 

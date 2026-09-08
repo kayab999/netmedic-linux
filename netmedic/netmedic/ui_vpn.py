@@ -4,7 +4,7 @@ gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, GLib
 from netmedic.operators.vpn.angristan import AngristanOperator
 from netmedic.operators.base import OperatorStatus
-from netmedic.models import NetResult, TaskResult
+from netmedic.models import NetResult, TaskResult, ResultCode
 from netmedic.gui_actions import GuiActionBridge
 
 class VPNPanel(Gtk.Box):
@@ -146,10 +146,15 @@ class VPNPanel(Gtk.Box):
                     if callback: GLib.idle_add(callback, net_res)
                     GLib.idle_add(lambda: self.log(net_res.to_log_entry()))
                     
-                    # Unified auth cancellation detection (message + details)
-                    if not net_res.success:
+                    # Unified auth/helper/cancellation detection — code-driven
+                    if net_res.code != ResultCode.OK:
                         text = (net_res.message + " " + (net_res.details or "")).lower()
-                        if any(w in text for w in ("cancel", "dismissed")):
+                        if net_res.code == ResultCode.ERROR and ("helper-missing" in text or "helper not installed" in text):
+                            GLib.idle_add(lambda: self._show_error(
+                                "Helper Not Installed",
+                                "Privileged helper not installed.\nRun: ./scripts/install-polkit-policy.sh"
+                            ))
+                        elif net_res.code == ResultCode.CANCELLED or any(w in text for w in ("cancel", "dismissed")):
                             GLib.idle_add(lambda: self._show_error(
                                 "Authentication Required",
                                 "This VPN operation requires administrator privileges."
@@ -184,7 +189,7 @@ class VPNPanel(Gtk.Box):
 
     def refresh_state(self):
         def update_ui(status_res):
-            if not status_res.success:
+            if status_res.code != ResultCode.OK:
                 self._needs_retry = True
                 self._state_loaded = False
                 self.status_label.set_text(f"VPN Error: {status_res.message}")
@@ -234,7 +239,7 @@ class VPNPanel(Gtk.Box):
 
     def update_client_list(self, result: NetResult):
         self.client_list_store.clear()
-        if not result.success or not result.data:
+        if result.code != ResultCode.OK or not result.data:
             self.client_stack.set_visible_child_name("empty")
             return
 

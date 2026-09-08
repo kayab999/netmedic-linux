@@ -39,9 +39,14 @@ def _require_instance() -> str | None:
 
 
 def _ipc_message(result: dict) -> str:
+    # PR2: primary is code, status is shim compat
+    code = result.get("code")
+    msg = result.get("message", "OK")
+    if code == "executed":
+        return f"{msg} — effect not yet verified (code=executed)"
     if result.get("status") == "ok":
-        return result.get("message", "OK")
-    return f"Error: {result.get('message', 'Unknown IPC error')}"
+        return msg
+    return f"Error: {msg}"
 
 
 @mcp.tool()

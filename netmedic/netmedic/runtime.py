@@ -4,6 +4,7 @@ import os
 import signal
 import sys
 import time
+import warnings
 from logging.handlers import RotatingFileHandler
 
 from netmedic.config import Config
@@ -100,6 +101,14 @@ def setup_logging(headless: bool = False):
 
     root_logger.addHandler(file_handler)
     root_logger.addHandler(console_handler)
+
+    # Route warnings (e.g. NetResult.success UserWarning) to netmedic.log
+    # Chosen to stay outside DeprecationWarning filter shadowing — see test_canary_shim
+    logging.captureWarnings(True)
+    warnings.filterwarnings("always", category=UserWarning)
+    # Silence noisy DeprecationWarnings from PyGObject/GLib etc. — would flood netmedic.log
+    # Must be AFTER captureWarnings (which does simplefilter("always"))
+    warnings.filterwarnings("ignore", category=DeprecationWarning)
 
     logging.info("=== NetMedic Session Started ===")
     logging.info(

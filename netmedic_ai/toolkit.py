@@ -39,7 +39,7 @@ class ActionRegistry:
 
 
 def _run_tool(action: str, params: dict | None = None) -> str:
-    """Execute via IPC when the daemon is available; fail closed otherwise."""
+    """Execute via IPC when the daemon is available; fail closed otherwise. Code-aware."""
     try:
         from netmedic.ipc_sync_client import SyncIPCClient
 
@@ -47,10 +47,21 @@ def _run_tool(action: str, params: dict | None = None) -> str:
         if not client.is_available():
             return "Error: NetMedic daemon is not running. Start the GUI or run: netmedic --headless"
         res = client.request(action, params or {}, confirmed=True)
+        code = res.get("code")
+        msg = res.get("message", "OK")
+        details = res.get("details")
         if res.get("status") == "ok":
-            msg = res.get("message", "OK")
+            if code == "executed":
+                return f"Success: {msg} — effect not yet verified (details: {details})"
+            if code == "partial":
+                return f"Partial: {msg} (details: {details})"
             return f"Success: {msg}"
-        return f"Error: {res.get('message', 'Unknown error')}"
+        # Use code for richer error: ERROR vs FAILED vs CANCELLED
+        if code == "cancelled":
+            return f"Cancelled: {msg}"
+        if code == "error":
+            return f"Error (environment): {msg}"
+        return f"Error: {msg}"
     except Exception as exc:
         return f"Error: {exc}"
 

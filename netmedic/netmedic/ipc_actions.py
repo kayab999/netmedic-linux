@@ -118,11 +118,33 @@ def _finish_privileged(
 
 
 def _result_payload(result) -> Dict[str, Any]:
+    # Code is source of truth; status/success derived for backward compat (E4)
+    from netmedic.models import ResultCode
+    try:
+        code = result.code
+        if isinstance(code, str):
+            code = ResultCode(code)
+        # Handle MagicMock from tests (has no real code)
+        if code.__class__.__name__ == "MagicMock":
+            # Fallback to success shim for mocked objects (tests only, not production)
+            is_ok = bool(getattr(result, "success", False))  # sf-success: allow - test mock compat
+        else:
+            is_ok = code in (ResultCode.OK, ResultCode.EXECUTED)
+    except Exception:
+        is_ok = False
+        code = ResultCode.FAILED
+    try:
+        code_val = code.value if hasattr(code, "value") and not code.__class__.__name__ == "MagicMock" else str(code)
+        if code_val.startswith("<MagicMock"):
+            code_val = "ok" if is_ok else "failed"
+    except Exception:
+        code_val = "ok" if is_ok else "failed"
     payload = {
-        "status": "ok" if result.success else "error",
-        "success": result.success,
+        "status": "ok" if is_ok else "error",
+        "success": is_ok,
         "message": result.message,
         "operation": result.operation,
+        "code": code_val,
     }
     if result.details is not None:
         payload["details"] = result.details

@@ -152,7 +152,14 @@ class CommandRunner:
                         ok = bool(payload.get("ok"))
                         msg = str(payload.get("message") or "")
                         details = payload.get("details")
+                        code = payload.get("code")
                         out = "" if details is None else str(details)
+                        # PR2: propagate cancelled via code, not locale string
+                        if not ok and code == "cancelled":
+                            return CommandResult(False, 126, "", "Authentication cancelled by user", result.command)
+                        if not ok and result.returncode == 126:
+                            # pkexec dismissal already surfaced as 126
+                            return CommandResult(False, 126, "", msg or "Authentication cancelled by user", result.command)
                         return CommandResult(
                             ok,
                             0 if ok else (result.returncode or 1),
@@ -162,15 +169,21 @@ class CommandRunner:
                         )
                 except json.JSONDecodeError:
                     pass
+            # Also handle direct pkexec cancellation without JSON payload (require_root case)
+            if result.returncode == 126 and not result.stdout:
+                stderr_low = (result.stderr or "").lower()
+                if "cancel" in stderr_low or "dismissed" in stderr_low:
+                    return CommandResult(False, 126, "", "Authentication cancelled by user", result.command)
             return result
 
         if not Config.allow_legacy_elevation():
+            # Distinct from 126 auth-cancel: use 127 + explicit helper-missing hint
             return CommandResult(
                 False,
-                126,
+                127,
                 "",
                 (
-                    "Privileged helper required for this operation. "
+                    "Privileged helper not installed (helper-missing). "
                     "Run: ./scripts/install-polkit-policy.sh "
                     "then: netmedic --status "
                     "(helper provides fixed-verb root elevation)."
@@ -272,7 +285,7 @@ class CommandRunner:
                     return CommandResult(
                         False, 126, "", "Authentication cancelled by user", final_cmd
                     )
-                if proc.returncode == 127 and "not found" in stderr_lower:
+                if proc.returncode == 127 and "not found" in stderr_lower:  # sf-str: allow pkexec error string, low-risk
                     return CommandResult(False, 127, "", stderr.strip(), final_cmd)
 
             return CommandResult(

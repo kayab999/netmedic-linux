@@ -1,3 +1,11 @@
+# Release Checklist — v1.6.0 Soak Gate
+
+> Soak exit criteria (must pass before `v1.6.0` final):
+> - p95 `settle` < 5s and p95 `recheck` < 10s (from `ui.py:456` `logging.info settle %ss` + diag timing; budget PR3 ~15s worst case)
+> - zero `CANCELLED`/`ERROR` misclassified in `netmedic.log`/`audit.log` period (`code` vs `message`)
+> - `POST_REPAIR_VERIFY` default ON, no disable needed
+> - Installed **from tag** (`clone` → `./install.sh` → `./scripts/install-polkit-policy.sh`) — dogfooding install path, not `venv` dev
+
 # Release Checklist — v1.0.0+
 
 Use this checklist before tagging a public release.
@@ -12,9 +20,9 @@ Use this checklist before tagging a public release.
 
 ## 2. Installation
 
-- [ ] Clean VM install via `./install.sh`
-- [ ] GUI launches: `venv/bin/netmedic`
-- [ ] Headless launches: `venv/bin/netmedic --headless`
+ - [ ] Clean VM (Ubuntu 24.04 GNOME, desktop session, not SSH) install **from tag** via `./install.sh` + `./scripts/install-polkit-policy.sh` (validates `config.py:60` both `/usr/libexec` and `/usr/lib` paths)
+ - [ ] GUI launches: `venv/bin/netmedic`
+ - [ ] Headless launches: `venv/bin/netmedic --headless`
 - [ ] Desktop entry appears in application menu
 - [ ] Log created at `~/.local/state/netmedic/netmedic.log` (mode 600)
 

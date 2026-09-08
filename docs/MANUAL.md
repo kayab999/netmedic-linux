@@ -64,10 +64,38 @@ The AI can only propose actions registered in its security whitelist.
 
 | Symptom | Solution |
 |---------|----------|
-| **pkexec error 126/127** | Authentication was cancelled. Retry the action. |
+| **pkexec error 126 (cancelled)** | Authentication cancelled (Escape / dismiss). Retry and enter password. Distinct from helper-missing. |
+| **Helper not installed (127, helper-missing)** | Privileged helper not installed. Run `sudo ./scripts/install-polkit-policy.sh` then `netmedic --status`. Check `/usr/libexec/netmedic/helper` **and** `/usr/lib/netmedic/helper` (Debian alt). |
+| **Smart Repair: short-circuit ⏭️ SKIPPED** | Network already healthy (gateway/DNS/WAN OK). No privileged actions executed — nothing to repair. |
+| **Smart Repair: PARTIAL (TCP blocked, ICMP ok)** | Firewall or captive portal suspected. `details.per_probe` shows `8.8.8.8:icmp OK` but `1.1.1.1:80 FAIL`. Check `MANUAL §Diagnostics`. |
+| **Gateway OK, WAN down (upstream)** | Likely ISP/captive portal. Try `curl -Is http://connectivity-check.ubuntu.com` (204 = ok, 302 = portal) or check router uplink. |
 | **SHA256 mismatch (VPN)** | Script integrity check failed. Do not proceed; re-download. |
 | **"Already running"** | Another NetMedic instance is active. Close it or remove stale lock at `~/.local/state/netmedic/netmedic.lock` if the process crashed. |
 | **AI unavailable** | Install with `pip install -e "netmedic_ai[runtime]"` and place the GGUF model (see [DEVELOPMENT.md](DEVELOPMENT.md)). |
+
+### Environment Matrix (audit §11)
+
+| Component | Expected | Alternative | If missing |
+|---|---|---|---|
+| Helper | `/usr/libexec/netmedic/helper` | `/usr/lib/netmedic/helper` (Debian) | `helper-missing` ERROR — install script |
+| Resolver | `systemd-resolved` + `resolvectl` | `dnsmasq`, `unbound` | `Missing resolvectl` ERROR |
+| NetworkManager | `nmcli` | `systemd-networkd`/`networkctl renew` | `nmcli not found` ERROR |
+| DHCP | `dhclient` fallback | `dhcpcd` | `dhclient not available` |
+| Firewall | `ufw` | `firewalld` | `Unknown` |
+| Probes | `curl` + `getent` + `ping` | busybox | degraded |
+
+### Manual probes (reproducir a mano)
+
+```bash
+ip route show default
+ping -c2 -W1 <gateway>
+getent hosts google.com; getent hosts cloudflare.com
+curl -Is http://1.1.1.1 --connect-timeout 5
+curl -Is http://8.8.8.8 --connect-timeout 5
+curl -Is https://1.1.1.1 --connect-timeout 5
+curl -Is http://connectivity-check.ubuntu.com
+nmcli -t -f CONNECTIVITY networking connectivity check || echo "NM check disabled"
+```
 
 ---
 

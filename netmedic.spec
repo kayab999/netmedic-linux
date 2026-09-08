@@ -27,7 +27,7 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=['netmedic_ai'],
+    excludes=['netmedic_ai', 'netmedic.canary_shim_prod', 'netmedic.netmedic.canary_shim_prod'],
     noarchive=False,
     optimize=0,
 )

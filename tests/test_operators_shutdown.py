@@ -1,6 +1,7 @@
 from unittest.mock import MagicMock, patch
 
 from netmedic.integration import shutdown_operators
+from netmedic.models import ResultCode
 from netmedic.operators.vpn.angristan import AngristanOperator
 from netmedic.operators.vpn.base import VPNClient
 
@@ -16,11 +17,12 @@ def test_revoke_client_verification():
         with patch.object(op, "list_clients") as mock_list:
             mock_list.return_value = MagicMock(
                 success=True,
+                code=ResultCode.OK,
                 data=[VPNClient(name="revoked-client", active=False)],
             )
             result = op.revoke_client("revoked-client")
 
-    assert result.success is True
+    assert result.code == ResultCode.OK
     assert "verified" in result.message.lower()
 
 
