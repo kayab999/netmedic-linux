@@ -58,27 +58,27 @@ class NetResult:
 
     def __getattribute__(self, name):
         if name == "success":
+            # Emit deprecation outside try that would swallow error-warnings
             try:
                 frame = inspect.currentframe().f_back if inspect.currentframe() else None
                 filename = frame.f_code.co_filename if frame and frame.f_code else ""
+                should_warn = True
                 if "models.py" in filename:
-                    pass
+                    should_warn = False
                 elif "tests" in filename:
-                    # Tests may still assert .success for shim compat — don't warn
-                    pass
+                    should_warn = False
                 else:
-                    # Check for inline allow marker on the caller line (E2)
                     try:
                         info = inspect.getframeinfo(frame) if frame else None
                         line = "".join(info.code_context or []) if info and info.code_context else ""
                         if "sf-success: allow" in line.lower():
-                            pass
-                        else:
-                            # Chosen to stay outside DeprecationWarning filter shadowing — see test_canary_shim
-                            # UserWarning is not ignored by default, so specific error filter can bite without broad DeprecationWarning noise
-                            warnings.warn("NetResult.success is deprecated, use code (ResultCode)", UserWarning, stacklevel=2)
+                            should_warn = False
                     except Exception:
-                        warnings.warn("NetResult.success is deprecated, use code (ResultCode)", UserWarning, stacklevel=2)
+                        should_warn = True
+                if should_warn:
+                    warnings.warn("NetResult.success is deprecated, use code (ResultCode)", UserWarning, stacklevel=2)
+            except Warning:
+                raise
             except Exception:
                 pass
         return object.__getattribute__(self, name)

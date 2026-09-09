@@ -1,10 +1,16 @@
 # Release Checklist — v1.6.0 Soak Gate
 
-> Soak exit criteria (must pass before `v1.6.0` final):
-> - p95 `settle` < 5s and p95 `recheck` < 10s (from `ui.py:456` `logging.info settle %ss` + diag timing; budget PR3 ~15s worst case)
+> Soak exit criteria (must pass before `v1.6.0` final — not dates, but evidence):
+> - **p95 `settle` < 5s and p95 `recheck` < 10s** (from `ui.py:456` `logging.info settle %ss` + diag timing; budget PR3 ~15s worst case). Extract mechanically, not by reading:
+>   ```bash
+>   grep -oP 'settle \K[0-9.]+s' ~/.local/state/netmedic/netmedic.log | sort -n | awk '{a[NR]=$1} END {printf "p95: %ss (n=%d)\n", a[int(NR*0.95)], NR}'
+>   ```
+>   `n` is sample count — **if `n=0` (or `n<5` broken-network repairs), soak is empty, not passed** (fails, not approves). This is the soak version of `2/3 steps succeeded`.
 > - zero `CANCELLED`/`ERROR` misclassified in `netmedic.log`/`audit.log` period (`code` vs `message`)
 > - `POST_REPAIR_VERIFY` default ON, no disable needed
-> - Installed **from tag** (`clone` → `./install.sh` → `./scripts/install-polkit-policy.sh`) — dogfooding install path, not `venv` dev
+> - Installed **from tag** (`clone --branch v1.6.0-rc1` → `./install.sh` → `./scripts/install-polkit-policy.sh`) — dogfooding install path, not `venv` dev
+> - **Minimum samples (otherwise soak is empty, not passed):** ≥5 Smart Repair on **broken** network (≥2 deliberate WAN-unplug 10 min, the real incident dogfooded) + ≥1 cancel via Escape (`audit.log` `code=CANCELLED`) + ≥1 healthy short-circuit `SKIPPED` (`code=SKIPPED`, no elevation). p95 computed only on broken-network samples; `netns` `nmsim-*` samples excluded from soak p95 (synthetic topology, not real).
+> - **Failure path:** p95 breach → tune `settle`/`timeout` → **`v1.6.0-rc2`** (never patch `rc1` in place — rc tag is a contract once public)
 
 # Release Checklist — v1.0.0+
 

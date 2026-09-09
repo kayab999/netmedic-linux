@@ -20,6 +20,13 @@ def immediate_idle(cb, *a, **kw):
     return False
 
 print("=== Row 1: Renew IP via GUI (lease vigente) ===")
+import time, logging
+from pathlib import Path
+from netmedic.config import Config
+from netmedic.runtime import setup_logging
+# Ensure log file has distinct timestamps per row
+setup_logging(headless=True)
+time.sleep(1)
 mock_bridge = MagicMock()
 # Simulate renew returning EXECUTED retained
 renew_res = NetResult("Renew IP", True, "IP retained 192.168.1.50 (lease reapplied)", details={"old_ip":"192.168.1.50","new_ip":"192.168.1.50","changed":False,"gateway_ok":True}, code=ResultCode.EXECUTED)
