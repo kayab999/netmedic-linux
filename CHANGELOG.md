@@ -2,6 +2,13 @@
 
 All notable changes to NetMedic Linux are documented here.
 
+## [1.6.0] — 2026-09-10 — RC2 v1.6.0-rc2
+
+### Fixed
+- Dock / `.desktop` launch crashed with `ModuleNotFoundError: netmedic.constants` when the strict-editable snapshot lagged source (v1.6.0 modules `constants`/`probes`/`canary_shim_prod`). `gui.py` no longer imports `MainWindow` at module load so startup errors can show a GTK dialog instead of a silent `sys.exit(1)` (`Terminal=false`). Launch tests compare the strict snapshot to source and import the dock GUI stack with `PYTHONPATH` cleared — the path the gate/VM runbook never exercised.
+- **R1 actually enforced:** `probes.check_internet_access` no longer treats ICMP success as `internet_ok` (TCP-only). TCP-blocked + ICMP-ok is `PARTIAL`, not healthy/SKIPPED. Captive-portal hint runs when gateway is up and TCP is down (not only when DNS also failed). Zombie `2/3 steps succeeded` simulator tests replaced by `ResultCode` icon contract. CI runs `sudo ./scripts/netns-golden.sh`. `NETMEDIC_POST_REPAIR_VERIFY=0` is debug-only (EXECUTED ⚠️, never OK/✅).
+- **netns harness:** `pytest.mark.netns` + skipif as a list (rc1 skipif stomped the marker → `-m netns` collected 0). Wrapper aborts if collect-only `-m netns` < 2. Scenario A does not DROP udp/53 (blackhole hung `getent` 30s×2). `getent` timeout 5s. Executed: `test_golden_wan_drop` PASSED 18.98s, `test_golden_icmp_ok_tcp_blocked` PASSED 1.60s.
+
 ## [1.6.0] — 2026-09-08 — RC1 v1.6.0-rc1
 
 > **SemVer:** breaking (Smart Repair contract, `NetResult.code`, IPC 1.1). Minor bump, not patch. Previous `v1.5.1-rc1` deleted — use `v1.6.0-rc1`.

@@ -15,7 +15,7 @@ def check_dns_resolution() -> Tuple[bool, Dict[str, bool], str]:
     per = {}
     ok_host = ""
     for h in hosts:
-        res = CommandRunner.run(["getent", "hosts", h])
+        res = CommandRunner.run(["getent", "hosts", h], timeout=5)
         per[h] = res.success
         if res.success and not ok_host:
             ok_host = h
@@ -30,6 +30,9 @@ def _probe_target(cmd):
 
 def check_internet_access() -> Tuple[bool, Dict[str, bool], str]:
     """Probe internet in parallel: two http + https fallback + icmp.
+
+    overall_ok is TCP/HTTPS only (R1). ICMP is recorded in per_target for
+    PARTIAL diagnostics and must not count as internet_ok.
     Returns (overall_ok, per_target dict, successful_label or details string).
     """
     targets = {
@@ -58,12 +61,9 @@ def check_internet_access() -> Tuple[bool, Dict[str, bool], str]:
     per["1.1.1.1:443"] = ok
     if ok:
         return True, per, "1.1.1.1:443 (port 80 blocked hint)"
-    # icmp fallback
+    # icmp: details only — a ping does not mean the user has internet (R1)
     ping = CommandRunner.run(["ping", "-c", "1", "-W", "2", "8.8.8.8"])
     per["8.8.8.8:icmp"] = ping.success
-    if ping.success:
-        return True, per, "8.8.8.8:icmp"
-    # Build details string for diagnostics
     details = ", ".join(f"{k}={'OK' if v else 'FAIL'}" for k, v in per.items())
     return False, per, details
 

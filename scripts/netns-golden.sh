@@ -26,6 +26,18 @@ for bin in ip nft python3; do
   fi
 done
 
+PYTEST_BIN="./venv/bin/python"
+if [[ ! -x "$PYTEST_BIN" ]]; then
+  echo "Missing $PYTEST_BIN (create venv and pip install -e netmedic/)" >&2
+  exit 1
+fi
+# Fail loud if skipif stomped pytest.mark.netns (rc1 collected 0).
+n_netns=$("$PYTEST_BIN" -m pytest --collect-only -q -m netns tests/test_golden_replay_ns.py 2>/dev/null | grep -c '::' || true)
+if [[ "${n_netns:-0}" -lt 2 ]]; then
+  echo "netns marker stomped? collected ${n_netns:-0} with -m netns (want >=2)" >&2
+  exit 1
+fi
+
 cleanup() {
   set +e
   echo "[netns-golden] teardown $RUNID" >&2
@@ -42,7 +54,7 @@ trap cleanup EXIT
 # Reap stale nmsim-* from previous crashed runs (pattern like medic reap)
 mkdir -p "$STATE_DIR"
 # Remove state files for dead PIDs
-for f in "$STATE_DIR"/*.json 2>/dev/null; do
+for f in "$STATE_DIR"/*.json; do
   [[ -f "$f" ]] || continue
   pid=$(basename "$f" .json)
   if ! kill -0 "$pid" 2>/dev/null; then
@@ -102,8 +114,8 @@ if [[ "$SCENARIO" == "A" || "$SCENARIO" == "all" ]]; then
   ip netns exec "$NS_R" nft add rule inet nmsim input ip daddr {8.8.8.8,1.1.1.1} icmp type echo-request drop 2>/dev/null || true
   ip netns exec "$NS_R" nft add rule inet nmsim input ip daddr {8.8.8.8,1.1.1.1} tcp dport 80 drop 2>/dev/null || true
   ip netns exec "$NS_R" nft add rule inet nmsim input ip daddr 1.1.1.1 tcp dport 443 drop 2>/dev/null || true
-  # Also drop UDP 53 to make DNS fail (no listener)
-  ip netns exec "$NS_R" nft add rule inet nmsim input ip daddr 192.0.2.1 udp dport 53 drop 2>/dev/null || true
+  # No DNS listener in A (resolv.conf -> 192.0.2.1). Do not DROP udp/53:
+  # blackhole makes getent wait the full CommandRunner timeout (was 30s x 2).
 fi
 
 if [[ "$SCENARIO" == "B" ]]; then

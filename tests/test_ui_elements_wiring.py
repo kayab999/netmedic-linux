@@ -16,7 +16,7 @@ import pytest
 gi.require_version("Gtk", "3.0")
 from gi.repository import Gtk, GLib  # noqa: E402
 
-from netmedic.models import NetResult  # noqa: E402
+from netmedic.models import NetResult, ResultCode  # noqa: E402
 from netmedic.operators.base import OperatorStatus  # noqa: E402
 from netmedic.operators.vpn.base import VPNClient  # noqa: E402
 
@@ -296,6 +296,46 @@ def test_smart_repair_skips_renew_without_gateway(main_window):
     actions = [c.args[0] for c in bridge.call.call_args_list]
     assert actions == ["network_status", "flush_dns", "network_status"]
     assert "renew_ip" not in actions
+
+
+def test_smart_repair_verify_flag_off_is_debug_not_ok(main_window, monkeypatch):
+    """H12: NETMEDIC_POST_REPAIR_VERIFY=0 must not report OK/✅."""
+    monkeypatch.setenv("NETMEDIC_POST_REPAIR_VERIFY", "0")
+    win, bridge = main_window
+    bridge.call.reset_mock()
+    bridge.call.side_effect = [
+        NetResult(
+            "Diagnostics",
+            False,
+            "Gateway Reachable | DNS Resolution Failed | No Internet Access",
+            data={"gateway": "192.168.1.1", "gateway_ok": True, "dns_ok": False, "internet_ok": False},
+        ),
+        NetResult("Flush DNS", True, "flushed", code="executed"),
+        NetResult("Renew IP", True, "renewed", code="executed"),
+    ]
+    captured = {}
+
+    def capture(task_func, msg="..."):
+        captured["result"] = task_func()
+        return captured["result"]
+
+    with patch.object(win, "run_async_task", side_effect=capture), patch.object(
+        win, "append_log"
+    ), patch("time.sleep"):
+        win.on_smart_repair(None)
+
+    res = captured["result"]
+    assert res.code == ResultCode.EXECUTED
+    entry = res.to_log_entry()
+    assert "⚠️" in entry
+    assert "✅" not in entry
+    assert "debug only" in res.message.lower()
+    assert "not implemented" not in res.message.lower()
+    assert [c.args[0] for c in bridge.call.call_args_list] == [
+        "network_status",
+        "flush_dns",
+        "renew_ip",
+    ]
 
 
 def test_ai_overlay_pass_through_when_hidden(main_window):

@@ -18,12 +18,19 @@ import re
 
 import pytest
 
-pytestmark = pytest.mark.netns
-
 def _in_sim():
     return os.environ.get("NETMEDIC_SIM_NS") == "1"
 
-pytestmark = pytest.mark.skipif(not _in_sim(), reason="requires netns harness (sudo ./scripts/netns-golden.sh)")
+
+# Both markers required: the second assignment used to drop `netns`, so
+# `pytest -m netns` (scripts/netns-golden.sh and CI) collected 0 tests.
+pytestmark = [
+    pytest.mark.netns,
+    pytest.mark.skipif(
+        not _in_sim(),
+        reason="requires netns harness (sudo ./scripts/netns-golden.sh)",
+    ),
+]
 
 from netmedic.models import ResultCode
 
@@ -39,8 +46,7 @@ def test_golden_wan_drop():
     # Import here so harness env is set
     from unittest.mock import patch
     from netmedic.network import NetworkMedic
-    from netmedic.ui import MainWindow  # will be mocked
-    # Instead of full UI, directly test the probe layer + Smart Repair logic
+    # Probe layer + diagnostics (no GUI / MainWindow — netns CI must not need GTK)
     # Use NetworkMedic diagnostics directly (probes run real syscalls in netns)
     medic = NetworkMedic()
     # Pre-diag should be FAILED (gateway ok, dns fail, net fail)

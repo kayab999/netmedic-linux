@@ -3,7 +3,6 @@ import gi
 gi.require_version("Gtk", "3.0")
 from gi.repository import Gtk, GLib
 
-from netmedic.ui import MainWindow
 from netmedic.teardown import register as register_teardown
 
 _main_window = None
@@ -14,14 +13,14 @@ def quit_gui_if_running():
         GLib.idle_add(Gtk.main_quit)
 
 
-def show_error_dialog(message: str):
-    """Show a simple GTK error dialog."""
+def show_error_dialog(message: str, *, title: str = "Instance Error"):
+    """Show a simple GTK error dialog (does not import MainWindow)."""
     dialog = Gtk.MessageDialog(
         transient_for=None,
         flags=0,
         message_type=Gtk.MessageType.ERROR,
         buttons=Gtk.ButtonsType.OK,
-        text="Instance Error",
+        text=title,
     )
     dialog.format_secondary_text(message)
     dialog.run()
@@ -30,6 +29,8 @@ def show_error_dialog(message: str):
 
 def run_gui():
     global _main_window
+    from netmedic.ui import MainWindow
+
     GLib.set_prgname("netmedic")
     GLib.set_application_name("NetMedic")
     _main_window = MainWindow()

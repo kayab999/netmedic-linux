@@ -298,9 +298,10 @@ class NetworkMedic:
         net_ok, net_per, net_label = self._check_internet_access_detailed()
         results.append("Internet Access OK" if net_ok else "No Internet Access")
 
-        # Captive portal hint (PR4): gateway OK but all WAN probes fail
+        # Captive portal hint: gateway OK but TCP internet failed (DNS may still
+        # "succeed" via a portal resolver — the common captive case).
         portal_hint = None
-        if gw_ok and not dns_ok and not net_ok:
+        if gw_ok and not net_ok:
             from netmedic.probes import check_captive_portal
             is_portal, hint = check_captive_portal()
             if is_portal:

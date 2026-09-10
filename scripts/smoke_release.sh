@@ -18,6 +18,13 @@ print("netmedic", __version__)
 assert __version__
 PY
 
+echo "[1b] Installed interpreter (no PYTHONPATH) imports GUI stack"
+if [[ -x "$ROOT/venv/bin/python" ]]; then
+  env -u PYTHONPATH "$ROOT/venv/bin/python" -c "import netmedic.constants, netmedic.probes, netmedic.gui"
+else
+  echo "skip (no venv)"
+fi
+
 echo "[2/6] netmedic --status"
 python3 -m netmedic.app --status || true
 

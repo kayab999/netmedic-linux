@@ -19,14 +19,16 @@ cd netmedic-linux
 ./install.sh
 ```
 
-The installer creates `venv/`, installs `netmedic` in editable mode, and optionally installs the AI module.
+The installer creates `venv/`, installs `netmedic` in **strict** editable mode (`editable_mode=strict`), and optionally installs the AI module.
+
+After adding a new `netmedic/*.py` module, re-run the same `pip install -e` command so the snapshot used by `venv/bin/netmedic` (dock / `.desktop` Exec) includes it. Editing an existing file does not need a reinstall (snapshot entries are symlinks).
 
 ### Manual setup
 
 ```bash
 python3 -m venv venv
 source venv/bin/activate
-pip install -e netmedic/
+pip install -e netmedic/ --config-settings editable_mode=strict
 pip install pytest ruff PyGObject
 ```
 

@@ -29,7 +29,7 @@ for arg in "$@"; do
     esac
 done
 
-echo -e "${BLUE}=== NetMedic Linux Installer (v1.5.0) ===${NC}"
+echo -e "${BLUE}=== NetMedic Linux Installer (v1.6.0) ===${NC}"
 
 echo -e "${BLUE}[0/6] Runtime dependency preflight...${NC}"
 chmod +x scripts/check-deps.sh
@@ -65,6 +65,8 @@ pip install --upgrade pip wheel setuptools pytest ruff
 echo -e "${BLUE}[3/6] Installing NetMedic core...${NC}"
 pip install PyGObject
 pip install -e netmedic/ --config-settings editable_mode=strict
+# Dock/desktop Exec uses this interpreter (strict snapshot), not PYTHONPATH.
+python -c "import netmedic.constants, netmedic.probes, netmedic.gui"
 
 if [ "$INSTALL_AI" -eq 0 ] && [ -t 0 ]; then
     echo -e "${BLUE}Install AI module (optional)? [y/N]${NC}"

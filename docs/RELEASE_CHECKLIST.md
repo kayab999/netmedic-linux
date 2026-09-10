@@ -19,6 +19,7 @@ Use this checklist before tagging a public release.
 ## 1. Code Quality
 
 - [ ] Automated smoke: `./scripts/smoke_release.sh` (version, helper dry-run, pytest)
+- [ ] Netns goldens: `sudo ./scripts/netns-golden.sh` (A WAN-drop + B TCP-blocked/ICMP-ok → PARTIAL). CI job `netns-golden` must be green.
 - [ ] All tests pass: `venv/bin/python -m pytest tests/ -v`
 - [ ] Linter clean: `venv/bin/ruff check netmedic/ netmedic_ai/ tests/`
 - [ ] Version aligned in `netmedic/pyproject.toml`, `netmedic_ai/`, `CHANGELOG.md`, `README.md`, `docs/RELEASE_NOTES.md`
@@ -29,6 +30,7 @@ Use this checklist before tagging a public release.
  - [ ] Clean VM (Ubuntu 24.04 GNOME, desktop session, not SSH) install **from tag** via `./install.sh` + `./scripts/install-polkit-policy.sh` (validates `config.py:60` both `/usr/libexec` and `/usr/lib` paths)
  - [ ] GUI launches: `venv/bin/netmedic`
  - [ ] Headless launches: `venv/bin/netmedic --headless`
+- [ ] Desktop launch: `gtk-launch netmedic` (or the `Exec=` line from `~/.local/share/applications/netmedic.desktop`) — not only a PYTHONPATH shell or `runbook_vm_evidence.py`
 - [ ] Desktop entry appears in application menu
 - [ ] Log created at `~/.local/state/netmedic/netmedic.log` (mode 600)
 

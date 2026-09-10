@@ -5,7 +5,9 @@ netmedic/action_catalog.py
 netmedic/ai_console.py
 netmedic/app.py
 netmedic/audit_log.py
+netmedic/canary_shim_prod.py
 netmedic/config.py
+netmedic/constants.py
 netmedic/gui.py
 netmedic/gui_actions.py
 netmedic/helper_main.py
@@ -23,6 +25,7 @@ netmedic/models.py
 netmedic/network.py
 netmedic/paths.py
 netmedic/polkit_auth.py
+netmedic/probes.py
 netmedic/runtime.py
 netmedic/sensors.py
 netmedic/status.py

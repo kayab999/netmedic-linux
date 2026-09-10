@@ -1,6 +1,10 @@
+import sys
+import types
 from unittest.mock import patch, MagicMock
 
-from netmedic.runtime import bootstrap, shutdown, parse_args
+import pytest
+
+from netmedic.runtime import bootstrap, shutdown, parse_args, run
 
 
 def test_parse_args_headless():
@@ -31,3 +35,25 @@ def test_bootstrap_starts_ipc(mock_lock, mock_medic, mock_ipc, tmp_path, monkeyp
 def test_shutdown_stops_ipc(mock_ipc):
     mock_ipc.stop = MagicMock()
     shutdown()
+
+
+def test_run_gui_start_failure_shows_dialog(monkeypatch):
+    shown = []
+    fake_gui = types.ModuleType("netmedic.gui")
+    fake_gui.run_gui = lambda: (_ for _ in ()).throw(
+        ImportError("No module named 'netmedic.constants'")
+    )
+    fake_gui.show_error_dialog = lambda message, title="Instance Error": shown.append(
+        (title, message)
+    )
+    monkeypatch.setitem(sys.modules, "netmedic.gui", fake_gui)
+    monkeypatch.setattr("netmedic.runtime.bootstrap", lambda headless=False: True)
+    monkeypatch.setattr("netmedic.runtime.shutdown", lambda: None)
+    monkeypatch.setattr("netmedic.runtime._shutting_down", False)
+
+    with pytest.raises(SystemExit) as exc_info:
+        run(headless=False)
+    assert exc_info.value.code == 1
+    assert shown == [
+        ("NetMedic failed to start", "ImportError: No module named 'netmedic.constants'")
+    ]

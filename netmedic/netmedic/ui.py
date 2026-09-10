@@ -621,9 +621,15 @@ class MainWindow(Gtk.Window):
             post_net = (post_res.data or {}).get("internet_ok") if post_res and post_res.data else None
             # PR2: code-driven overall
             if not do_verify:
-                overall_code = ResultCode.OK if repairs_ok else ResultCode.FAILED
-                summary = f"Repairs executed: {repairs_succeeded}/{repairs_total} ✓ — initial diagnostics {'OK' if pre_ok else 'failed'}; Post-repair verification: not implemented yet."
-                overall = repairs_ok
+                # Debug escape hatch only. Never present unverified repairs as OK/✅.
+                overall_code = ResultCode.EXECUTED if repairs_ok else ResultCode.FAILED
+                summary = (
+                    f"Smart Repair: repairs {repairs_succeeded}/{repairs_total} executed; "
+                    "post-repair verification DISABLED "
+                    "(NETMEDIC_POST_REPAIR_VERIFY=0, debug only). "
+                    "Re-run with the flag unset before treating this as recovery."
+                )
+                overall = False
             elif repairs_ok and post_ok:
                 if not pre_ok:
                     summary = f"Smart Repair: SUCCESS (verified) — repairs {repairs_succeeded}/{repairs_total} ok | pre=FAIL post=OK"

@@ -222,6 +222,16 @@ def run(headless: bool = False, *, status: bool = False, status_json: bool = Fal
             run_gui()
     except Exception as exc:
         logging.critical("Unhandled Application Error: %s", exc, exc_info=True)
+        if not headless:
+            try:
+                from netmedic.gui import show_error_dialog
+
+                show_error_dialog(
+                    f"{type(exc).__name__}: {exc}",
+                    title="NetMedic failed to start",
+                )
+            except Exception:
+                print(f"NetMedic failed to start: {exc}", file=sys.stderr)
         sys.exit(1)
     finally:
         shutdown()
