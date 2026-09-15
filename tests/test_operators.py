@@ -24,13 +24,17 @@ def test_wifi_scan_congestion(mock_run):
 
 @patch('netmedic.system.CommandRunner.run')
 @patch('netmedic.operators.vpn.angristan.AngristanOperator._verify_integrity', return_value=True)
-@patch('pathlib.Path.exists', return_value=True)
-def test_angristan_status_running(mock_exists, mock_verify, mock_run):
-    # Mock systemctl response
+def test_angristan_status_running(mock_verify, mock_run, tmp_path, monkeypatch):
+    # Do not patch pathlib.Path.exists globally — that makes Config._ensure_dir
+    # skip mkdir then fail on a missing ~/.local/share/netmedic (clean CI homes).
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
+    script = tmp_path / "netmedic" / "operators" / "openvpn-install.sh"
+    script.parent.mkdir(parents=True)
+    script.write_bytes(b"#!/bin/sh\n")
     mock_run.return_value = MagicMock(success=True, stdout="active (running)", stderr="")
-    
+
     vpn = AngristanOperator()
     res = vpn.check_status()
-    
+
     assert res.success is True
     assert res.message == "running"

@@ -8,6 +8,7 @@ All notable changes to NetMedic Linux are documented here.
 - Smart Repair crashed with `'dict' object has no attribute 'lower'` on failed diagnostics (WAN unplug): `payload_to_net_result` called `.lower()` on dict `details`.
 - `scripts/netns-golden.sh` no longer treats vacuous skips as success: pytest logs must contain the expected `passed` counts.
 - CI preflight no longer fails on GitHub-hosted runners: install `network-manager` (nmcli) with the other system packages.
+- CI test job runs under Xvfb and installs Polkit GI typelib so GTK/polkit tests can run on hosted runners.
 
 ## [1.6.0] — 2026-09-10 — RC2 v1.6.0-rc2
 

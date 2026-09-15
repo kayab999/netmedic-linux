@@ -1,6 +1,7 @@
 import json
 import socket
 import threading
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -12,9 +13,22 @@ from netmedic.ipc_sync_client import SyncIPCClient
 from netmedic.lifecycle import LifecycleManager
 
 
+def _fake_command_run(cmd, *a, **kw):
+    """Host-independent probes so e2e does not require a default route."""
+    if isinstance(cmd, (list, tuple)) and cmd:
+        if cmd[0] == "ip" and "default" in cmd:
+            return MagicMock(success=True, stdout="default via 192.168.1.1 dev eth0", stderr="")
+        if cmd[0] in ("ping", "getent", "curl", "nmcli"):
+            return MagicMock(success=True, stdout="full", stderr="")
+    return MagicMock(success=True, stdout="", stderr="")
+
+
 @pytest.fixture
 def ipc_server(tmp_path, monkeypatch):
     monkeypatch.setattr("netmedic.config.Config.get_state_dir", lambda: tmp_path)
+    monkeypatch.setattr("netmedic.system.CommandRunner.run", _fake_command_run)
+    monkeypatch.setattr("netmedic.probes.CommandRunner.run", _fake_command_run)
+    monkeypatch.setattr("netmedic.network.CommandRunner.run", _fake_command_run)
     lifecycle = LifecycleManager()
     session = IPCSession()
     session.issue_token()
