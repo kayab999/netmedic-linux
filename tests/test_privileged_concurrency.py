@@ -2,8 +2,7 @@
 
 import os
 import threading
-import time
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from netmedic.ipc_actions import create_action_dispatcher
 from netmedic.ipc_security import IPCSession

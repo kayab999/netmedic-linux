@@ -14,9 +14,11 @@ Scenarios:
 - B ICMP-ok/TCP-blocked: gateway OK, DNS OK, TCP fail, ICMP ok → PARTIAL
 """
 import os
-import re
 
 import pytest
+
+from netmedic.models import ResultCode
+
 
 def _in_sim():
     return os.environ.get("NETMEDIC_SIM_NS") == "1"
@@ -31,8 +33,6 @@ pytestmark = [
         reason="requires netns harness (sudo ./scripts/netns-golden.sh)",
     ),
 ]
-
-from netmedic.models import ResultCode
 
 
 def _logs_contain(logs, substr):

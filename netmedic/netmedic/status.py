@@ -6,8 +6,7 @@ import os
 import shutil
 import subprocess
 from dataclasses import asdict, dataclass
-from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from netmedic import __version__
 from netmedic.action_catalog import POLKIT_ACTION_IDS
@@ -19,13 +18,6 @@ class CheckResult:
     name: str
     ok: bool
     detail: str
-
-
-def _file_ok(path: Path) -> bool:
-    try:
-        return path.is_file() and os.access(path, os.X_OK)
-    except OSError:
-        return False
 
 
 def _pkaction_ids() -> List[str]:
@@ -78,13 +70,8 @@ def collect_status() -> Dict[str, Any]:
     helper_system = Config.SYSTEM_HELPER_PATH
     helper_alt = Config.SYSTEM_HELPER_ALT_PATH
     helper_on = Config.use_privileged_helper()
-    helper_exists = _file_ok(helper_system) or _file_ok(helper_alt) or (
-        helper_path.exists() if hasattr(helper_path, "exists") else False
-    )
     # Marker path "python|-m|..." is not a real file.
     helper_marker = "|" in str(helper_path)
-    if helper_marker:
-        helper_exists = True  # module path usable in dev
 
     lib_ok = (Config.SYSTEM_HELPER_LIB / "netmedic" / "helper_main.py").is_file()
     helper_ready = helper_on and (

@@ -1,7 +1,6 @@
 """Phase B: helper verb validation and dry-run planning (no root)."""
 
 import json
-import sys
 
 import pytest
 

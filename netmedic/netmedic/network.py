@@ -570,7 +570,8 @@ class NetworkMedic:
                 code=ResultCode.FAILED,
             )
         # Post-condition: PR6 SEM-03 use ip -j link show operstate poll up to 5s
-        import time, json
+        import json
+        import time
         operstate_ok = False
         last_out = ""
         for _ in range(5):

@@ -1,8 +1,6 @@
 """Canary for E4 — production read of .success must warn (would burst with error filter)."""
 import warnings
 
-import pytest
-
 
 def test_canary_success_shim_bursts():
     """If someone reintroduces net_res.success in production, suite must warn."""

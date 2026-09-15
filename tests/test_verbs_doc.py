@@ -50,8 +50,6 @@ def test_every_catalog_verb_is_documented():
 
 def test_no_doc_drift():
     helper_verbs, ipc_priv, ipc_safe = _collect_registered_verbs()
-    all_actual = helper_verbs | ipc_priv | ipc_safe
-    # Include internal iface verbs already in helper_verbs
     registry = _parse_verbs_registry()
     for row in registry:
         hv = row.get("helper_verb")
@@ -60,8 +58,6 @@ def test_no_doc_drift():
             assert hv in helper_verbs, f"doc drift: helper_verb '{hv}' no existe en helper_verbs.py"
         if ipc:
             # ipc_action may be null for internal iface verbs
-            is_known = ipc in ipc_priv or ipc in ipc_safe or ipc in helper_verbs
-            # Also allow null
             if ipc not in (None,):
                 assert ipc in (ipc_priv | ipc_safe), f"doc drift: ipc_action '{ipc}' no registrado en action_catalog.py"
 
