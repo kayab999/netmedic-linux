@@ -75,7 +75,8 @@ jobs:
           sudo apt-get install -y iproute2 nftables iputils-ping curl libc-bin
           python -m pip install --upgrade pip wheel setuptools pytest
           python -m venv venv
-          ./venv/bin/pip install -e netmedic/ --config-settings editable_mode=strict
+          # Goldens import NetworkMedic/probes only — skip PyGObject/cairo build.
+          ./venv/bin/pip install -e netmedic/ --config-settings editable_mode=strict --no-deps
           ./venv/bin/pip install pytest
       - name: Golden replay A+B (H1 TCP-only / incident)
         run: sudo ./scripts/netns-golden.sh
@@ -91,15 +92,20 @@ jobs:
       - name: Install deps
         run: |
           sudo apt-get update
-          sudo apt-get install -y python3-gi gir1.2-gtk-3.0 \
-            libcairo2-dev libgirepository-2.0-dev pkg-config policykit-1
+          sudo apt-get install -y \
+            python3-gi python3-gi-cairo gir1.2-gtk-3.0 \
+            libcairo2-dev libgirepository-2.0-dev pkg-config \
+            policykit-1 gir1.2-polkit-1.0 network-manager iproute2 \
+            iputils-ping curl xvfb dbus-x11
           python -m pip install --upgrade pip wheel setuptools pytest
           pip install -e netmedic/ --config-settings editable_mode=strict
           pip install -e netmedic_ai/
       - name: Release smoke
+        env:
+          NO_AT_BRIDGE: "1"
         run: |
           chmod +x scripts/smoke_release.sh
-          ./scripts/smoke_release.sh
+          xvfb-run -a ./scripts/smoke_release.sh
 
   build-smoke:
     runs-on: ubuntu-latest
@@ -118,7 +124,9 @@ jobs:
             python3-gi python3-gi-cairo gir1.2-gtk-3.0 \
             libcairo2-dev libgirepository-2.0-dev pkg-config
           python -m pip install --upgrade pip wheel setuptools pyinstaller
-          pip install -e netmedic/ --config-settings editable_mode=strict
+          python -m venv venv
+          ./venv/bin/pip install --upgrade pip wheel setuptools pyinstaller pillow
+          ./venv/bin/pip install -e netmedic/ --config-settings editable_mode=strict
 
       - name: Build standalone binary
         run: |
