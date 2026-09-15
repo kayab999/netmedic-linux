@@ -148,7 +148,7 @@ class VPNPanel(Gtk.Box):
                     
                     # Unified auth/helper/cancellation detection — code-driven
                     if net_res.code != ResultCode.OK:
-                        text = (net_res.message + " " + (net_res.details or "")).lower()
+                        text = f"{net_res.message} {net_res.details or ''}".lower()
                         if net_res.code == ResultCode.ERROR and ("helper-missing" in text or "helper not installed" in text):
                             GLib.idle_add(lambda: self._show_error(
                                 "Helper Not Installed",

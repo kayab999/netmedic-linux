@@ -77,11 +77,18 @@ def payload_to_net_result(action: str, payload: Dict[str, Any]) -> NetResult:
             hints.append("helper missing")
         if hints:
             details = ", ".join(hints)
-    # Also surface helper-missing even when details already present — append hint
+    # Also surface helper-missing even when details already present — append hint.
+    # Diagnostics details are a dict (probes); never call .lower() on them.
     if not success and details is not None:
-        msg_low = (message or "").lower() + " " + (details or "").lower()
-        if "helper-missing" in msg_low and "helper missing" not in (details or "").lower():
-            details = f"{details} (helper missing: run ./scripts/install-polkit-policy.sh)"
+        scan = f"{message or ''} {details}".lower()
+        if "helper-missing" in scan and "helper missing" not in str(details).lower():
+            if isinstance(details, dict):
+                details = {
+                    **details,
+                    "helper_hint": "helper missing: run ./scripts/install-polkit-policy.sh",
+                }
+            else:
+                details = f"{details} (helper missing: run ./scripts/install-polkit-policy.sh)"
 
     return NetResult(
         operation=operation,

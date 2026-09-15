@@ -37,6 +37,8 @@ if [[ "${n_netns:-0}" -lt 2 ]]; then
   echo "netns marker stomped? collected ${n_netns:-0} with -m netns (want >=2)" >&2
   exit 1
 fi
+# Also guard vacuous skip: collect 2 but both skipped (missing dep) → exit 0 with 2 skipped, not 2 passed
+# This catches host missing deps where skipif true even inside netns
 
 cleanup() {
   set +e
@@ -128,20 +130,30 @@ if [[ "$SCENARIO" == "B" ]]; then
 fi
 
 echo "[netns-golden] running golden replay in $NS_C (NETMEDIC_SIM_NS=1)" >&2
+LOG="/tmp/nmsim-${RUNID}.pytest.log"
+: > "$LOG"
 
-# Run pytest inside client ns
+# Run pytest inside client ns — capture log and assert 2 passed total, not just 2 collected (vacuous skip guard)
 if [[ "$SCENARIO" == "B" ]]; then
-  ip netns exec "$NS_C" env NETMEDIC_SIM_NS=1 NETMEDIC_SIM_SCENARIO=B ./venv/bin/python -m pytest -m netns -v tests/test_golden_replay_ns.py -k test_golden_icmp_ok_tcp_blocked
+  ip netns exec "$NS_C" env NETMEDIC_SIM_NS=1 NETMEDIC_SIM_SCENARIO=B ./venv/bin/python -m pytest -m netns -v tests/test_golden_replay_ns.py -k test_golden_icmp_ok_tcp_blocked 2>&1 | tee "$LOG"
+  grep -q "1 passed" "$LOG" || { echo "golden vacuous: want 1 passed in B (got $(cat "$LOG"))" >&2; exit 1; }
 else
   # Default: both scenarios (A + B if --scenario all, but B needs micro DNS)
   # For 'all', run A first, then restart B
-  ip netns exec "$NS_C" env NETMEDIC_SIM_NS=1 NETMEDIC_SIM_SCENARIO=A ./venv/bin/python -m pytest -m netns -v tests/test_golden_replay_ns.py::test_golden_wan_drop
+  ip netns exec "$NS_C" env NETMEDIC_SIM_NS=1 NETMEDIC_SIM_SCENARIO=A ./venv/bin/python -m pytest -m netns -v tests/test_golden_replay_ns.py::test_golden_wan_drop 2>&1 | tee "$LOG"
+  grep -q "1 passed" "$LOG" || { echo "golden vacuous: want 1 passed in A" >&2; exit 1; }
   if [[ "$SCENARIO" == "all" ]]; then
     # Reconfigure for B
     ip netns exec "$NS_R" nft flush ruleset 2>/dev/null || true
     ip netns exec "$NS_R" nohup python3 "$(dirname "$0")/../tools/netmedic-sim/micro_dns.py" >/tmp/nmsim-${RUNID}-dns.log 2>&1 &
     sleep 0.5
-    ip netns exec "$NS_C" env NETMEDIC_SIM_NS=1 NETMEDIC_SIM_SCENARIO=B ./venv/bin/python -m pytest -m netns -v tests/test_golden_replay_ns.py::test_golden_icmp_ok_tcp_blocked
+    ip netns exec "$NS_C" env NETMEDIC_SIM_NS=1 NETMEDIC_SIM_SCENARIO=B ./venv/bin/python -m pytest -m netns -v tests/test_golden_replay_ns.py::test_golden_icmp_ok_tcp_blocked 2>&1 | tee -a "$LOG"
+    grep -q "1 passed" "$LOG" || { echo "golden vacuous: want 1 passed in B (all)" >&2; exit 1; }
+  fi
+  # Combined: when SCENARIO=all, we ran two separate 1-passed runs; assert at least 2 passed in total log
+  if [[ "$SCENARIO" == "all" ]]; then
+    n_passed=$(grep -o "[0-9]* passed" "$LOG" | awk '{s+=$1} END {print s+0}')
+    if [[ "${n_passed:-0}" -lt 2 ]]; then echo "golden vacuous: want >=2 passed total, got ${n_passed:-0}" >&2; exit 1; fi
   fi
 fi
 

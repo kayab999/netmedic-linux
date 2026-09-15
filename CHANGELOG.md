@@ -2,6 +2,12 @@
 
 All notable changes to NetMedic Linux are documented here.
 
+## [Unreleased]
+
+### Fixed
+- Smart Repair crashed with `'dict' object has no attribute 'lower'` on failed diagnostics (WAN unplug): `payload_to_net_result` called `.lower()` on dict `details`.
+- `scripts/netns-golden.sh` no longer treats vacuous skips as success: pytest logs must contain the expected `passed` counts.
+
 ## [1.6.0] — 2026-09-10 — RC2 v1.6.0-rc2
 
 ### Fixed

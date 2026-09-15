@@ -1,8 +1,9 @@
 """GUI action bridge maps IPC payloads and routes privileged work correctly."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from netmedic.gui_actions import GuiActionBridge, payload_to_net_result
+from netmedic.models import ResultCode
 from netmedic.operators.vpn.base import VPNClient
 
 
@@ -27,6 +28,46 @@ def test_payload_to_net_result_error_with_polkit_hint():
     )
     assert res.success is False
     assert "polkit" in (res.details or "").lower()
+
+
+def test_payload_failed_diagnostics_keeps_dict_details():
+    """WAN-down diagnostics ship details as a dict; .lower() on that used to crash Smart Repair."""
+    details = {
+        "gateway": "none",
+        "gateway_ok": False,
+        "dns_probe": "none",
+        "net_probe": "none",
+        "per_probe": {"gw_ok": False, "dns_ok": False, "internet_ok": False},
+    }
+    res = payload_to_net_result(
+        "network_status",
+        {
+            "status": "error",
+            "code": "failed",
+            "message": "Gateway Not Found | DNS Resolution Failed | No Internet Access",
+            "details": details,
+            "data": {"gateway_ok": False, "dns_ok": False, "internet_ok": False},
+        },
+    )
+    assert res.code == ResultCode.FAILED
+    assert isinstance(res.details, dict)
+    assert res.details["gateway_ok"] is False
+
+
+def test_payload_failed_dict_details_keeps_helper_hint():
+    details = {"gateway_ok": False}
+    res = payload_to_net_result(
+        "network_status",
+        {
+            "status": "error",
+            "code": "error",
+            "message": "helper-missing",
+            "details": details,
+        },
+    )
+    assert isinstance(res.details, dict)
+    assert res.details["gateway_ok"] is False
+    assert "helper missing" in res.details["helper_hint"]
 
 
 def test_payload_vpn_list_converts_dicts():
