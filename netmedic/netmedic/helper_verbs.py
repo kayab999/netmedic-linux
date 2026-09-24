@@ -217,6 +217,8 @@ def plan_verb(verb: str, args: Optional[Mapping[str, Any]] = None) -> VerbPlan:
             raise VerbValidationError("vpn-run-script requires an absolute script path")
         if _os.path.normpath(script) != script:
             raise VerbValidationError("vpn-run-script path must be normalized")
+        # NOTE: the normpath check subsumes the ".." check above; both layers
+        # stay on purpose (defense in depth — proven equivalent by mutation testing).
         # Canonicalization is enforced at exec time via SHA256 sealed-copy re-hash
         # (helper_main re-hashes FD before exec); planning stage rejects tricks above.
         expected_sha = _require_str(args, "expected_sha256") or ""

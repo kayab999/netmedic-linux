@@ -6,6 +6,8 @@ import sys
 import time
 import warnings
 from logging.handlers import RotatingFileHandler
+from types import FrameType
+from typing import List, Optional
 
 from netmedic.config import Config
 from netmedic.network import NetworkMedic
@@ -22,7 +24,7 @@ _lifecycle_manager = LifecycleManager()
 _shutting_down = False
 
 
-def get_medic_instance():
+def get_medic_instance() -> Optional[NetworkMedic]:
     return _medic_instance
 
 
@@ -33,7 +35,7 @@ def get_ipc_session() -> IPCSession:
     return _ipc_session
 
 
-def handle_signals(signum, frame):
+def handle_signals(signum: int, frame: Optional[FrameType]) -> None:
     global _shutting_down
     if _shutting_down:
         return
@@ -67,7 +69,7 @@ def handle_signals(signum, frame):
     sys.exit(0)
 
 
-def setup_logging(headless: bool = False):
+def setup_logging(headless: bool = False) -> None:
     log_file = Config.get_log_file()
 
     if not log_file.exists():
@@ -162,7 +164,7 @@ def bootstrap(headless: bool = False) -> bool:
         raise
 
 
-def shutdown():
+def shutdown() -> None:
     global _ipc_server, _ipc_session, _shutting_down
     if _shutting_down:
         return
@@ -183,7 +185,7 @@ def shutdown():
         logging.error("Cleanup failed during shutdown: %s", exc)
 
 
-def parse_args(argv=None):
+def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="NetMedic: Network Diagnostic & Repair Tool")
     parser.add_argument("--headless", action="store_true", help="Run without GUI (background mode)")
     parser.add_argument(
@@ -199,7 +201,7 @@ def parse_args(argv=None):
     return parser.parse_args(argv)
 
 
-def run(headless: bool = False, *, status: bool = False, status_json: bool = False):
+def run(headless: bool = False, *, status: bool = False, status_json: bool = False) -> None:
     if status or status_json:
         from netmedic.status import print_status
 

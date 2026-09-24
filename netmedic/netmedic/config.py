@@ -126,7 +126,7 @@ class Config:
         return Path(sys_executable_helper_module())
 
     @staticmethod
-    def _ensure_dir(path: Path):
+    def _ensure_dir(path: Path) -> None:
         """Ensure directory exists with mode 0700 and is owned by this user."""
         if not path.exists():
             path.mkdir(parents=True, mode=0o700, exist_ok=True)

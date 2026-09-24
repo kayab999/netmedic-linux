@@ -5,6 +5,7 @@ from typing import Any, Callable, Dict, Optional
 
 from netmedic.audit_log import record as audit_record
 from netmedic.ipc_peer import validate_peer_identity
+from netmedic.models import NetResult
 from netmedic.network import NetworkMedic
 from netmedic.operators.wifi import WifiOperator
 from netmedic.operators.vpn.angristan import AngristanOperator
@@ -24,7 +25,7 @@ def _validate_action(action: str) -> Optional[Dict[str, Any]]:
     if is_internal(action):
         return None
     try:
-        from netmedic_ai.toolkit import registry  # type: ignore[import-untyped]
+        from netmedic_ai.toolkit import registry
 
         if registry.is_registered(action):
             return None
@@ -45,8 +46,8 @@ def _validate_dispatch_params(action: str, params: Dict[str, Any]) -> Optional[s
     }
 
     try:
-        from netmedic_ai.param_validation import validate_tool_params  # type: ignore[import-untyped]
-        from netmedic_ai.toolkit import registry  # type: ignore[import-untyped]
+        from netmedic_ai.param_validation import validate_tool_params
+        from netmedic_ai.toolkit import registry
 
         if registry.is_registered(action):
             return validate_tool_params(action, tool_params)
@@ -117,7 +118,7 @@ def _finish_privileged(
     return result
 
 
-def _result_payload(result) -> Dict[str, Any]:
+def _result_payload(result: NetResult) -> Dict[str, Any]:
     # Code is source of truth; status/success derived for backward compat (E4)
     from netmedic.models import ResultCode
     try:
@@ -134,12 +135,15 @@ def _result_payload(result) -> Dict[str, Any]:
         is_ok = False
         code = ResultCode.FAILED
     try:
-        code_val = code.value if hasattr(code, "value") and not code.__class__.__name__ == "MagicMock" else str(code)
+        if isinstance(code, ResultCode):
+            code_val = code.value
+        else:
+            code_val = str(code)
         if code_val.startswith("<MagicMock"):
             code_val = "ok" if is_ok else "failed"
     except Exception:
         code_val = "ok" if is_ok else "failed"
-    payload = {
+    payload: Dict[str, Any] = {
         "status": "ok" if is_ok else "error",
         "success": is_ok,
         "message": result.message,
@@ -363,7 +367,7 @@ def create_action_dispatcher(
 def _handle_user_intent(params: Dict[str, Any]) -> Dict[str, Any]:
     """Delegates natural-language requests to the AI pilot when available."""
     try:
-        from netmedic_ai.pilot import interpret_intent  # type: ignore[import-untyped]
+        from netmedic_ai.pilot import interpret_intent
     except ImportError:
         return {
             "status": "error",

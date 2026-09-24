@@ -7,6 +7,12 @@ All notable changes to NetMedic Linux are documented here.
 ### Breaking
 - **Python `>=3.10,<3.13` (was `>=3.8`):** intentional per internal-IT Narrow+Pin (Ubuntu 22.04/24.04, CI 3.10/3.11/3.12). Affected: Ubuntu 20.04 (3.8), Debian 11 (3.9) — pin to `v1.5.x` for these platforms (security fixes only). Rationale: Python 3.8 EOL Oct 2024, `pillow>=10`/`PyGObject>=3.42` pins, `X|Y` typing + `match` readiness, matrix cost. Not a SemVer major: pre-1.6.0-final RC series, documented here + `README.md` + `docs/RELEASE_NOTES.md`.
 
+### Added
+- P1 coverage: `runtime.py` 100% (`tests/test_runtime_lifecycle.py`), `ui.py` 98% (`tests/test_ui_flows.py`) — total 77%→83%, CI gate 70→75
+- Property tests (`tests/test_properties.py`, Hypothesis): framing roundtrip, token uniqueness/shape, catalog/schema consistency, verb totality, redaction shape
+- Mutation-tested `ipc_security` + `helper_verbs` (targeted mutants, 15/16 killed = 94%; 1 equivalent mutant documented in code) + dispatch-level peer/empty-token tests
+- `mypy.ini`: strict on 10 modules (ipc_security/helper_verbs/action_catalog/models/ipc_bridge/ipc_actions/runtime/lifecycle/config/polkit_auth); `Dockerfile.build` reproducible image + CI `container-build` job; `setup.cfg` mutmut scope
+
 ### Fixed
 - Smart Repair crashed with `'dict' object has no attribute 'lower'` on failed diagnostics (WAN unplug): `payload_to_net_result` called `.lower()` on dict `details`.
 - `scripts/netns-golden.sh` no longer treats vacuous skips as success: pytest logs must contain the expected `passed` counts.

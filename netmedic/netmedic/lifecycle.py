@@ -1,6 +1,7 @@
 import os
 import logging
 import fcntl
+from typing import Optional, TextIO
 from netmedic.config import Config
 
 logger = logging.getLogger(__name__)
@@ -12,13 +13,13 @@ class LifecycleManager:
     Establece una única fuente de verdad para PID, Sockets, Lock y cleanup.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.state_dir = Config.get_state_dir()
         self.pid_file = self.state_dir / "ipc.pid"
         self.sock_file = self.state_dir / "ipc.sock"
         self.lock_file = self.state_dir / "netmedic.lock"
         self.token_file = self.state_dir / "ipc.token"
-        self._lock_fd = None
+        self._lock_fd: Optional[TextIO] = None
 
     def _is_process_alive(self, pid: int) -> bool:
         try:
@@ -45,7 +46,7 @@ class LifecycleManager:
                 self._lock_fd = None
             return False
 
-    def acquire_lock(self):
+    def acquire_lock(self) -> bool:
         """Intenta adquirir el lock de instancia única, recuperando locks huérfanos."""
         if self._try_acquire_lock():
             return True
@@ -64,7 +65,7 @@ class LifecycleManager:
 
         return False
 
-    def cleanup(self):
+    def cleanup(self) -> None:
         """Realiza el cleanup garantizado de todos los recursos de estado."""
         logger.info("Ejecutando limpieza centralizada de recursos...")
         if self._lock_fd:
@@ -85,7 +86,7 @@ class LifecycleManager:
                     logger.error("Error removiendo %s: %s", path, e)
         logger.info("Limpieza centralizada finalizada.")
 
-    def write_pid(self):
+    def write_pid(self) -> None:
         flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
         fd = os.open(str(self.pid_file), flags, 0o600)
         with os.fdopen(fd, "w", encoding="utf-8") as handle:

@@ -36,7 +36,7 @@ class NetMedicIPCServer:
         self.thread: Optional[threading.Thread] = None
         self._pool = ThreadPoolExecutor(max_workers=_MAX_WORKERS, thread_name_prefix="IPCWorker")
 
-    def start(self):
+    def start(self) -> None:
         self._remove_stale_socket()
 
         old_umask = os.umask(0o177)
@@ -74,7 +74,7 @@ class NetMedicIPCServer:
         except FileNotFoundError:
             pass
 
-    def _listen_loop(self):
+    def _listen_loop(self) -> None:
         while self.running and self.server:
             try:
                 self.server.settimeout(1.0)
@@ -90,7 +90,7 @@ class NetMedicIPCServer:
                 if self.running:
                     logger.error("IPC accept loop failure", exc_info=True)
 
-    def _handle_connection(self, conn: socket.socket):
+    def _handle_connection(self, conn: socket.socket) -> None:
         peer_pid, peer_uid = _peer_credentials(conn)
         with conn:
             try:
@@ -125,7 +125,7 @@ class NetMedicIPCServer:
             logger.exception("IPC payload handling failed")
             return {"status": "error", "message": "Internal IPC error."}
 
-    def stop(self):
+    def stop(self) -> None:
         """Gracefully stop the IPC server."""
         self.running = False
         self._pool.shutdown(wait=True, cancel_futures=False)

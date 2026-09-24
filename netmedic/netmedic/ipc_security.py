@@ -42,7 +42,7 @@ def _write_secret_file(path: Path, content: str, mode: int = 0o600) -> None:
 class IPCSession:
     """Manages per-instance IPC authorization for privileged operations."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.token_file: Path = Config.get_state_dir() / "ipc.token"
         self._token: Optional[str] = None
 
@@ -124,7 +124,7 @@ class IPCSession:
 
         return None
 
-    def cleanup(self):
+    def cleanup(self) -> None:
         if self.token_file.exists():
             try:
                 self.token_file.unlink()

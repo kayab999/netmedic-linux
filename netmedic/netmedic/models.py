@@ -37,7 +37,7 @@ class NetResult:
     data: Any = None
     code: Optional["ResultCode"] = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         # Derive code from success if not explicitly set (backward compat).
         # Use direct dict access to avoid triggering deprecation warning during init
         success_val = object.__getattribute__(self, "success")
@@ -56,12 +56,13 @@ class NetResult:
         # but do not override explicit success for EXECUTED/PARTIAL which are still "executed"
         # success remains as passed for backward compat; icon comes from code.
 
-    def __getattribute__(self, name):
+    def __getattribute__(self, name: str) -> Any:
         if name == "success":
             # Emit deprecation outside try that would swallow error-warnings
             try:
-                frame = inspect.currentframe().f_back if inspect.currentframe() else None
-                filename = frame.f_code.co_filename if frame and frame.f_code else ""
+                current = inspect.currentframe()
+                frame = current.f_back if current is not None else None
+                filename = frame.f_code.co_filename if frame is not None and frame.f_code else ""
                 should_warn = True
                 if "models.py" in filename:
                     should_warn = False

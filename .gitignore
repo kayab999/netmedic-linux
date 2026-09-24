@@ -52,3 +52,7 @@ golden_*.log
 
 # Local packaging caches
 localpycs/netmedic_run
+
+# Mutation testing sandbox + cache (mutmut 3.x)
+mutants/
+.mutmut/
