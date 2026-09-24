@@ -1,0 +1,17 @@
+# NetMedic CODEOWNERS — internal IT, single maintainer + security paths
+* @kayab999
+/netmedic/netmedic/ipc_security.py @kayab999
+/netmedic/netmedic/ipc_peer.py @kayab999
+/netmedic/netmedic/ipc_actions.py @kayab999
+/netmedic/netmedic/helper_verbs.py @kayab999
+/netmedic/netmedic/helper_main.py @kayab999
+/netmedic/netmedic/polkit_auth.py @kayab999
+/netmedic/netmedic/action_catalog.py @kayab999
+/netmedic/netmedic/system.py @kayab999
+/netmedic/netmedic/audit_log.py @kayab999
+/assets/com.kayab.netmedic.policy @kayab999
+/scripts/install-polkit-policy.sh @kayab999
+/.github/workflows/ @kayab999
+/docs/THREAT_MODEL.md @kayab999
+/docs/PRIVILEGED_HELPER.md @kayab999
+/VERBS.md @kayab999

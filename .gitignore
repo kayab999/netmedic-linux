@@ -8,6 +8,11 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.pyre/
 
 # Virtual environments
 venv/
@@ -35,6 +40,11 @@ netmedic_run
 *.pid
 *.sock
 netmedic.log
+# Soak evidence is host-specific (absolute paths, hashes, live eventlog) — not committed.
+# Keep the template in docs/; per-run SOAK_*.md + golden logs stay local.
+SOAK_PLAN.md
+SOAK_EVENTLOG.md
+golden_*.log
 
 # AI model weights (download separately — see docs/DEVELOPMENT.md)
 *.gguf

@@ -1,5 +1,0 @@
-PyGObject
-pillow
-
-[ai]
-llama-cpp-python>=0.2.57
