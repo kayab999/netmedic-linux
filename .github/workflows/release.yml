@@ -24,16 +24,22 @@ jobs:
           sudo apt-get install -y \
             python3-gi python3-gi-cairo gir1.2-gtk-3.0 \
             libcairo2-dev libgirepository-2.0-dev pkg-config \
-            policykit-1
+            policykit-1 gir1.2-polkit-1.0 network-manager iproute2 \
+            iputils-ping curl xvfb dbus-x11
 
       - name: Install Python packages
         run: |
-          python -m pip install --upgrade pip wheel setuptools pytest pyinstaller
+          python -m pip install --upgrade pip wheel setuptools pytest pytest-cov pyinstaller cyclonedx-bom
           pip install -e netmedic/ --config-settings editable_mode=strict
           pip install -e netmedic_ai/
 
       - name: Test
-        run: python -m pytest tests/ -q
+        env:
+          NETMEDIC_TEST_MODE: "1"
+          NETMEDIC_SKIP_POLKIT: "1"
+          NETMEDIC_USE_HELPER: "0"
+          NO_AT_BRIDGE: "1"
+        run: xvfb-run -a python -m pytest tests/ -q
 
       - name: Build release assets
         run: |
@@ -41,7 +47,7 @@ jobs:
           TAG="${GITHUB_REF_NAME#v}"
           ./scripts/prepare_release_assets.sh "$TAG"
 
-      - name: Sign checksums (optional)
+      - name: Sign checksums (required on tags)
         env:
           RELEASE_GPG_PRIVATE_KEY: ${{ secrets.RELEASE_GPG_PRIVATE_KEY }}
           RELEASE_GPG_KEY_ID: ${{ secrets.RELEASE_GPG_KEY_ID }}
@@ -53,16 +59,18 @@ jobs:
               --output dist/SHA256SUMS.asc \
               dist/SHA256SUMS
           else
-            echo "GPG signing skipped (secrets not configured)."
+            echo "::error::GPG signing required for v* releases but secrets missing (RELEASE_GPG_PRIVATE_KEY/KEY_ID)."
+            exit 1
           fi
 
       - name: Stage release artifacts
         run: |
           mkdir -p release-upload
           cp dist/netmedic dist/SHA256SUMS dist/sbom-python-*.txt release-upload/
-          if [ -f dist/SHA256SUMS.asc ]; then
-            cp dist/SHA256SUMS.asc release-upload/
+          if ls dist/sbom-cyclonedx-*.json >/dev/null 2>&1; then
+            cp dist/sbom-cyclonedx-*.json release-upload/
           fi
+          cp dist/SHA256SUMS.asc release-upload/
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2

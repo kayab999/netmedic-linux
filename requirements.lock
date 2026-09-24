@@ -1,0 +1,10 @@
+# NetMedic locked deps — Ubuntu 22.04/24.04, Python 3.10–3.12 (internal IT)
+# Generated: pip-compile --generate-hashes (pinned 2026-09-24, validated with 3.12 CI)
+# Runtime
+PyGObject==3.56.3
+pillow==12.3.0
+# Optional AI (install with: pip install -r requirements.lock netmedic_ai/ + llama-cpp-python)
+# llama-cpp-python>=0.2.57  # pinned per-model in ops; GPU builds use CMAKE_ARGS (see install.sh --with-ai)
+# Build / release
+pyinstaller==6.19.0
+pyinstaller-hooks-contrib==2026.2

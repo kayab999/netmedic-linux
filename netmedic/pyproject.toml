@@ -9,10 +9,11 @@ authors = [
     { name = "Kayab Software", email = "support@kayabsoftware.com" },
 ]
 description = "Professional network diagnostics, repair, and infrastructure management for Linux."
-requires-python = ">=3.8"
+# Breaking (1.6.0): floor 3.10 — 3.8 EOL, Pillow>=10/PyGObject>=3.42, X|Y typing, CI 3.10-3.12 on Ubuntu 22.04/24.04
+requires-python = ">=3.10,<3.13"
 dependencies = [
-    "PyGObject",
-    "pillow",
+    "PyGObject>=3.42",
+    "pillow>=10.0",
 ]
 
 [project.scripts]

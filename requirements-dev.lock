@@ -1,0 +1,8 @@
+# NetMedic dev/test lock — CI pins 3.10/3.11/3.12
+-r requirements.lock
+pytest==9.1.0
+pytest-cov==7.1.0
+ruff==0.15.12
+mypy==1.18.2
+pip-audit==2.10.0
+cyclonedx-bom==8.6.2
