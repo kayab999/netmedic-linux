@@ -1,8 +1,22 @@
 [lint]
-select = ["E", "F"]
-ignore = ["E501"]
+select = ["E", "F", "B", "S"]
+ignore = [
+  "E501",
+  # S101: pytest uses assert pervasively — gated by guardian tests, not bandit
+  "S101",
+  # S603/S607: subprocess argv-only (no shell) with fixed-verb allowlist;
+  # full paths resolved via helper/pkexec. See helper_verbs.py + system.py allowlist.
+  "S603",
+  "S607",
+  # S110/S112: best-effort teardown/probe paths log nearby or are intentionally silent
+  "S110",
+  "S112",
+  # S108: sealed VPN staging uses XDG_RUNTIME_DIR/netmedic (0700), not world /tmp
+  "S108",
+]
 
 [lint.per-file-ignores]
+# E402: PyGObject requires gi.require_version() before from gi.repository import — not circular debt
 "netmedic/netmedic/gui.py" = ["E402"]
 "netmedic/netmedic/theme.py" = ["E402"]
 "netmedic/netmedic/ui.py" = ["E402", "E701"]
@@ -13,3 +27,10 @@ ignore = ["E501"]
 "tests/test_ai_package.py" = ["E402"]
 "tests/test_guardrail_params.py" = ["E402"]
 "tools/netmedic_mcp.py" = ["E402"]
+# Test fixtures use fake tokens — not real secrets
+"tests/test_audit_log.py" = ["S105"]
+"tests/test_ipc_sync_client.py" = ["S105"]
+# Own policy XML, trusted local file — not untrusted input
+"tests/test_policy_and_catalog_contract.py" = ["S314"]
+# netns sim binds 0.0.0.0 inside isolated netns (hermetic, trap EXIT) — intentional
+"tools/netmedic-sim/micro_dns.py" = ["S104"]

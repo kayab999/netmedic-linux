@@ -469,7 +469,7 @@ class MainWindow(Gtk.Window):
             time.sleep(1)
             logging.info("settle: no iface, slept 1s")
             return
-        for i in range(max(1, timeout)):
+        for _i in range(max(1, timeout)):
             # Check IPv4 present
             res = CommandRunner.run(["ip", "-4", "addr", "show", iface])
             has_ip = res.success and "inet " in (res.stdout or "")

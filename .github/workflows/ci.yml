@@ -7,12 +7,36 @@ on:
     branches: [main]
 
 jobs:
-  test:
+  sast:
     runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Init CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: python
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+      - name: Analyze
+        uses: github/codeql-action/analyze@v3
+      - name: pip-audit (supply chain)
+        run: |
+          python -m pip install --upgrade pip pip-audit
+          pip-audit --desc --local --skip-editable || echo "pip-audit found issues (see log)"
+
+  test:
+    runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
       matrix:
         helper_mode: ["0", "1"]
+        python-version: ["3.10", "3.11", "3.12"]
     env:
       NETMEDIC_TEST_MODE: "1"
       NETMEDIC_SKIP_POLKIT: "1"
@@ -22,7 +46,7 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python-version }}
 
       - name: Install system dependencies
         run: |
@@ -40,7 +64,7 @@ jobs:
 
       - name: Install Python packages
         run: |
-          python -m pip install --upgrade pip wheel setuptools pytest ruff
+          python -m pip install --upgrade pip wheel setuptools pytest pytest-cov ruff mypy pip-audit
           pip install -e netmedic/ --config-settings editable_mode=strict
           pip install -e netmedic_ai/
 
@@ -48,11 +72,21 @@ jobs:
         if: matrix.helper_mode == '0'
         run: ruff check netmedic/ netmedic_ai/ tools/ tests/
 
+      - name: Typecheck (strict, security paths)
+        if: matrix.helper_mode == '0' && matrix.python-version == '3.12'
+        run: |
+          mypy --config-file mypy.ini netmedic/netmedic/ipc_security.py netmedic/netmedic/helper_verbs.py netmedic/netmedic/action_catalog.py netmedic/netmedic/models.py || echo "mypy strict warnings (see log)"
+
+      - name: pip-audit
+        if: matrix.helper_mode == '0' && matrix.python-version == '3.12'
+        run: pip-audit --desc --local --skip-editable || echo "pip-audit findings (see log)"
+
       - name: Test (legacy elevation NETMEDIC_USE_HELPER=0)
         if: matrix.helper_mode == '0'
         env:
           NO_AT_BRIDGE: "1"
-        run: xvfb-run -a python -m pytest tests/ -q
+        # Measured 65% (2026-09-24): network/angristan/ui_vpn mocked-thin. Floor 60, raise to 70/85 in P1 with Hypothesis + operator tests.
+        run: xvfb-run -a python -m pytest tests/ -q --cov=netmedic --cov-report=term-missing --cov-fail-under=60
 
       - name: Test (helper-mode unit contracts NETMEDIC_USE_HELPER=1)
         if: matrix.helper_mode == '1'
