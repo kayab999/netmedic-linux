@@ -272,3 +272,25 @@ def test_vpn_run_script_rejects_non_normalized():
             "vpn-run-script",
             {"script": "/tmp/a/../x.sh", "expected_sha256": "ab" * 32, "env": {}},
         )
+
+
+def test_vpn_run_script_rejects_bad_env_key():
+    """Mutation-hardening: env key allowlist must reject shell-ish names."""
+    with pytest.raises(VerbValidationError):
+        plan_verb(
+            "vpn-run-script",
+            {
+                "script": "/tmp/openvpn-install.sh",
+                "expected_sha256": "ab" * 32,
+                "env": {"BAD-KEY!": "1"},
+            },
+        )
+    with pytest.raises(VerbValidationError):
+        plan_verb(
+            "vpn-run-script",
+            {
+                "script": "/tmp/openvpn-install.sh",
+                "expected_sha256": "ab" * 32,
+                "env": {"ok_key": "a\nb"},
+            },
+        )

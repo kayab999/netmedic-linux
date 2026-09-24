@@ -263,3 +263,63 @@ def test_vpn_install_and_start_via_ipc(mock_vpn_cls):
     )
     assert ok_start["status"] == "ok"
     mock_vpn.start_service.assert_called_once()
+
+
+def test_privileged_rejects_foreign_peer_uid():
+    """Mutation-hardening: peer check bypass must fail at dispatch level."""
+    medic = MagicMock()
+    medic.flush_dns.return_value = NetResult("DNS", True, "flushed")
+    session = IPCSession()
+    token = session.issue_token()
+    dispatch = create_action_dispatcher(medic, session)
+    result = dispatch(
+        "flush_dns",
+        {"confirmed": True, "session_token": token},
+        peer_uid=65534,
+        peer_pid=1,
+    )
+    assert result["status"] == "error"
+    assert result.get("requires_peer_auth") is True
+    medic.flush_dns.assert_not_called()
+
+
+def test_privileged_rejects_empty_token():
+    """Mutation-hardening: empty session_token must not authorize."""
+    medic = MagicMock()
+    session = IPCSession()
+    session.issue_token()
+    dispatch = create_action_dispatcher(medic, session)
+    result = dispatch("flush_dns", {"confirmed": True, "session_token": ""}, **_PEER)
+    assert result["status"] == "error"
+    assert "token" in result["message"].lower()
+    medic.flush_dns.assert_not_called()
+
+
+def test_validate_privileged_rejects_foreign_peer_direct():
+    """Mutation-hardening: the peer gate inside validate_privileged is a
+    second, independent check behind dispatch's own gate (defense in depth)."""
+    session = IPCSession()
+    token = session.issue_token()
+    err = session.validate_privileged(
+        "flush_dns",
+        {"confirmed": True, "session_token": token},
+        peer_uid=65534,
+        peer_pid=1,
+    )
+    assert err is not None
+    assert err.get("requires_peer_auth") is True
+
+
+def test_validate_privileged_rejects_empty_token_untokened(tmp_path, monkeypatch):
+    """Mutation-hardening: with no session token issued, empty supplied
+    token must be rejected (the length check alone would compare ''=='')."""
+    monkeypatch.setattr("netmedic.config.Config.get_state_dir", lambda: tmp_path)
+    session = IPCSession()
+    err = session.validate_privileged(
+        "flush_dns",
+        {"confirmed": True, "session_token": ""},
+        peer_uid=os.getuid(),
+        peer_pid=os.getpid(),
+    )
+    assert err is not None
+    assert "token" in err["message"].lower()
