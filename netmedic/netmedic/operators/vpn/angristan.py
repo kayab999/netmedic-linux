@@ -2,6 +2,7 @@ import logging
 import os
 import re
 import hashlib
+import secrets
 from pathlib import Path
 
 from netmedic.models import CommandResult, NetResult, ResultCode
@@ -96,8 +97,6 @@ class AngristanOperator(VPNOperator):
         3) re-hashing the sealed path immediately before pkexec.
         Same-UID residual risk remains (documented in threat model).
         """
-        import tempfile
-
         try:
             fd = os.open(str(self.script_path), os.O_RDONLY)
         except OSError as exc:
@@ -108,7 +107,9 @@ class AngristanOperator(VPNOperator):
             if self._hash_file_fd(fd) != self.EXPECTED_SHA256:
                 return CommandResult(False, 126, "", "Security abort: Script integrity failure.", [])
 
-            runtime = os.environ.get("XDG_RUNTIME_DIR") or tempfile.gettempdir()
+            runtime = os.environ.get("XDG_RUNTIME_DIR")
+            if not runtime:
+                return CommandResult(False, 2, "", "Refusing VPN sealed staging without XDG_RUNTIME_DIR (no /tmp fallback).", [])
             sealed_dir = Path(runtime) / "netmedic"
             sealed_dir.mkdir(mode=0o700, exist_ok=True)
             try:
@@ -116,9 +117,7 @@ class AngristanOperator(VPNOperator):
             except OSError:
                 pass
 
-            sealed_path = sealed_dir / f"openvpn-install.{os.getpid()}.{os.getuid()}.sh"
-            if sealed_path.exists():
-                sealed_path.unlink()
+            sealed_path = sealed_dir / f"openvpn-install.{os.getpid()}.{os.getuid()}.{secrets.token_hex(4)}.sh"
             out_fd = os.open(
                 str(sealed_path),
                 os.O_WRONLY | os.O_CREAT | os.O_EXCL,
@@ -188,7 +187,7 @@ class AngristanOperator(VPNOperator):
 
     def _download_script(self) -> NetResult:
         logger.info(f"Downloading installer from {self.SCRIPT_URL}")
-        cmd = ["curl", "-sS", "-L", "-o", str(self.script_path), self.SCRIPT_URL]
+        cmd = ["curl", "--proto=https", "--tlsv1.2", "--retry", "3", "-sS", "-L", "-o", str(self.script_path), self.SCRIPT_URL]
         res = CommandRunner.run(cmd, timeout=60)
         
         if not res.success:

@@ -26,10 +26,14 @@ class PilotoGuardrail:
         tool = registry.get_tool(action_name)
 
         try:
+            safe_params = {
+                k: ("<redacted>" if any(s in k.lower() for s in ("password", "pass", "token", "key", "secret", "auth")) else (v[:500] + "...[truncated]" if isinstance(v, str) and len(v) > 500 else v))
+                for k, v in params.items()
+            }
             logger.info(
                 "Pilot executing: %s with parameters %s",
                 action_name,
-                params,
+                safe_params,
             )
             result = tool["impl"](**params)
             if isinstance(result, str) and result.startswith("Error:"):

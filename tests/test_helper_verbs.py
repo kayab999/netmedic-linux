@@ -239,3 +239,36 @@ def test_validate_iface():
     assert validate_iface("wlan0") == "wlan0"
     with pytest.raises(VerbValidationError):
         validate_iface("../etc")
+
+
+def test_service_allowlist_rejects_arbitrary():
+    from netmedic.helper_verbs import validate_service
+
+    with pytest.raises(VerbValidationError, match="allowlisted"):
+        validate_service("ssh.service")
+    with pytest.raises(VerbValidationError, match="allowlisted"):
+        validate_service("NetworkManager.service")
+    with pytest.raises(VerbValidationError):
+        plan_verb("vpn-start-service", {"service": "dbus.service"})
+
+
+def test_service_allowlist_accepts_openvpn():
+    from netmedic.helper_verbs import validate_service
+
+    assert validate_service("openvpn-server@server.service") == "openvpn-server@server.service"
+    assert validate_service("openvpn-server@client2.service") == "openvpn-server@client2.service"
+    plan = plan_verb("vpn-restart-service", {"service": "openvpn-server@client2.service"})
+    assert plan.commands == [["systemctl", "restart", "openvpn-server@client2.service"]]
+
+
+def test_vpn_run_script_rejects_non_normalized():
+    with pytest.raises(VerbValidationError):
+        plan_verb(
+            "vpn-run-script",
+            {"script": "/tmp//x.sh", "expected_sha256": "ab" * 32, "env": {}},
+        )
+    with pytest.raises(VerbValidationError):
+        plan_verb(
+            "vpn-run-script",
+            {"script": "/tmp/a/../x.sh", "expected_sha256": "ab" * 32, "env": {}},
+        )

@@ -88,7 +88,15 @@ class Config:
 
         Production must not set this. Tests set NETMEDIC_ALLOW_LEGACY_ELEVATION=1
         together with NETMEDIC_USE_HELPER=0.
+        Fail-closed when running as root: env override ignored.
         """
+        try:
+            if os.geteuid() == 0:
+                if os.environ.get("NETMEDIC_ALLOW_LEGACY_ELEVATION"):
+                    logger.warning("Ignoring NETMEDIC_ALLOW_LEGACY_ELEVATION when euid==0")
+                return False
+        except Exception:
+            pass
         return os.environ.get("NETMEDIC_ALLOW_LEGACY_ELEVATION", "").lower() in (
             "1",
             "true",
@@ -98,9 +106,15 @@ class Config:
     @staticmethod
     def get_helper_path() -> Path:
         """Resolve netmedic-helper executable path."""
+        try:
+            is_root = os.geteuid() == 0
+        except Exception:
+            is_root = False
         override = os.environ.get("NETMEDIC_HELPER_PATH")
-        if override:
+        if override and not is_root:
             return Path(override)
+        if override and is_root:
+            logger.warning("Ignoring NETMEDIC_HELPER_PATH when euid==0")
         if Config.SYSTEM_HELPER_PATH.is_file():
             return Config.SYSTEM_HELPER_PATH
         if Config.SYSTEM_HELPER_ALT_PATH.is_file():

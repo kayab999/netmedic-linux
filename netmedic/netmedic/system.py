@@ -15,6 +15,8 @@ logger = logging.getLogger(__name__)
 
 # Basenames allowed under require_root=True. Path is resolved via shutil.which
 # or absolute path; argv shape is still caller-controlled within these tools.
+# NOTE: bash/sh removed (P0 hardening) — no legit elevated path needs a shell;
+# VPN scripts run via `env VAR=... /abs/path` + SHA256 sealed copy in helper.
 _ROOT_ALLOWED_BINARIES: FrozenSet[str] = frozenset({
     "pkexec",  # never used as target; elevation wrapper only
     "resolvectl",
@@ -25,8 +27,6 @@ _ROOT_ALLOWED_BINARIES: FrozenSet[str] = frozenset({
     "ufw",
     "cat",
     "env",  # Angristan script launcher: env VAR=... /path/to/script
-    "bash",
-    "sh",
 })
 
 

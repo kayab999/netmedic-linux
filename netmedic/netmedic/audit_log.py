@@ -19,13 +19,23 @@ def get_audit_log_path():
     return Config.get_state_dir() / "audit.log"
 
 
+_SENSITIVE_SUBSTR = ("password", "pass", "token", "key", "secret", "auth")
+_MAX_PARAM_STR = 500
+
+
+def _redact_value(key: str, value: Any) -> Any:
+    kl = key.lower()
+    if key == "session_token" or any(s in kl for s in _SENSITIVE_SUBSTR):
+        return "<redacted>"
+    if isinstance(value, str) and len(value) > _MAX_PARAM_STR:
+        return value[:_MAX_PARAM_STR] + "...[truncated]"
+    return value
+
+
 def _sanitize_params(params: Dict[str, Any]) -> Dict[str, Any]:
     safe: Dict[str, Any] = {}
     for key, value in params.items():
-        if key == "session_token":
-            safe[key] = "<redacted>"
-        else:
-            safe[key] = value
+        safe[key] = _redact_value(key, value)
     return safe
 
 

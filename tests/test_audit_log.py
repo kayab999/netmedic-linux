@@ -79,3 +79,30 @@ def test_safe_action_does_not_write_audit(tmp_path, monkeypatch):
     dispatch = create_action_dispatcher(medic, IPCSession())
     dispatch("firewall_status", {}, peer_uid=os.getuid(), peer_pid=1)
     assert not get_audit_log_path().exists()
+
+
+def test_audit_redacts_sensitive_keys(tmp_path, monkeypatch):
+    from netmedic.audit_log import _sanitize_params
+
+    safe = _sanitize_params(
+        {
+            "session_token": "abc",
+            "password": "secret123",
+            "api_key": "k",
+            "user_request": "hi",
+            "iface": "eth0",
+        }
+    )
+    assert safe["session_token"] == "<redacted>"
+    assert safe["password"] == "<redacted>"
+    assert safe["api_key"] == "<redacted>"
+    assert safe["iface"] == "eth0"
+
+
+def test_audit_truncates_long_strings(tmp_path, monkeypatch):
+    from netmedic.audit_log import _sanitize_params
+
+    long_val = "a" * 600
+    safe = _sanitize_params({"user_request": long_val})
+    assert len(safe["user_request"]) <= 500 + len("...[truncated]")
+    assert safe["user_request"].endswith("...[truncated]")

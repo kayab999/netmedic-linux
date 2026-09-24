@@ -107,6 +107,10 @@ def validate_conn_name(name: str) -> str:
 def validate_service(name: str) -> str:
     if not _SERVICE_RE.fullmatch(name):
         raise VerbValidationError(f"Invalid service name: {name!r}")
+    # Allowlist: only OpenVPN server units + NetworkManager (fixed reset-stack uses
+    # NetworkManager directly; param path is VPN-only). Prevents `systemctl restart <arbitrary>`.
+    if not (name.startswith("openvpn-server@") and name.endswith(".service")):
+        raise VerbValidationError(f"Service not allowlisted (want openvpn-server@*.service): {name!r}")
     return name
 
 
@@ -208,8 +212,13 @@ def plan_verb(verb: str, args: Optional[Mapping[str, Any]] = None) -> VerbPlan:
 
     if verb == "vpn-run-script":
         script = _require_str(args, "script") or ""
-        if ".." in script or not script.startswith("/"):
+        import os as _os
+        if ".." in script.split("/") or not script.startswith("/") or "//" in script:
             raise VerbValidationError("vpn-run-script requires an absolute script path")
+        if _os.path.normpath(script) != script:
+            raise VerbValidationError("vpn-run-script path must be normalized")
+        # Canonicalization is enforced at exec time via SHA256 sealed-copy re-hash
+        # (helper_main re-hashes FD before exec); planning stage rejects tricks above.
         expected_sha = _require_str(args, "expected_sha256") or ""
         if not re.fullmatch(r"[0-9a-f]{64}", expected_sha):
             raise VerbValidationError("expected_sha256 must be 64 lowercase hex chars")
