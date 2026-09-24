@@ -1,3 +1,17 @@
+# Release Notes — NetMedic v1.6.0-rc2
+
+Honest-repair release: `NetResult.code` is source of truth, TCP-only `internet_ok` (ICMP no longer counts), `VERBS.md` live contract + guardian tests, `probes.py` single-source, `netns-golden` harness (A WAN-drop + B TCP-block), `--status/--status-json` health CLI. Breaking: Smart Repair `SKIPPED/PARTIAL` semantics, IPC 1.0→1.1 (`+code`). See CHANGELOG for RC1/RC2 fixes.
+
+Requirements (v1.6): Ubuntu 22.04/24.04, Python 3.10–3.12, GTK3 + NetworkManager + PolicyKit. Python 3.8 compat is best-effort, CI pins 3.10–3.12.
+
+---
+
+# Release Notes — NetMedic v1.5.0
+
+Phase D privileged helper cutover: production root work only via `netmedic-helper` fixed verbs (`pkexec /usr/libexec/netmedic/helper <verb>`), single interactive polkit prompt, `NETMEDIC_ALLOW_LEGACY_ELEVATION` tests-only, system-owned helper at `/usr/lib/netmedic`. See CHANGELOG.
+
+---
+
 # Release Notes — NetMedic v1.4.1
 
 Security hardening release on the v1.4 platform: polkit subject fix, GUI→IPC

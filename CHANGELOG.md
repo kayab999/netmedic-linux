@@ -4,6 +4,9 @@ All notable changes to NetMedic Linux are documented here.
 
 ## [Unreleased]
 
+### Breaking
+- **Python `>=3.10,<3.13` (was `>=3.8`):** intentional per internal-IT Narrow+Pin (Ubuntu 22.04/24.04, CI 3.10/3.11/3.12). Affected: Ubuntu 20.04 (3.8), Debian 11 (3.9) — pin to `v1.5.x` for these platforms (security fixes only). Rationale: Python 3.8 EOL Oct 2024, `pillow>=10`/`PyGObject>=3.42` pins, `X|Y` typing + `match` readiness, matrix cost. Not a SemVer major: pre-1.6.0-final RC series, documented here + `README.md` + `docs/RELEASE_NOTES.md`.
+
 ### Fixed
 - Smart Repair crashed with `'dict' object has no attribute 'lower'` on failed diagnostics (WAN unplug): `payload_to_net_result` called `.lower()` on dict `details`.
 - `scripts/netns-golden.sh` no longer treats vacuous skips as success: pytest logs must contain the expected `passed` counts.
@@ -20,8 +23,6 @@ All notable changes to NetMedic Linux are documented here.
 ## [1.6.0] — 2026-09-08 — RC1 v1.6.0-rc1
 
 > **SemVer:** breaking (Smart Repair contract, `NetResult.code`, IPC 1.1). Minor bump, not patch. Previous `v1.5.1-rc1` deleted — use `v1.6.0-rc1`.
-
-## [Unreleased]
 
 ### Breaking
 - **Smart Repair semantics reverted with cause (replaces 1.1.1 ratio):** pre-diag no longer counts in repairs ratio; repairs `2/2` + `pre/post` delta, `SKIPPED` when healthy, `PARTIAL` distinct (docs: VERBS.md §5). Update tests in same PR (contract change).

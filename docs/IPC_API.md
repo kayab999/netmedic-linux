@@ -1,6 +1,8 @@
-# NetMedic IPC API v1.0
+# NetMedic IPC API v1.1
 
 NetMedic exposes a local Unix socket API for automation, MCP, AI, and third-party clients. The GUI is one client; the IPC core is the platform contract.
+
+> v1.1 (additive): adds `code: ResultCode` to privileged responses. `success` is a legacy shim derived from `code` — new clients must use `code`.
 
 ## Transport
 
@@ -20,8 +22,10 @@ NetMedic exposes a local Unix socket API for automation, MCP, AI, and third-part
 ## Response format
 
 ```json
-{"status": "ok", "success": true, "message": "...", "operation": "..."}
+{"status": "ok", "success": true, "code": "ok", "message": "...", "operation": "..."}
 ```
+
+`code` is source of truth (`ok|executed|partial|failed|skipped|error|cancelled` — see `VERBS.md §2`). `success` is deprecated shim (`true` for `ok/executed`, `false` otherwise).
 
 Errors include `"status": "error"` and a `"message"`. Privileged denials may add `requires_confirmation`, `requires_polkit`, or `requires_peer_auth`.
 
@@ -56,6 +60,8 @@ Note: `vpn_list_clients` is privileged because it elevates to read the EasyRSA P
 Policy definitions: `assets/com.kayab.netmedic.policy`.
 
 ## Machine-readable schema
+
+API version `1.1` (see `netmedic/ipc_schema.py: export_schema()`).
 
 ```python
 from netmedic.ipc_schema import export_schema

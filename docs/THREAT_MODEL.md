@@ -1,8 +1,8 @@
-# NetMedic Threat Model (v1.4)
+# NetMedic Threat Model (v1.6)
 
 ## Scope
 
-NetMedic is a single-user desktop privileged operations platform. This document describes trust boundaries for v1.5.0 (Phase D helper cutover).
+NetMedic is a single-user desktop privileged operations platform. This document describes trust boundaries for v1.6.0 (Phase D helper cutover + honest-repair ResultCode).
 
 ## Actors
 
@@ -23,7 +23,7 @@ NetMedic is a single-user desktop privileged operations platform. This document 
 - IPC session token file (`~/.local/state/netmedic/ipc.token`)
 - Privileged action audit log (`~/.local/state/netmedic/audit.log`)
 
-## Mitigations (v1.5 / Phase D)
+## Mitigations (v1.6 / Phase D + honest repair)
 
 1. **Single elevation path** — Production root work goes through `netmedic-helper` fixed verbs via `pkexec` (annotated `exec.path` = `/usr/libexec/netmedic/helper`). Direct `CommandRunner.run(..., require_root=True)` is blocked unless `NETMEDIC_ALLOW_LEGACY_ELEVATION=1` (tests only).
 2. **One interactive polkit prompt** — With the helper installed, IPC validates peer + session token + `confirmed` only; interactive polkit is deferred to helper `pkexec` (avoids double prompts).

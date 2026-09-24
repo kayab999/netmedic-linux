@@ -77,7 +77,7 @@ pkaction --action-id com.kayab.netmedic.flush-dns
 netmedic-linux/
 ├── netmedic/          # Core application package
 ├── netmedic_ai/       # Optional AI pilot module
-├── tests/             # Test suite (160+ tests)
+├── tests/             # Test suite (222 tests, 52 files)
 ├── docs/              # User & developer documentation
 ├── scripts/           # Build & packaging scripts
 ├── assets/            # Icon and desktop entry template
@@ -98,6 +98,7 @@ netmedic-linux/
 | [IPC API](docs/IPC_API.md) | Integration guide for automation clients |
 | [Threat Model](docs/THREAT_MODEL.md) | Trust boundaries and residual risks |
 | [Privileged Helper](docs/PRIVILEGED_HELPER.md) | v1.5 design: fixed-argv elevation |
+| [Ops Runbook](docs/OPS.md) | Install, health, headless, audit, env matrix (internal IT) |
 | [Contributing](CONTRIBUTING.md) | Contribution guidelines |
 | [Changelog](CHANGELOG.md) | Version history |
 | [Roadmap](docs/ROADMAP.md) | Future plans |
@@ -120,8 +121,8 @@ See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for details.
 
 ## System Requirements
 
-- **OS:** Linux (Debian/Ubuntu, Fedora, Arch tested)
-- **Python:** 3.8+
+- **OS:** Ubuntu 22.04/24.04 (primary; Debian/Fedora/Arch best-effort)
+- **Python:** 3.10–3.12 (pinned in CI; see `requirements.lock`)
 - **System packages:** GTK3, GObject introspection, NetworkManager (`nmcli`), PolicyKit
 - **Optional AI:** `llama-cpp-python`, ~950 MB GGUF model (not bundled in repo)
 
@@ -134,7 +135,7 @@ See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for details.
 - Structured audit log at `~/.local/state/netmedic/audit.log` (mode 600)
 - Commands requiring root use `pkexec` (no setuid)
 - Sensitive arguments are redacted in application logs and audit records
-- Release binaries ship with `SHA256SUMS` and Python SBOM; optional GPG signature
+- Release binaries ship with `SHA256SUMS` and Python SBOM (freeze + CycloneDX); GPG signature required on `v*` tags
 
 ---
 
