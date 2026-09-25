@@ -38,7 +38,16 @@ chmod +x scripts/check-deps.sh
 echo -e "${BLUE}[1/6] Detecting system dependencies...${NC}"
 if [ -f /etc/debian_version ]; then
     sudo apt-get update -qq || true
-    pkgs="python3-venv python3-dev libgirepository-2.0-dev libcairo2-dev gir1.2-gtk-3.0 network-manager iproute2 curl iputils-ping policykit-1"
+    # noble (24.04+) renamed the gir dev package; jammy (22.04) uses the 1.0 name.
+    gir_dev="libgirepository-2.0-dev"
+    if [ -f /etc/os-release ]; then
+        # shellcheck disable=SC1091
+        . /etc/os-release
+        case "${VERSION_ID:-}" in
+            22.04) gir_dev="libgirepository1.0-dev" ;;
+        esac
+    fi
+    pkgs="python3-venv python3-dev $gir_dev libcairo2-dev gir1.2-gtk-3.0 network-manager iproute2 curl iputils-ping policykit-1"
     install_cmd="sudo apt-get install -y $pkgs"
 elif [ -f /etc/fedora-release ]; then
     pkgs="python3-devel gobject-introspection-devel cairo-gobject-devel gtk3 NetworkManager iproute curl iputils policykit"
@@ -48,7 +57,7 @@ elif [ -f /etc/arch-release ]; then
     install_cmd="sudo pacman -S --noconfirm $pkgs"
 else
     echo -e "${RED}Unsupported distro for automatic dependency install.${NC}"
-    echo "Install Python 3.8+, GTK3, NetworkManager, and GObject introspection headers manually."
+    echo "Install Python 3.10-3.12, GTK3, NetworkManager, and GObject introspection headers manually."
     install_cmd="true"
 fi
 $install_cmd
@@ -60,7 +69,7 @@ if [ "$RECREATE_VENV" -eq 1 ]; then
 fi
 # shellcheck disable=SC1091
 source venv/bin/activate
-pip install --upgrade pip wheel setuptools pytest ruff
+pip install --upgrade pip wheel setuptools pytest pytest-cov ruff hypothesis
 
 echo -e "${BLUE}[3/6] Installing NetMedic core...${NC}"
 pip install PyGObject

@@ -1,4 +1,4 @@
-# Release Checklist — v1.6.0 Soak Gate
+# Release Checklist — v1.6.0 Soak Gate (closed 2026-09-25: shipped with partial physical soak; `netns-golden` A+B in CI is the standing regression gate — see ROADMAP)
 
 > Soak exit criteria (must pass before `v1.6.0` final — not dates, but evidence):
 > - **p95 `settle` < 5s and p95 `recheck` < 10s** (from `ui.py:456` `logging.info settle %ss` + diag timing; budget PR3 ~15s worst case). Extract mechanically, not by reading:
@@ -21,7 +21,7 @@ Use this checklist before tagging a public release.
 - [ ] Automated smoke: `./scripts/smoke_release.sh` (version, helper dry-run, pytest)
 - [ ] Netns goldens: `sudo ./scripts/netns-golden.sh` (A WAN-drop + B TCP-blocked/ICMP-ok → PARTIAL). CI job `netns-golden` must be green.
 - [ ] All tests pass: `venv/bin/python -m pytest tests/ -v`
-- [ ] Linter clean: `venv/bin/ruff check netmedic/ netmedic_ai/ tests/`
+- [ ] Linter clean: `venv/bin/ruff check netmedic/ netmedic_ai/ tools/ tests/`
 - [ ] Version aligned in `netmedic/pyproject.toml`, `netmedic_ai/`, `CHANGELOG.md`, `README.md`, `docs/RELEASE_NOTES.md`
 - [ ] Policy contract: privileged actions ⊆ polkit XML with helper `exec.path` annotate
 

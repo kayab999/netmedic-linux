@@ -4,6 +4,8 @@ All notable changes to NetMedic Linux are documented here.
 
 ## [Unreleased]
 
+## [1.6.0] — 2026-09-25 — final (tag `v1.6.0`)
+
 ### Breaking
 - **Python `>=3.10,<3.13` (was `>=3.8`):** intentional per internal-IT Narrow+Pin (Ubuntu 22.04/24.04, CI 3.10/3.11/3.12). Affected: Ubuntu 20.04 (3.8), Debian 11 (3.9) — pin to `v1.5.x` for these platforms (security fixes only). Rationale: Python 3.8 EOL Oct 2024, `pillow>=10`/`PyGObject>=3.42` pins, `X|Y` typing + `match` readiness, matrix cost. Not a SemVer major: pre-1.6.0-final RC series, documented here + `README.md` + `docs/RELEASE_NOTES.md`.
 

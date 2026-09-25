@@ -2,7 +2,7 @@
 
 Professional network diagnostics, repair, and infrastructure management for Linux. NetMedic combines a GTK3 interface with a hardened privileged IPC core, optional AI orchestration, and VPN lifecycle management.
 
-**Version:** 1.6.0-rc2 · **License:** [MIT](LICENSE)
+**Version:** 1.6.0 · **License:** [MIT](LICENSE)
 
 ---
 
@@ -77,13 +77,15 @@ pkaction --action-id com.kayab.netmedic.flush-dns
 netmedic-linux/
 ├── netmedic/          # Core application package
 ├── netmedic_ai/       # Optional AI pilot module
-├── tests/             # Test suite (222 tests, 52 files)
+├── tests/             # Test suite (438 tests, 57 files; 436 passed, 2 root-only netns skips)
 ├── docs/              # User & developer documentation
 ├── scripts/           # Build & packaging scripts
 ├── assets/            # Icon and desktop entry template
 ├── tools/             # Optional integrations (MCP server)
 ├── install.sh         # Source installer
-└── netmedic.spec      # PyInstaller specification
+├── netmedic.spec      # PyInstaller specification
+├── packaging/         # Debian skeleton (deb/rpm P1 backlog)
+└── Dockerfile.build   # Reproducible container build
 ```
 
 ---
@@ -110,7 +112,8 @@ netmedic-linux/
 ```bash
 ./install.sh                              # Full setup + test run
 venv/bin/python -m pytest tests/ -v
-venv/bin/ruff check netmedic/ netmedic_ai/ tests/
+venv/bin/ruff check netmedic/ netmedic_ai/ tools/ tests/
+venv/bin/mypy --config-file mypy.ini netmedic/netmedic/ipc_security.py netmedic/netmedic/helper_verbs.py
 ./scripts/build_binary.sh                 # PyInstaller build
 ./scripts/prepare_release_assets.sh       # Binary + SHA256SUMS + SBOM
 ```

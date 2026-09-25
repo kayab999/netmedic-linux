@@ -45,6 +45,8 @@ Single instance via `flock`. Stale lock reaped on PID death. Socket `ipc.sock 06
 | `NETMEDIC_SKIP_POLKIT` | **unset** | `1` + `NETMEDIC_TEST_MODE=1` |
 | `NETMEDIC_MCP_ALLOW_MUTATING` | unset unless intentional | — |
 | `NETMEDIC_HELPER_PATH` | unset (use `/usr/libexec/...`) | dev override; ignored when `euid==0` |
+| `NETMEDIC_POST_REPAIR_VERIFY` | unset (default ON) | `0` debug-only: repairs report `EXECUTED`, never `OK` |
+| `NETMEDIC_TEST_MODE` | **unset** | `1` to honor `SKIP_POLKIT` in tests |
 
 Overrides are ignored when running as root (fail-closed, warning logged).
 

@@ -264,7 +264,23 @@ def _done_future(task_result=None, exc=None):
 
 
 def test_run_async_task_success_and_error(win):
+    from concurrent.futures import Future
+
     w, _ = win
+
+    class InlineExecutor:
+        def submit(self, fn):
+            fut: Future = Future()
+            try:
+                fut.set_result(fn())
+            except Exception as exc:  # noqa: BLE001 — mirrors task_wrapper
+                fut.set_exception(exc)
+            return fut
+
+    # NOTE: the real ThreadPoolExecutor would run on_task_done (and its Gtk
+    # dialogs, via immediate idle_add) on a worker thread -> segfault under
+    # coverage. Inline keeps everything on the test thread.
+    w.executor = InlineExecutor()
     w.run_async_task(lambda: _nr("T", True, "fine"))
     w.run_async_task(lambda: 1 / 0, msg="Boom")
 

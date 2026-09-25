@@ -7,10 +7,10 @@ Thank you for your interest in contributing. NetMedic is built on principles of 
 1. Fork the repository and clone locally.
 2. Run `./install.sh` to set up the development environment.
 3. Create a feature branch: `git checkout -b feature/your-feature`.
-4. Make changes and ensure tests pass:
+4. Make changes and ensure tests pass (Python 3.10–3.12, see `requirements-dev.lock`):
    ```bash
-   PYTHONPATH="netmedic:." venv/bin/python -m pytest tests/ -v
-   venv/bin/ruff check netmedic/ netmedic_ai/ tests/
+   venv/bin/python -m pytest tests/ -v
+   venv/bin/ruff check netmedic/ netmedic_ai/ tools/ tests/
    ```
 5. Submit a pull request with a clear description of changes.
 

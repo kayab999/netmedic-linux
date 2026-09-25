@@ -35,9 +35,12 @@ fi
 PY_VERSION="$(python3 -c 'import sys; print(".".join(map(str, sys.version_info[:2])))')"
 PY_MAJOR="$(echo "$PY_VERSION" | cut -d. -f1)"
 PY_MINOR="$(echo "$PY_VERSION" | cut -d. -f2)"
-if [ "$PY_MAJOR" -lt 3 ] || { [ "$PY_MAJOR" -eq 3 ] && [ "$PY_MINOR" -lt 8 ]; }; then
-    echo "Python 3.8+ required, found $PY_VERSION"
+if [ "$PY_MAJOR" -lt 3 ] || { [ "$PY_MAJOR" -eq 3 ] && [ "$PY_MINOR" -lt 10 ]; }; then
+    echo "Python 3.10+ required, found $PY_VERSION"
     exit 1
+fi
+if [ "$PY_MAJOR" -eq 3 ] && [ "$PY_MINOR" -gt 12 ]; then
+    echo "WARNING: Python $PY_VERSION is above the pinned 3.10-3.12 range (CI matrix). Continuing."
 fi
 
 echo "Dependency preflight passed (Python $PY_VERSION)."

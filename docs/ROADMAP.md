@@ -63,7 +63,7 @@ NetMedic aims to be a sovereign, open-source network management platform for Lin
 - [x] `netmedic --status` health CLI + SECURITY.md
 - [ ] Distro packages (deb/rpm) — skeleton under `packaging/`
 
-## v1.6.0 — Honest Repair (RC1 v1.6.0-rc1, Soak)
+## v1.6.0 — Honest Repair (Released 2026-09-25, tag `v1.6.0`)
 
 - [x] `VERBS.md` live contract + guardian 1/2/3 (ratchets) + `ResultCode` (models.py:59) — exit 0 ≠ fixed
 - [x] `probes.py` single source DNS+TCP+https+captive + NM divergence, TCP-only `internet_ok`
@@ -71,7 +71,8 @@ NetMedic aims to be a sovereign, open-source network management platform for Lin
 - [x] `canary_shim_prod` UserWarning (outside DeprecationWarning shadowing) + `filterwarnings` error last
 - [x] `netmedic-sim` v0 `tools/netmedic-sim/` `nmsim-*` + 2 scenarios + golden `tests/test_golden_replay_ns.py` (<30s)
 - [x] `captureWarnings(True)` → `netmedic.log` + `filterwarnings` ignore DeprecationWarning noise
-- [ ] Soak p95 settle <5s / recheck <10s, zero misclass — gate to `v1.6.0` final
+- [x] P0/P1 hardening: 438 tests, 83% coverage (gate 75), Hypothesis, 94% mutation kill, mypy strict ×10, container build, GPG-required releases
+- [ ] Soak p95 settle <5s / recheck <10s, zero misclass — deferred: physical-host soak incomplete (`SOAK_EVENTLOG.md` partial); `netns-golden` A+B in CI is the standing regression gate
 
 ## v1.6.1 — Post-release (1.6 backlog, ordered)
 
@@ -80,8 +81,6 @@ NetMedic aims to be a sovereign, open-source network management platform for Lin
 - [ ] RFC 8910 opt 114 `captive-portal` + `networkctl renew` fallback (systemd ≥248)
 - [ ] Multi-interface candidates (`network.py:155` `details.candidates` + metric)
 - [ ] AppImage helper bundling (1–2d design) — separated from `SKIP-03` (`curl --fail` 0.5d)
-
-## v2.0.0 — Framework (Future)
 
 ## v2.0.0 — Framework (Future)
 

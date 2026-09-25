@@ -39,15 +39,27 @@
 | Module | Responsibility |
 |--------|---------------|
 | `runtime.py` | Bootstrap, signals, IPC server, headless loop |
-| `gui.py` | GTK initialization and main window |
+| `gui.py` | GTK entry helpers (`run_gui`, dialogs; `MainWindow` lives in `ui.py`) |
+| `ui.py` / `ui_vpn.py` | Main window, Smart Repair sequence, VPN panel |
 | `network.py` | Network diagnostics and repair operations |
-| `system.py` | `CommandRunner` with log redaction |
+| `probes.py` | Shared DNS/TCP/captive/NM probes (single source) |
+| `sensors.py` | Read-only snapshot for AI/MCP |
+| `system.py` | `CommandRunner` with log redaction, fixed-verb elevation |
+| `models.py` | `ResultCode` (source of truth) + `NetResult`/`CommandResult` |
+| `config.py` | XDG dirs, helper resolution, env gates |
+| `action_catalog.py` | Single source of truth: action tiers + polkit IDs |
+| `helper_verbs.py` / `helper_main.py` | Fixed-verb validation + privileged `netmedic-helper` CLI |
+| `polkit_auth.py` | Polkit GI/`pkcheck` authorization, fail-closed skip |
+| `audit_log.py` | Structured JSONL audit log with redaction |
+| `status.py` | `netmedic --status/--status-json` health CLI |
 | `lifecycle.py` | PID/lock/socket cleanup, stale lock recovery |
 | `ipc_bridge.py` | Unix socket IPC server |
 | `ipc_security.py` | Session tokens and peer identity for privileged IPC |
 | `ipc_peer.py` | SO_PEERCRED UID/PID validation |
 | `ipc_schema.py` | Versioned IPC action contract export |
 | `ipc_actions.py` | Action dispatcher routing |
+| `ipc_client.py` / `ipc_sync_client.py` | Async (GTK) / blocking IPC clients |
+| `gui_actions.py` | GUI→IPC bridge |
 | `operators/` | Pluggable infrastructure operators |
 
 ## Operator Pattern
@@ -63,7 +75,7 @@ class BaseOperator(ABC):
 
 VPN operator (`AngristanOperator`) pins script SHA256 before any execution.
 
-## IPC Security Model (v1.5)
+## IPC Security Model (v1.6)
 
 1. On startup, `IPCSession` issues a random token stored at `~/.local/state/netmedic/ipc.token` (mode 600, atomic create).
 2. **All** actions require peer UID matching the daemon owner (`SO_PEERCRED`).
