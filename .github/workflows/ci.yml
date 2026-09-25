@@ -85,8 +85,9 @@ jobs:
         if: matrix.helper_mode == '0'
         env:
           NO_AT_BRIDGE: "1"
-        # P1.3: total 83% (runtime 100%, ui 98%, ui_vpn 100%, network 99%, angristan 98%).
-        run: xvfb-run -a python -m pytest tests/ -q --cov=netmedic --cov-report=term-missing --cov-fail-under=75
+        # Sprint-1: total 85% (runtime 100%, ui 98%, ui_vpn 100%,
+        # network 99%, angristan 98%). Gate 80 ratchets without tripping.
+        run: xvfb-run -a python -m pytest tests/ -q --cov=netmedic --cov-report=term-missing --cov-fail-under=80
 
       - name: Test (helper-mode unit contracts NETMEDIC_USE_HELPER=1)
         if: matrix.helper_mode == '1'
@@ -106,12 +107,29 @@ jobs:
       - name: Install netns harness
         run: |
           sudo apt-get update
-          sudo apt-get install -y iproute2 nftables iputils-ping curl libc-bin
+          sudo apt-get install -y iproute2 nftables iputils-ping curl libc-bin policykit-1
           python -m pip install --upgrade pip wheel setuptools pytest
           python -m venv venv
           # Goldens import NetworkMedic/probes only — skip PyGObject/cairo build.
           ./venv/bin/pip install -e netmedic/ --config-settings editable_mode=strict --no-deps
           ./venv/bin/pip install pytest
+      - name: pkexec env-scrub probe (C-8)
+        # Empirical close of the adjudication's open question: what does the
+        # root helper context actually receive from caller env? Runs with real
+        # pkexec (root via sudo, no agent needed for `env`). Fails closed.
+        run: |
+          sudo MARKER_NETMEDIC_PROBE=expect-absent timeout 30 pkexec env > /tmp/pkexec-env.txt
+          if grep -q MARKER_NETMEDIC_PROBE /tmp/pkexec-env.txt; then
+            echo "::error::pkexec leaked caller marker env into root context"
+            exit 1
+          fi
+          for v in LD_PRELOAD LD_LIBRARY_PATH PYTHONPATH PYTHONHOME NETMEDIC_HELPER_EXECUTE; do
+            if sudo env "$v=probe" timeout 30 pkexec env 2>/dev/null | grep -q "^$v="; then
+              echo "::error::pkexec leaked $v into root context"
+              exit 1
+            fi
+          done
+          echo "pkexec env scrub verified (marker + loader vars absent)"
       - name: Golden replay A+B (H1 TCP-only / incident)
         run: sudo ./scripts/netns-golden.sh
 

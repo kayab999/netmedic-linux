@@ -2,7 +2,16 @@
 
 All notable changes to NetMedic Linux are documented here.
 
-## [Unreleased]
+## [Unreleased] — v1.6.1 candidate
+
+### Fixed relative to 1.6.0
+- **C-1 (same-UID script swap):** helper re-stages verified scripts into root-owned `/run/netmedic` (0700, unique per invocation), re-hashes at the exec path, unlinks after. 1.6.0 hashed then exec'd a user-owned path.
+- **B-4/C-16 (fail-closed audit):** privileged intent is recorded before execution; unwritable audit log refuses the action ("Audit unavailable") instead of executing unaudited.
+- **B-1 (portal misdiagnosis):** all-green verdicts are re-verified via the 204-endpoint check — TCP-behind-portal now reports PARTIAL, not healthy. `NETMEDIC_PORTAL_URL` override added.
+- **H-2 (torn token reads):** secret files via tmp+rename with 0600 at creation.
+- **C-9 (timeout containment):** `run_elevated` converts escaped timeouts to structured results; real-hang wall-clock test added.
+- **C-8 (helper backdoor):** `NETMEDIC_HELPER_EXECUTE` honored only with `NETMEDIC_TEST_MODE=1`.
+- AI confirmation dialogs now show the resolved verb **and** concrete args.
 
 ## [1.6.0] — 2026-09-25 — final (tag `v1.6.0`)
 

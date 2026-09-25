@@ -36,6 +36,7 @@ Single instance via `flock`. Stale lock reaped on PID death. Socket `ipc.sock 06
 * `~/.local/state/netmedic/audit.log` (JSONL, 1M×3, 0600) — two records per privileged action: `privileged_intent` (before execution) + `privileged_ipc` (completion with `peer_uid/pid,duration_ms,outcome`). `session_token` redacted; secrets in `user_request/params` truncated to 500ch.
 * **Fail-closed audit:** if `audit.log` is unwritable (disk full), privileged actions are **refused** with "Audit unavailable" — no action without an audit record. If you see this: free space/quota/inodes under `$HOME`, then retry. This trades availability for auditability on purpose.
 * Soak: `grep settle|recheck netmedic.log` for p95; `SOAK_PLAN.md` gate `n>=5 broken+cancel+healthy, 0 fails`.
+* Long soak: `scripts/soak_sample.sh` hourly via cron appends `soak.csv` (RSS/FDs/threads/log sizes) — flat slopes on non-log resources required.
 
 ## 5. Env matrix (production)
 
