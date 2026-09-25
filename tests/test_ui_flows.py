@@ -263,7 +263,7 @@ def _done_future(task_result=None, exc=None):
     return f
 
 
-def test_run_async_task_success_and_error(win):
+def test_run_async_task_success_and_error(win, monkeypatch):
     from concurrent.futures import Future
 
     w, _ = win
@@ -279,10 +279,14 @@ def test_run_async_task_success_and_error(win):
 
     # NOTE: the real ThreadPoolExecutor would run on_task_done (and its Gtk
     # dialogs, via immediate idle_add) on a worker thread -> segfault under
-    # coverage. Inline keeps everything on the test thread.
+    # coverage. Inline keeps everything on the test thread. Dialogs stay
+    # mocked: a real Gtk.MessageDialog.run() blocks forever under xvfb.
     w.executor = InlineExecutor()
+    mock_err = MagicMock()
+    monkeypatch.setattr(w, "_show_error_dialog", mock_err)
     w.run_async_task(lambda: _nr("T", True, "fine"))
     w.run_async_task(lambda: 1 / 0, msg="Boom")
+    mock_err.assert_called_once_with("Unexpected Error", ANY)
 
 
 def test_on_task_done_ok(win, monkeypatch):
