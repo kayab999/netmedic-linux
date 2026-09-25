@@ -22,7 +22,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3.12 python3.12-venv python3-pip \
     python3-gi python3-gi-cairo gir1.2-gtk-3.0 \
     libcairo2-dev libgirepository-2.0-dev pkg-config \
-    binutils upx \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /src
@@ -34,11 +33,14 @@ COPY docs/MANUAL.md ./docs/MANUAL.md
 COPY scripts/build_binary.sh ./scripts/build_binary.sh
 COPY netmedic.spec ./
 
-RUN python3.12 -m venv /opt/buildenv \
+# NOTE: PyGObject comes from apt (python3-gi), not pip — PyPI sdist would
+# need a C toolchain (meson/gcc) inside the image. Pillow/PyInstaller have
+# wheels and stay pinned. Same split as CI build-smoke.
+# --system-site-packages exposes apt's gi to the venv.
+RUN python3.12 -m venv --system-site-packages /opt/buildenv \
     && /opt/buildenv/bin/pip install --upgrade pip wheel setuptools \
-    && /opt/buildenv/bin/pip install -r requirements.lock \
+    && /opt/buildenv/bin/pip install "pyinstaller==6.19.0" "pillow==12.3.0" \
     && /opt/buildenv/bin/pip install --no-deps -e netmedic/ \
-    && /opt/buildenv/bin/pip install pyinstaller==6.19.0 \
     && ln -s /opt/buildenv /src/venv
 
 RUN chmod +x scripts/build_binary.sh \
