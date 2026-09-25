@@ -92,8 +92,21 @@ def check_nm_connectivity() -> Tuple[bool | None, str]:
 
 def check_captive_portal() -> Tuple[bool, str]:
     """If gateway OK but WAN fail, check connectivity-check.ubuntu.com for redirect."""
-    # Use curl -s http://connectivity-check.ubuntu.com (expects 204 no-content)
-    res = CommandRunner.run(["curl", "-Is", "--connect-timeout", "3", "http://connectivity-check.ubuntu.com"], timeout=5)
+    return check_portal_at_url(_portal_url())
+
+
+def _portal_url() -> str:
+    """Captive-portal 204 endpoint; overridable (privacy) via NETMEDIC_PORTAL_URL."""
+    import os
+
+    return os.environ.get(
+        "NETMEDIC_PORTAL_URL", "http://connectivity-check.ubuntu.com"
+    )
+
+
+def check_portal_at_url(url: str) -> Tuple[bool, str]:
+    """True when `url` answers like a captive portal (redirect/200 instead of 204)."""
+    res = CommandRunner.run(["curl", "-Is", "--connect-timeout", "3", url], timeout=5)
     if not res.success:
         return False, "portal probe failed"
     out = (res.stdout or "") + "\n" + (res.stderr or "")

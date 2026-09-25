@@ -22,10 +22,21 @@ class AngristanOperator(VPNOperator):
     
     # URL apuntando a commit específico para evitar roturas por cambios upstream
     SCRIPT_URL = "https://raw.githubusercontent.com/angristan/openvpn-install/9c966d4/openvpn-install.sh"
-    
+
+    # Pinned upstream commit + hash (the trust anchor). Upstream moves: see
+    # docs/VPN_REPIN.md for the re-pin procedure. Never "fix" a mismatch by
+    # editing the hash to match a downloaded file — verify provenance first.
+    PIN_COMMIT = "9c966d4"
+
     # Hash SHA256 del script oficial en el commit 9c966d4
     # Este valor es la 'Ancla de Confianza' del operador.
     EXPECTED_SHA256 = "65c3b53f652615598696ec062a4d3106540c43666f2722108ecf62a4b87e2f5b"
+
+    # Shown to operators on every integrity failure (B-9: name the resolution).
+    REPIN_HINT = (
+        "See docs/VPN_REPIN.md (pinned commit + hash must be updated together; "
+        "verify upstream provenance before changing EXPECTED_SHA256)."
+    )
 
     # Ruta a la base de datos de certificados (Source of Truth)
     INDEX_TXT_PATH = "/etc/openvpn/server/easy-rsa/pki/index.txt"
@@ -175,7 +186,7 @@ class AngristanOperator(VPNOperator):
 
             # Verificación de integridad en cada chequeo de estado
             if not self._verify_integrity():
-                 return NetResult(self.name, False, OperatorStatus.ERROR.value, details="Script integrity check failed (SHA256 mismatch). Please re-install.")
+                 return NetResult(self.name, False, OperatorStatus.ERROR.value, details=f"Script integrity check failed (SHA256 mismatch vs pin {self.PIN_COMMIT}). {self.REPIN_HINT}")
 
             is_active = CommandRunner.is_service_active(self.get_service_name())
             status = OperatorStatus.RUNNING.value if is_active else OperatorStatus.STOPPED.value
@@ -198,7 +209,7 @@ class AngristanOperator(VPNOperator):
         
         # Validar integridad inmediatamente tras descarga
         if not self._verify_integrity():
-             return NetResult("Download Script", False, "Integrity check failed after download. The source might be compromised or the download corrupted.")
+             return NetResult("Download Script", False, f"Integrity check failed after download (pin {self.PIN_COMMIT}). The source might be compromised or the download corrupted. {self.REPIN_HINT}")
 
         try:
             with open(self.script_path, 'r', encoding='utf-8') as f:
@@ -350,7 +361,7 @@ class AngristanOperator(VPNOperator):
         if not self.script_path.exists():
             return NetResult(self.name, False, OperatorStatus.NOT_INSTALLED.value, details="Script not found.")
         if not self._verify_integrity():
-            return NetResult(self.name, False, OperatorStatus.ERROR.value, details="Script integrity check failed.")
+            return NetResult(self.name, False, OperatorStatus.ERROR.value, details=f"Script integrity check failed (pin {self.PIN_COMMIT}). {self.REPIN_HINT}")
 
         service = self.get_service_name()
         res = CommandRunner.run_elevated(
@@ -367,7 +378,7 @@ class AngristanOperator(VPNOperator):
         if not self.script_path.exists():
             return NetResult(self.name, False, OperatorStatus.NOT_INSTALLED.value, details="VPN not installed.")
         if not self._verify_integrity():
-            return NetResult(self.name, False, OperatorStatus.ERROR.value, details="Script integrity check failed.")
+            return NetResult(self.name, False, OperatorStatus.ERROR.value, details=f"Script integrity check failed (pin {self.PIN_COMMIT}). {self.REPIN_HINT}")
 
         service = self.get_service_name()
         res = CommandRunner.run_elevated(

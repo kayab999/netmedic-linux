@@ -127,6 +127,18 @@ class AIConsoleController:
     def _escape_markup(value) -> str:
         return GLib.markup_escape_text(str(value))
 
+    @staticmethod
+    def _format_args(params) -> str:
+        """Deterministic rendering of the exact args about to be sent."""
+        import json
+
+        if not params:
+            return "{}"
+        try:
+            return json.dumps(params, sort_keys=True, ensure_ascii=False)
+        except (TypeError, ValueError):
+            return str(params)
+
     def _translate_to_human(self, action, params):
         translations = {
             "vpn_reconnect": (
@@ -177,8 +189,11 @@ class AIConsoleController:
         box.pack_start(explanation_label, False, False, 0)
 
         technical_label = Gtk.Label(xalign=0)
+        # I-2: the user authorizes an ACTION, not a narrative — show the
+        # resolved verb AND the concrete args that will be sent.
         technical_label.set_markup(
-            f"<span size='small' foreground='gray'>Target Tool: <tt>{self._escape_markup(action)}</tt></span>"
+            f"<span size='small' foreground='gray'>Target Tool: <tt>{self._escape_markup(action)}</tt>"
+            f" <tt>{self._escape_markup(self._format_args(params))}</tt></span>"
         )
         box.pack_start(technical_label, False, False, 0)
 
@@ -237,7 +252,8 @@ class AIConsoleController:
                 title = f"Authorize AI action: {action}?"
                 message = (
                     "This operation can disrupt network connectivity or security settings. "
-                    "Continue only if you trust this proposal."
+                    "Continue only if you trust this proposal. "
+                    f"Arguments: {self._format_args(params)}"
                 )
                 if not ask(title, message):
                     return

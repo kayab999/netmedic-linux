@@ -32,5 +32,6 @@ ignore = [
 "tests/test_ipc_sync_client.py" = ["S105"]
 # Own policy XML, trusted local file — not untrusted input
 "tests/test_policy_and_catalog_contract.py" = ["S314"]
+"tests/test_contract_four_way.py" = ["S314"]
 # netns sim binds 0.0.0.0 inside isolated netns (hermetic, trap EXIT) — intentional
 "tools/netmedic-sim/micro_dns.py" = ["S104"]

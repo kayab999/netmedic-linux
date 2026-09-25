@@ -4,6 +4,7 @@ import time
 from typing import Any, Callable, Dict, Optional
 
 from netmedic.audit_log import record as audit_record
+from netmedic.audit_log import record_intent as audit_record_intent
 from netmedic.ipc_peer import validate_peer_identity
 from netmedic.models import NetResult
 from netmedic.network import NetworkMedic
@@ -249,6 +250,30 @@ def create_action_dispatcher(
                     )
                     return busy
                 held_privileged_slot = True
+
+            # Fail-closed audit gate (B-4/C-16): the intent write IS the gate —
+            # no separate writability pre-check (TOCTOU against disk fill).
+            # Abort here precedes any pkexec launch inside the handlers below.
+            if privileged:
+                try:
+                    audit_record_intent(
+                        action=action,
+                        peer_uid=peer_uid,
+                        peer_pid=peer_pid,
+                        params=params,
+                    )
+                except OSError as exc:
+                    result = {
+                        "status": "error",
+                        "message": (
+                            "Audit unavailable — refusing privileged action "
+                            f"(disk full or unwritable audit log: {exc})"
+                        ),
+                    }
+                    return _finish_privileged(
+                        action, params, result,
+                        peer_uid=peer_uid, peer_pid=peer_pid, started=started, privileged=privileged,
+                    )
 
             if action == "user_intent":
                 return _handle_user_intent(params)

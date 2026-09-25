@@ -18,18 +18,33 @@ logger = logging.getLogger(__name__)
 
 
 def _write_secret_file(path: Path, content: str, mode: int = 0o600) -> None:
-    """Atomically create/replace a secret file with restrictive mode."""
+    """Atomically create/replace a secret file with restrictive mode.
+
+    Write-then-rename in the same directory: readers of `path` observe the
+    old or the new content, never a torn write. The temp file is created
+    with the final mode up front (no chmod window) and unlinked on failure.
+    Sibling directory is required — cross-device rename is not atomic.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
-    flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
-    fd = os.open(str(path), flags, mode)
+    tmp_path = path.with_name(f"{path.name}.{os.getpid()}.tmp")
+    try:
+        fd = os.open(str(tmp_path), os.O_WRONLY | os.O_CREAT | os.O_EXCL, mode)
+    except FileExistsError:
+        # Stale tmp from a crashed run under a recycled PID; ours to replace.
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        fd = os.open(str(tmp_path), os.O_WRONLY | os.O_CREAT | os.O_EXCL, mode)
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
             handle.write(content)
             handle.flush()
             os.fsync(handle.fileno())
+        os.rename(tmp_path, path)
     except Exception:
         try:
-            os.close(fd)
+            os.unlink(tmp_path)
         except OSError:
             pass
         raise

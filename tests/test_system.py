@@ -78,3 +78,52 @@ def test_command_runner_root_cancellation(mock_popen, mock_which, mock_geteuid):
     assert res.success is False
     assert res.returncode == 126
     assert "cancel" in res.stderr.lower()
+
+
+def test_hanging_command_bounded_by_timeout():
+    """C-9: a hung child (no polkit agent, stuck pkexec) must surface as a
+    structured timeout, never a hang. Real subprocess, wall-clock asserted."""
+    import time
+
+    start = time.monotonic()
+    res = CommandRunner.run(["sleep", "30"], timeout=1)
+    elapsed = time.monotonic() - start
+    assert res.success is False
+    assert res.returncode == -1
+    assert "Timeout" in res.stderr
+    assert elapsed < 10
+
+
+def test_run_elevated_timeout_never_escapes(monkeypatch):
+    """C-9: even if run() itself raised TimeoutExpired, run_elevated must
+    return a CommandResult, not propagate a traceback (headless safety)."""
+
+    def raising_run(command, require_root=False, timeout=None, _legacy_ok=False):
+        raise subprocess.TimeoutExpired(command, timeout or 1)
+
+    monkeypatch.setattr(CommandRunner, "run", staticmethod(raising_run))
+    monkeypatch.setenv("NETMEDIC_USE_HELPER", "1")
+    res = CommandRunner.run_elevated("flush-dns", {})
+    assert res.success is False
+    assert "Timeout" in res.stderr
+
+
+def test_run_elevated_legacy_timeout_never_escapes(monkeypatch):
+    def raising_run(command, require_root=False, timeout=None, _legacy_ok=False):
+        raise subprocess.TimeoutExpired(command, timeout or 1)
+
+    monkeypatch.setattr(CommandRunner, "run", staticmethod(raising_run))
+    monkeypatch.setenv("NETMEDIC_USE_HELPER", "0")
+    monkeypatch.setenv("NETMEDIC_ALLOW_LEGACY_ELEVATION", "1")
+    res = CommandRunner.run_elevated("flush-dns", {})
+    assert res.success is False
+    assert "Timeout" in res.stderr
+
+
+@patch("os.geteuid", return_value=1000)
+@patch("shutil.which", return_value=None)
+def test_pkexec_missing_fails_fast(mock_which, mock_geteuid):
+    res = CommandRunner.run(["ip", "link", "show"], require_root=True, _legacy_ok=True)
+    assert res.success is False
+    assert res.returncode == 127
+    assert "pkexec" in res.stderr.lower()

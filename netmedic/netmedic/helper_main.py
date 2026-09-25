@@ -4,18 +4,23 @@ Usage:
   netmedic-helper <verb> [--dry-run] [--json '{...}']
   netmedic-helper --list-verbs
 
-Dry-run (default when not root and NETMEDIC_HELPER_EXECUTE is unset) prints the
-planned argv sequence as JSON without running commands. Execute mode runs the
-planned commands with subprocess (intended under pkexec as root).
+Dry-run (default when not root and NETMEDIC_HELPER_EXECUTE is unset, or when
+test mode is off) prints the planned argv sequence as JSON without running
+commands. Execute mode runs the planned commands with subprocess (intended
+under pkexec as root).
 """
 from __future__ import annotations
 
 import argparse
 import hashlib
 import json
+import logging
 import os
+import stat
 import subprocess
 import sys
+import tempfile
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
 
 from netmedic.helper_verbs import (
@@ -32,6 +37,8 @@ EXIT_OP_FAIL = 1
 EXIT_BAD_ARGS = 2
 EXIT_INTEGRITY = 3
 EXIT_CANCELLED = 126
+
+logger = logging.getLogger(__name__)
 
 
 def _emit(payload: Dict[str, Any], code: int) -> int:
@@ -52,13 +59,25 @@ def _parse_json_args(raw: Optional[str]) -> Dict[str, Any]:
     return data
 
 
+def _allow_test_execute() -> bool:
+    """Honor the execute backdoor only in explicit test mode (fail-closed in production)."""
+    if os.environ.get("NETMEDIC_HELPER_EXECUTE", "").lower() not in ("1", "true", "yes"):
+        return False
+    if os.environ.get("NETMEDIC_TEST_MODE") == "1":
+        return True
+    logger.warning(
+        "NETMEDIC_HELPER_EXECUTE is set but ignored outside NETMEDIC_TEST_MODE (fail-closed)."
+    )
+    return False
+
+
 def _should_execute(explicit_execute: bool, dry_run: bool) -> bool:
     if dry_run:
         return False
     if explicit_execute:
         return True
-    # Default: execute only when already root (pkexec path) or env forces it.
-    if os.environ.get("NETMEDIC_HELPER_EXECUTE", "").lower() in ("1", "true", "yes"):
+    # Default: execute only when already root (pkexec path) or test env forces it.
+    if _allow_test_execute():
         return True
     return os.geteuid() == 0
 
@@ -69,6 +88,82 @@ def _hash_file(path: str) -> str:
         for chunk in iter(lambda: handle.read(65536), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def _hash_bytes(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+# Root-owned staging for verified scripts (C-1). The daemon stages into a
+# user-owned dir, so the helper must never execute from there: a same-UID
+# attacker could swap bytes between the helper's hash check and exec.
+# Staging here is owned by the executing UID (root under pkexec), mode 0700,
+# unique per invocation — the swap window no longer exists.
+ROOT_STAGE_DIR = "/run/netmedic"
+
+
+class StagingError(Exception):
+    """Staging dir unusable; fail closed with an integrity-class error."""
+
+
+def _ensure_root_stage_dir(staging_dir: str = ROOT_STAGE_DIR) -> Path:
+    """Return a trusted staging dir or raise StagingError.
+
+    Trust = real directory, owned by our own euid (root under pkexec),
+    mode 0700. A pre-created attacker-owned/symlinked dir is refused —
+    chmod alone would not help (owner keeps write bits).
+    """
+    try:
+        os.makedirs(staging_dir, mode=0o700, exist_ok=True)
+    except OSError as exc:
+        raise StagingError(f"Cannot create staging dir {staging_dir}: {exc}") from exc
+    try:
+        st = os.lstat(staging_dir)
+    except OSError as exc:
+        raise StagingError(f"Cannot stat staging dir {staging_dir}: {exc}") from exc
+    if not stat.S_ISDIR(st.st_mode):
+        raise StagingError(f"Staging path is not a directory: {staging_dir}")
+    if st.st_uid != os.geteuid():
+        raise StagingError(
+            f"Refusing staging dir not owned by euid {os.geteuid()}: {staging_dir}"
+        )
+    try:
+        os.chmod(staging_dir, 0o700)
+    except OSError as exc:
+        raise StagingError(f"Cannot secure staging dir {staging_dir}: {exc}") from exc
+    return Path(staging_dir)
+
+
+def _stage_verified_copy(script: str, expected: str, staging_dir: str = ROOT_STAGE_DIR) -> str:
+    """Copy hash-verified script bytes into the trusted staging dir.
+
+    Returns the staged path. Verifies source bytes, then re-verifies the
+    staged bytes at the execution location — execution never reads the
+    user-supplied path. Raises StagingError / returns integrity dict via caller.
+    """
+    try:
+        with open(script, "rb") as handle:
+            data = handle.read()
+    except OSError as exc:
+        raise StagingError(f"Cannot read script: {exc}") from exc
+    if _hash_bytes(data) != expected:
+        raise StagingError("Security abort: Script integrity failure.")
+    staged_dir = _ensure_root_stage_dir(staging_dir)
+    fd, staged = tempfile.mkstemp(prefix="sealed-", suffix=".sh", dir=str(staged_dir))
+    try:
+        os.write(fd, data)
+        os.fsync(fd)
+        os.fchmod(fd, 0o700)
+    finally:
+        os.close(fd)
+    # Re-hash AT the execution location: the staged bytes are what will exec.
+    if _hash_file(staged) != expected:
+        try:
+            os.unlink(staged)
+        except OSError:
+            pass
+        raise StagingError("Security abort: Sealed script integrity failure.")
+    return staged
 
 
 def _run_argv(argv: List[str], timeout: Optional[int]) -> subprocess.CompletedProcess:
@@ -82,7 +177,9 @@ def _run_argv(argv: List[str], timeout: Optional[int]) -> subprocess.CompletedPr
     )
 
 
-def _execute_vpn_script(marker_cmd: List[str], timeout: Optional[int]) -> Dict[str, Any]:
+def _execute_vpn_script(
+    marker_cmd: List[str], timeout: Optional[int], staging_dir: str = ROOT_STAGE_DIR
+) -> Dict[str, Any]:
     # ["__vpn_script__", script, expected_sha, KEY=val, ...]
     if len(marker_cmd) < 3:
         return {
@@ -93,21 +190,21 @@ def _execute_vpn_script(marker_cmd: List[str], timeout: Optional[int]) -> Dict[s
     script = marker_cmd[1]
     expected = marker_cmd[2]
     env_pairs = marker_cmd[3:]
+    staged: Optional[str] = None
     try:
-        actual = _hash_file(script)
-    except OSError as exc:
-        return {"ok": False, "message": f"Cannot read script: {exc}", "details": None}
-    if actual != expected:
-        return {
-            "ok": False,
-            "message": "Security abort: Script integrity failure.",
-            "details": f"expected {expected}, got {actual}",
-        }
-    cmd = ["env", *env_pairs, script]
+        staged = _stage_verified_copy(script, expected, staging_dir)
+    except StagingError as exc:
+        return {"ok": False, "message": str(exc), "details": None}
+    cmd = ["env", *env_pairs, staged]
     try:
         proc = _run_argv(cmd, timeout)
     except subprocess.TimeoutExpired:
         return {"ok": False, "message": f"Timeout ({timeout}s) exceeded", "details": None}
+    finally:
+        try:
+            os.unlink(staged)
+        except OSError:
+            pass
     if proc.returncode == 0:
         return {
             "ok": True,

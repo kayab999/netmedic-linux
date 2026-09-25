@@ -33,7 +33,8 @@ Single instance via `flock`. Stale lock reaped on PID death. Socket `ipc.sock 06
 ## 4. Logs
 
 * `~/.local/state/netmedic/netmedic.log` (Rotating 1M×3, INFO)
-* `~/.local/state/netmedic/audit.log` (JSONL, 1M×3, 0600) — every privileged granted/denied/busy with `peer_uid/pid,duration_ms,outcome`. `session_token` redacted; secrets in `user_request/params` truncated to 500ch.
+* `~/.local/state/netmedic/audit.log` (JSONL, 1M×3, 0600) — two records per privileged action: `privileged_intent` (before execution) + `privileged_ipc` (completion with `peer_uid/pid,duration_ms,outcome`). `session_token` redacted; secrets in `user_request/params` truncated to 500ch.
+* **Fail-closed audit:** if `audit.log` is unwritable (disk full), privileged actions are **refused** with "Audit unavailable" — no action without an audit record. If you see this: free space/quota/inodes under `$HOME`, then retry. This trades availability for auditability on purpose.
 * Soak: `grep settle|recheck netmedic.log` for p95; `SOAK_PLAN.md` gate `n>=5 broken+cancel+healthy, 0 fails`.
 
 ## 5. Env matrix (production)
@@ -47,13 +48,15 @@ Single instance via `flock`. Stale lock reaped on PID death. Socket `ipc.sock 06
 | `NETMEDIC_HELPER_PATH` | unset (use `/usr/libexec/...`) | dev override; ignored when `euid==0` |
 | `NETMEDIC_POST_REPAIR_VERIFY` | unset (default ON) | `0` debug-only: repairs report `EXECUTED`, never `OK` |
 | `NETMEDIC_TEST_MODE` | **unset** | `1` to honor `SKIP_POLKIT` in tests |
+| `NETMEDIC_HELPER_EXECUTE` | **unset** | `1` + `TEST_MODE=1` to force helper execution in tests; ignored otherwise |
+| `NETMEDIC_PORTAL_URL` | unset (default `http://connectivity-check.ubuntu.com`) | Override the captive-portal 204 endpoint (privacy: the default phones Ubuntu on every all-green diagnosis) |
 
 Overrides are ignored when running as root (fail-closed, warning logged).
 
 ## 6. Security ops
 
 * Elevation: single path `pkexec /usr/libexec/netmedic/helper <verb> --execute --json`. No `shell=True`. Verbs fixed in `helper_verbs.py`, contract in `VERBS.md`.
-* Services allowlisted to `openvpn-server@*.service` + `NetworkManager`. `vpn-run-script` requires absolute path + 64-hex SHA + `XDG_RUNTIME_DIR` staging.
+* Services allowlisted to `openvpn-server@*.service` + `NetworkManager`. `vpn-run-script` requires absolute path + 64-hex SHA; the daemon seals into `XDG_RUNTIME_DIR`, and the helper re-stages into root-owned `/run/netmedic` (0700, unique per invocation), re-hashes there, and execs — no execution from user-writable paths.
 * Permissions: state/data `0700` owner-checked, secrets `0600`, helper `root:root 644/755`, VPN script `0500`.
 * Alert: rapid distinct-PID privileged bursts in `audit.log` → investigate same-UID abuse (`auth_admin_keep` reduces friction — prefer `auth_admin` for `vpn-install/run-script`).
 
@@ -62,5 +65,6 @@ Overrides are ignored when running as root (fail-closed, warning logged).
 * No daemon DB — state is `created_ifaces.*.json` + logs. Backup `~/.local/state/netmedic/` optional.
 * Update helper after code change: re-run `./scripts/install-polkit-policy.sh` (`/usr/lib/netmedic` must match repo).
 * Release verify: `sha256sum -c SHA256SUMS`, `SHA256SUMS.asc` (GPG required on `v*` tags), `sbom-python-*.txt` (freeze + CycloneDX).
+* Reproducibility: rebuilding from tag in a clean container (`Dockerfile.build`) yields a functionally identical binary, not necessarily a hash-identical one (PyInstaller embeds timestamps). Verify via behavior + SBOM, not hash equality.
 
 See `docs/THREAT_MODEL.md`, `docs/PRIVILEGED_HELPER.md`, `VERBS.md`, `docs/IPC_API.md`.

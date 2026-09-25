@@ -68,8 +68,10 @@ The AI can only propose actions registered in its security whitelist.
 | **Helper not installed (127, helper-missing)** | Privileged helper not installed. Run `sudo ./scripts/install-polkit-policy.sh` then `netmedic --status`. Check `/usr/libexec/netmedic/helper` **and** `/usr/lib/netmedic/helper` (Debian alt). |
 | **Smart Repair: short-circuit ⏭️ SKIPPED** | Network already healthy (gateway/DNS/WAN OK). No privileged actions executed — nothing to repair. |
 | **Smart Repair: PARTIAL (TCP blocked, ICMP ok)** | Firewall or captive portal suspected. `details.per_probe` shows `8.8.8.8:icmp OK` but `1.1.1.1:80 FAIL`. Check `MANUAL §Diagnostics`. |
+| **Smart Repair: PARTIAL (portal detected)** | TCP reachable but a captive portal is answering (log in via browser). Override the 204 endpoint with `NETMEDIC_PORTAL_URL` if needed (see `docs/OPS.md`). |
 | **Gateway OK, WAN down (upstream)** | Likely ISP/captive portal. Try `curl -Is http://connectivity-check.ubuntu.com` (204 = ok, 302 = portal) or check router uplink. |
-| **SHA256 mismatch (VPN)** | Script integrity check failed. Do not proceed; re-download. |
+| **Audit unavailable (disk full)** | Privileged actions are refused until `audit.log` is writable — free space under `$HOME` and retry. This is intentional (no action without audit). |
+| **SHA256 mismatch (VPN)** | Script integrity check failed — the message names the pinned commit. See `docs/VPN_REPIN.md`; do not "fix" by editing the hash to match. |
 | **"Already running"** | Another NetMedic instance is active. Close it or remove stale lock at `~/.local/state/netmedic/netmedic.lock` if the process crashed. |
 | **AI unavailable** | Install with `pip install -e "netmedic_ai[runtime]"` and place the GGUF model (see [DEVELOPMENT.md](DEVELOPMENT.md)). |
 

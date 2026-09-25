@@ -1,6 +1,10 @@
 """Phase B: helper verb validation and dry-run planning (no root)."""
 
+import hashlib
 import json
+import os
+from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -294,3 +298,112 @@ def test_vpn_run_script_rejects_bad_env_key():
                 "env": {"ok_key": "a\nb"},
             },
         )
+
+
+def test_helper_execute_backdoor_requires_test_mode(monkeypatch):
+    from netmedic.helper_main import _allow_test_execute, _should_execute
+
+    monkeypatch.setenv("NETMEDIC_TEST_MODE", "1")
+    monkeypatch.setenv("NETMEDIC_HELPER_EXECUTE", "1")
+    assert _allow_test_execute() is True
+    assert _should_execute(False, False) is True
+
+    monkeypatch.delenv("NETMEDIC_TEST_MODE")
+    assert _allow_test_execute() is False
+
+    monkeypatch.delenv("NETMEDIC_HELPER_EXECUTE")
+    monkeypatch.setenv("NETMEDIC_TEST_MODE", "1")
+    assert _allow_test_execute() is False
+    assert _should_execute(True, False) is True
+    assert _should_execute(False, True) is False
+
+
+def _write_source(path, content: bytes):
+    path.write_bytes(content)
+    return hashlib.sha256(content).hexdigest()
+
+
+def test_stage_verified_copy_ok(tmp_path):
+    from netmedic.helper_main import _stage_verified_copy
+
+    src = tmp_path / "src.sh"
+    digest = _write_source(src, b"#!/bin/sh\necho hi\n")
+    stage = tmp_path / "stage"
+    staged = _stage_verified_copy(str(src), digest, str(stage))
+    assert staged.startswith(str(stage) + "/")
+    assert staged != str(src)
+    assert Path(staged).read_bytes() == b"#!/bin/sh\necho hi\n"
+    assert oct(os.stat(staged).st_mode & 0o777) == oct(0o700)
+    assert oct(os.stat(stage).st_mode & 0o777) == oct(0o700)
+    os.unlink(staged)
+
+
+def test_stage_rejects_tampered_source(tmp_path):
+    from netmedic.helper_main import StagingError, _stage_verified_copy
+
+    src = tmp_path / "src.sh"
+    _write_source(src, b"#!/bin/sh\necho hi\n")
+    with pytest.raises(StagingError, match="integrity"):
+        _stage_verified_copy(str(src), "0" * 64, str(tmp_path / "stage"))
+
+
+def test_stage_refuses_symlink_and_file(tmp_path):
+    from netmedic.helper_main import StagingError, _stage_verified_copy
+
+    real = tmp_path / "real"
+    real.mkdir()
+    link = tmp_path / "link"
+    link.symlink_to(real, target_is_directory=True)
+    src = tmp_path / "src.sh"
+    digest = _write_source(src, b"#!/bin/sh\necho hi\n")
+    with pytest.raises(StagingError):
+        _stage_verified_copy(str(src), digest, str(link))
+    afile = tmp_path / "afile"
+    afile.write_text("x")
+    with pytest.raises(StagingError):
+        _stage_verified_copy(str(src), digest, str(afile))
+
+
+def test_exec_uses_staged_copy_not_source(tmp_path, monkeypatch):
+    from netmedic.helper_main import _execute_vpn_script
+
+    src = tmp_path / "openvpn-install.sh"
+    digest = _write_source(src, b"#!/bin/sh\necho staged\n")
+    stage = tmp_path / "stage"
+    captured = {}
+
+    def fake_run(argv, timeout):
+        captured["argv"] = list(argv)
+        # Deterministic swap simulation: rewrite SOURCE after staging.
+        # Old code exec'd this path; new code must not.
+        src.write_bytes(b"#!/bin/sh\necho PWNED\n")
+        m = MagicMock()
+        m.returncode = 0
+        m.stdout = "done"
+        m.stderr = ""
+        return m
+
+    monkeypatch.setattr("netmedic.helper_main._run_argv", fake_run)
+    res = _execute_vpn_script(
+        ["__vpn_script__", str(src), digest, "MENU_OPTION=1"],
+        timeout=10,
+        staging_dir=str(stage),
+    )
+    assert res["ok"] is True
+    target = captured["argv"][-1]
+    assert target != str(src)
+    assert target.startswith(str(stage) + "/")
+    # Staged copy cleaned up after exec
+    assert list(stage.glob("sealed-*.sh")) == []
+
+
+def test_exec_real_harmless_script(tmp_path):
+    from netmedic.helper_main import _execute_vpn_script
+
+    src = tmp_path / "openvpn-install.sh"
+    digest = _write_source(src, b"#!/bin/sh\necho hello-from-staged\n")
+    res = _execute_vpn_script(
+        ["__vpn_script__", str(src), digest], timeout=10, staging_dir=str(tmp_path / "stage2")
+    )
+    assert res["ok"] is True
+    assert "hello-from-staged" in (res["details"] or "")

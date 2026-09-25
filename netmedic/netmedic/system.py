@@ -144,7 +144,13 @@ class CommandRunner:
             except FileNotFoundError as exc:
                 return CommandResult(False, 127, "", str(exc), [verb])
             # Helper elevates via pkexec; do not double-wrap.
-            result = CommandRunner.run(final_cmd, require_root=False, timeout=timeout)
+            # C-9: run() contains its own timeout, but never let a timeout
+            # escape as a traceback — headless with no polkit agent must get
+            # a structured result, never a hang or an unhandled exception.
+            try:
+                result = CommandRunner.run(final_cmd, require_root=False, timeout=timeout)
+            except subprocess.TimeoutExpired:
+                return CommandResult(False, -1, "", f"Timeout ({timeout}s) exceeded", final_cmd)
             if result.stdout:
                 try:
                     payload = json.loads(result.stdout.splitlines()[-1])
@@ -198,13 +204,14 @@ class CommandRunner:
                 script = argv[1]
                 env_pairs = argv[3:]
                 legacy = ["env", *env_pairs, script]
+            else:
+                legacy = argv
+            try:
                 last = CommandRunner.run(
                     legacy, require_root=True, timeout=timeout, _legacy_ok=True
                 )
-            else:
-                last = CommandRunner.run(
-                    argv, require_root=True, timeout=timeout, _legacy_ok=True
-                )
+            except subprocess.TimeoutExpired:
+                return CommandResult(False, -1, "", f"Timeout ({timeout}s) exceeded", legacy)
             if not last.success:
                 return last
         return last

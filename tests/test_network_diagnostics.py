@@ -877,3 +877,47 @@ def test_create_virtual_adapter(medic, monkeypatch):
         staticmethod(lambda verb, args=None, **k: _cmd(False, "", "denied")),
     )
     assert medic.create_virtual_adapter().success is False
+
+
+def test_diagnostics_portal_hijack_not_healthy(medic, monkeypatch):
+    """B-1: TCP success behind a portal must not report healthy."""
+    _diag_mocks(
+        medic, monkeypatch,
+        net=(True, {"1.1.1.1:80": True}, "1.1.1.1:80"),
+        portal=(True, "possible captive portal (redirect detected)"),
+    )
+    res = medic.run_diagnostics()
+    assert res.success is False
+    assert res.code == ResultCode.PARTIAL
+    assert "Portal detected" in res.message
+    assert res.details["captive_portal_hint"] == "possible captive portal (redirect detected)"
+    # Raw probe facts stay honest: TCP was reachable, verdict is portal.
+    assert res.data["internet_ok"] is True
+
+
+def test_diagnostics_no_portal_stays_healthy(medic, monkeypatch):
+    _diag_mocks(medic, monkeypatch, portal=(False, "no portal (204)"))
+    res = medic.run_diagnostics()
+    assert res.success is True
+    assert res.code == ResultCode.OK
+
+
+def test_portal_url_override(monkeypatch):
+    from netmedic import probes as probes_mod
+
+    monkeypatch.delenv("NETMEDIC_PORTAL_URL", raising=False)
+    assert "connectivity-check.ubuntu.com" in probes_mod._portal_url()
+    monkeypatch.setenv("NETMEDIC_PORTAL_URL", "http://portal.corp.example/generate_204")
+    assert probes_mod._portal_url() == "http://portal.corp.example/generate_204"
+
+    seen = {}
+
+    def fake_run(cmd, timeout=None, **kwargs):
+        seen["url"] = cmd[-1]
+        return _cmd(True, "HTTP/1.1 204 No Content")
+
+    monkeypatch.setattr(probes_mod.CommandRunner, "run", staticmethod(fake_run))
+    ok, msg = probes_mod.check_captive_portal()
+    assert seen["url"] == "http://portal.corp.example/generate_204"
+    assert ok is False
+    assert "204" in msg

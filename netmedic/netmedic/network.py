@@ -309,6 +309,20 @@ class NetworkMedic:
                 # Append hint to message for human display (optional)
                 results.append("Captive portal hint")
 
+        # B-1: portal hijack verification. Plain-HTTP TCP success can be a
+        # captive portal answering instead of the real endpoint — a portal
+        # 302/200 counts as "reachable" in check_internet_access. Verify an
+        # all-green verdict with the 204-endpoint check before declaring
+        # healthy: internet_ok / portal_detected / offline (three-state).
+        portal_detected = False
+        if gw_ok and dns_ok and net_ok:
+            from netmedic.probes import check_captive_portal as _verify_portal
+            portal_found, portal_msg = _verify_portal()
+            if portal_found:
+                portal_detected = True
+                portal_hint = portal_msg
+                results.append("Captive portal detected — login may be required")
+
         # L1: NM second-opinion (divergence signal, not verdict)
         nm_full, nm_details = None, "nm: skipped"
         try:
@@ -318,7 +332,7 @@ class NetworkMedic:
             pass
 
         msg = " | ".join(results)
-        success = gw_ok and dns_ok and net_ok
+        success = gw_ok and dns_ok and net_ok and not portal_detected
         # PR2 + R1: internet_ok is TCP-only; ICMP lives only in details. PARTIAL when TCP fail but ICMP ok.
         is_partial = False
         if gw_ok and dns_ok and not net_ok:
@@ -342,6 +356,9 @@ class NetworkMedic:
         data = {"gateway": gw_ip, "gateway_ok": gw_ok, "dns_ok": dns_ok, "internet_ok": net_ok, "net_probe": net_label, "dns_probe": dns_host, "captive_portal": portal_hint, "nm": nm_details, "nm_full": nm_full}
         if success:
             code = ResultCode.OK
+        elif portal_detected:
+            code = ResultCode.PARTIAL
+            msg += " (Portal detected: TCP reachable but captive — log in to continue)"
         elif is_partial:
             code = ResultCode.PARTIAL
         else:

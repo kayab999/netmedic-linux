@@ -46,6 +46,8 @@ NetMedic is a single-user desktop privileged operations platform. This document 
 - Headless MCP mutating operations require `pkttyagent` or fail with an explicit error.
 - IPC worker pool is fixed size; privileged execution is serialized (one at a time).
 - Helper package under `/usr/lib/netmedic` must be updated when helper code changes (re-run install script).
+- Onefile distribution: the PyInstaller binary extracts to a random `_MEIxxxx` dir at each start (latency cost) — accepted; rebuilding from tag in a clean container yields a functionally identical artifact, not a hash-identical one (embedded timestamps): verify via behavior + SBOM, not hash equality.
+- Audit is fail-closed: if `audit.log` is unwritable (disk full), privileged actions are refused. Availability is intentionally traded for no-action-without-audit; see `docs/OPS.md`.
 
 ## Out of scope
 
