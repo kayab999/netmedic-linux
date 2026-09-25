@@ -32,6 +32,10 @@ jobs:
           python -m pip install --upgrade pip wheel setuptools pytest pytest-cov pyinstaller cyclonedx-bom hypothesis
           pip install -e netmedic/ --config-settings editable_mode=strict
           pip install -e netmedic_ai/
+          # build_binary.sh requires ./venv (same split as CI build-smoke)
+          python -m venv venv
+          ./venv/bin/pip install --upgrade pip wheel setuptools pyinstaller pillow
+          ./venv/bin/pip install -e netmedic/ --config-settings editable_mode=strict
 
       - name: Test
         env:
