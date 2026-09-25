@@ -1,3 +1,16 @@
+# Release Notes — NetMedic v1.6.0
+
+Enterprise-grade hardening release (B+ → A+ across the engagement).
+
+Security: audit redaction (all sensitive keys + truncation), `openvpn-server@*.service` allowlist, TLS 1.2+ VPN downloads, root-context env guards, no-shell allowlist — all mutation-validated (94% kill rate).
+Quality: 436 tests (was 222), 83% coverage (gates at 75), Hypothesis property tests, mypy strict on 10 modules.
+Supply: Python 3.10–3.12 matrix, lockfiles, CycloneDX SBOM, mandatory GPG, reproducible container build.
+Breaking: Python `>=3.10,<3.13` (was `>=3.8`); Smart Repair `SKIPPED/PARTIAL` semantics; IPC 1.0→1.1 (`+code`).
+
+Requirements: Ubuntu 22.04/24.04, Python 3.10–3.12, GTK3 + NetworkManager + PolicyKit. See CHANGELOG for RC1/RC2 fixes.
+
+---
+
 # Release Notes — NetMedic v1.6.0-rc2
 
 Honest-repair release: `NetResult.code` is source of truth, TCP-only `internet_ok` (ICMP no longer counts), `VERBS.md` live contract + guardian tests, `probes.py` single-source, `netns-golden` harness (A WAN-drop + B TCP-block), `--status/--status-json` health CLI. Breaking: Smart Repair `SKIPPED/PARTIAL` semantics, IPC 1.0→1.1 (`+code`). See CHANGELOG for RC1/RC2 fixes.
