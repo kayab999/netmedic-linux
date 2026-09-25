@@ -131,7 +131,7 @@ jobs:
             libcairo2-dev libgirepository-2.0-dev pkg-config \
             policykit-1 gir1.2-polkit-1.0 network-manager iproute2 \
             iputils-ping curl xvfb dbus-x11
-          python -m pip install --upgrade pip wheel setuptools pytest
+          python -m pip install --upgrade pip wheel setuptools pytest hypothesis
           pip install -e netmedic/ --config-settings editable_mode=strict
           pip install -e netmedic_ai/
       - name: Release smoke

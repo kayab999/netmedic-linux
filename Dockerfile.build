@@ -1,13 +1,18 @@
 # NetMedic reproducible build environment (P1.5).
 #
 # Pins the OS + system deps + Python packages so `dist/netmedic` is identical
-# regardless of the host. CI `build-smoke` should migrate to this image.
+# regardless of the host. CI `container-build` should migrate to this image.
+#
+# Base is ubuntu:24.04 (noble): it ships python3.12 and
+# libgirepository-2.0-dev natively. ubuntu:22.04 (jammy) has neither
+# (no python3.12, gir is libgirepository1.0-dev) — do not downgrade
+# without adding deadsnakes + renaming the gir dev package.
 #
 #   docker build -f Dockerfile.build -t netmedic-build:1.6 .
 #   docker run --rm -v "$PWD/dist:/out" netmedic-build:1.6
 #
 # The binary is extracted to ./dist on the host; nothing else leaves the image.
-FROM ubuntu:22.04
+FROM ubuntu:24.04
 
 ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONDONTWRITEBYTECODE=1 \
