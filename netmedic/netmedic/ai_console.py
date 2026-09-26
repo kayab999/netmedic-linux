@@ -31,6 +31,11 @@ class AIConsoleController:
         self.revealer.set_valign(Gtk.Align.START)
         self.revealer.set_hexpand(True)
         self.revealer.set_vexpand(False)
+        # show_all() must not map a closed palette. A CROSSFADE revealer keeps
+        # its full height at opacity 0, and that height covers the notebook
+        # tab strip (Infrastructure sits in that band).
+        self.revealer.set_no_show_all(True)
+        self.revealer.connect("notify::child-revealed", self._on_child_revealed)
         self.overlay.add_overlay(self.revealer)
 
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
@@ -56,18 +61,31 @@ class AIConsoleController:
         escape_key, escape_mod = Gtk.accelerator_parse("Escape")
         accel_group.connect(escape_key, escape_mod, Gtk.AccelFlags.VISIBLE, self._dismiss_palette)
 
+    def _on_child_revealed(self, revealer, _param):
+        """Drop the overlay allocation once the close animation finishes."""
+        if not revealer.get_reveal_child() and not revealer.get_child_revealed():
+            revealer.hide()
+
     def _set_palette_visible(self, visible: bool):
         """Show/hide the palette and toggle overlay hit-testing.
 
-        Gtk.Overlay children participate in hit-testing for their full allocation
-        unless pass-through is enabled. Without this, an invisible CROSSFADE
-        revealer blocks every click on the main window content.
+        Pass-through alone is not enough: a hidden CROSSFADE revealer still
+        occupies the notebook tab strip and can eat the Infrastructure click.
+        Unmap it while closed so that band belongs to the notebook.
         """
         if self.revealer is None:
             return
-        self.revealer.set_reveal_child(visible)
+        if visible:
+            self.revealer.show()
+            self.revealer.set_reveal_child(True)
+            if self.overlay is not None:
+                self.overlay.set_overlay_pass_through(self.revealer, False)
+            return
         if self.overlay is not None:
-            self.overlay.set_overlay_pass_through(self.revealer, not visible)
+            self.overlay.set_overlay_pass_through(self.revealer, True)
+        self.revealer.set_reveal_child(False)
+        if not self.revealer.get_child_revealed():
+            self.revealer.hide()
 
     def set_sensitive(self, sensitive: bool):
         if self.revealer is not None:

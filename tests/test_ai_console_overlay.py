@@ -35,9 +35,12 @@ def test_hidden_palette_passes_through_events():
 
     try:
         assert ctrl.revealer.get_reveal_child() is False
+        assert ctrl.revealer.get_visible() is False
         assert win.overlay.get_overlay_pass_through(ctrl.revealer) is True
         assert ctrl.revealer.get_valign() == Gtk.Align.START
         assert ctrl.revealer.get_vexpand() is False
+        # Unmapped overlay children keep a 0 or 1px allocation, not the tab strip.
+        assert ctrl.revealer.get_allocated_height() <= 1
     finally:
         win.destroy()
 
@@ -50,11 +53,13 @@ def test_visible_palette_receives_events():
 
     try:
         ctrl._set_palette_visible(True)
+        assert ctrl.revealer.get_visible() is True
         assert ctrl.revealer.get_reveal_child() is True
         assert win.overlay.get_overlay_pass_through(ctrl.revealer) is False
 
         ctrl._dismiss_palette()
         assert ctrl.revealer.get_reveal_child() is False
+        assert ctrl.revealer.get_visible() is False
         assert win.overlay.get_overlay_pass_through(ctrl.revealer) is True
     finally:
         win.destroy()

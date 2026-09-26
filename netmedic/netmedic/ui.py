@@ -110,7 +110,10 @@ class MainWindow(Gtk.Window):
         
         self.btn_diag = self.create_btn("Check Connectivity", self.on_diagnostics, accessible_description="Test internet connectivity")
         self.btn_dns = self.create_btn("Flush DNS", self.on_flush_dns, accessible_description="Clear local DNS cache")
-        self.btn_ip = self.create_btn("Renew IP Address", self.on_renew_ip, accessible_description="Request new IP from DHCP server")
+        self.btn_ip = self.create_btn(
+            "Renew IP Address", self.on_renew_ip, True,
+            accessible_description="Request new IP from DHCP server",
+        )
         self.btn_wifi = self.create_btn("Scan Wi-Fi Congestion", self.on_scan_wifi, accessible_description="Analyze local Wi-Fi channel congestion")
         
         grid.attach(self.btn_diag, 0, 0, 1, 1)

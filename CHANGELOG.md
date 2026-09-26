@@ -12,6 +12,9 @@ All notable changes to NetMedic Linux are documented here.
 - **C-9 (timeout containment):** `run_elevated` converts escaped timeouts to structured results; real-hang wall-clock test added.
 - **C-8 (helper backdoor):** `NETMEDIC_HELPER_EXECUTE` honored only with `NETMEDIC_TEST_MODE=1`.
 - AI confirmation dialogs now show the resolved verb **and** concrete args.
+- Notebook page fill and the log view no longer follow a light gtk-theme: the page `Gtk.Stack` and the text-view `text` node are owned by the dark stylesheet.
+- A closed AI palette no longer keeps a full-width invisible overlay over the notebook tab strip, which swallowed clicks on Infrastructure.
+- Renew IP Address is a destructive (red) control again. The flag was dropped when its accessibility description was added.
 
 ## [1.6.0] — 2026-09-25 — final (tag `v1.6.0`)
 

@@ -21,6 +21,9 @@ REQUIRED_SELECTORS = (
     "viewport {",
     "treeview",
     "tooltip {",
+    "notebook stack",
+    "stack {",
+    "textview.log-view text {",
 )
 
 

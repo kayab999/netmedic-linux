@@ -112,6 +112,10 @@ def test_basic_repair_buttons_wired(main_window):
         assert btn is not None, attr
         assert btn.get_sensitive() is True, attr
         assert btn.get_label() == label, f"{attr}: {btn.get_label()!r}"
+    # Renew IP drops the link; it stays the only red control on Basic Repair.
+    assert win.btn_ip.get_style_context().has_class("destructive-action")
+    for attr in ("btn_diag", "btn_dns", "btn_wifi"):
+        assert not getattr(win, attr).get_style_context().has_class("destructive-action")
 
 
 def test_infrastructure_buttons_wired(main_window):

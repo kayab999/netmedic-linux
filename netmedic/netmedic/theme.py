@@ -28,6 +28,13 @@ notebook header tab:checked {
     color: #FFFFFF;
     border-bottom: 2px solid #4A90E2;
 }
+/* Page body is a Gtk.Stack. Unstyled, Adwaita paints it white around
+   .surface-card (the card does not expand to fill the page). */
+notebook stack,
+stack {
+    background-color: #121212;
+    color: #E0E0E0;
+}
 
 /* Cards / Surfaces */
 .surface-card {
@@ -150,8 +157,13 @@ button.secondary-action {
     border: 1px solid #555555;
 }
 
-/* Log TextView */
+/* Log TextView. GTK3 paints the buffer on the `text` subnode; styling
+   only the textview leaves that node on the ambient (light) theme. */
 textview.log-view {
+    background-color: #121212;
+    color: #A89984;
+}
+textview.log-view text {
     background-color: #121212;
     color: #A89984;
 }
