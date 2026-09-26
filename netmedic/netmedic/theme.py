@@ -37,6 +37,23 @@ notebook header tab:checked {
     padding: 12px;
 }
 
+/* Header bar (title bar): same treatment as window chrome */
+headerbar {
+    background-color: #1A1A1A;
+    color: #E0E0E0;
+    border: none;
+    box-shadow: none;
+    background-image: none;
+}
+headerbar button {
+    background-color: #2A2A2A;
+    color: #E0E0E0;
+    border: 1px solid #444444;
+}
+headerbar button:hover {
+    background-color: #383838;
+}
+
 /* Container frames (Gtk.Frame): never inherit the ambient system theme.
    Unstyled frames followed e.g. a light gtk-theme while the rest of the
    window is dark — own every container surface explicitly. */

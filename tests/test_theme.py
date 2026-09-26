@@ -15,6 +15,7 @@ from netmedic.theme import CSS, apply_theme  # noqa: E402
 REQUIRED_SELECTORS = (
     "frame {",
     "frame > border",
+    "headerbar {",
     "separator {",
     "scrollbar slider",
     "viewport {",
