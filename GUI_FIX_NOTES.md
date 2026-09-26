@@ -2,10 +2,10 @@
 
 Working tree on top of `1b66831` (`ui: own headerbar surface`). These three defects showed up together after the Sprint 1 / theme iteration. They are independent. None of them is the fail-closed audit gate.
 
-Reference shots from a known-good session (log line `[06:46:20] ✅ OpenVPN (Angristan): not_installed` on both):
+Reference shots from a known-good session (log line `[06:46:20] ✅ OpenVPN (Angristan): not_installed` on both, see `docs/screenshots/`):
 
-- Basic Repair: dark card, SMART REPAIR blue, **Renew IP Address red**, the other three grid buttons outlined.
-- Infrastructure: warning line, three red actions, **VPN Not Installed** / **Install OpenVPN**, client list.
+- Basic Repair (`docs/screenshots/basic.png`): dark card, SMART REPAIR blue, **Renew IP Address red**, the other three grid buttons outlined.
+- Infrastructure (`docs/screenshots/infra.png`): warning line, three red actions, **VPN Not Installed** / **Install OpenVPN**, client list.
 
 The broken dock shot of Basic Repair kept the dark card and title bar, and painted everything around them white, including the log (`Install health: OK (helper=on)` in black on white). Infrastructure did not become the current page when clicked.
 
