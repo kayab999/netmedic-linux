@@ -162,6 +162,7 @@ class AngristanOperator(VPNOperator):
             return CommandRunner.run_elevated(
                 "vpn-run-script",
                 {
+                    "script_id": "openvpn-install",
                     "script": str(sealed_path),
                     "expected_sha256": self.EXPECTED_SHA256,
                     "env": env_map,
@@ -260,8 +261,8 @@ class AngristanOperator(VPNOperator):
         if status.message == OperatorStatus.NOT_INSTALLED.value:
             return NetResult(self.name, False, "VPN not installed")
 
-        # Privileged PKI index read via fixed helper verb.
-        res = CommandRunner.run_elevated("vpn-list", {"index_path": self.INDEX_TXT_PATH})
+        # Privileged PKI index read via fixed helper verb (no caller path — F2).
+        res = CommandRunner.run_elevated("vpn-list", {})
         if not res.success:
             # Si falla cat, quizás no se ha creado PKI aún
             return NetResult(self.name, False, "Cannot read PKI index", details=res.stderr)

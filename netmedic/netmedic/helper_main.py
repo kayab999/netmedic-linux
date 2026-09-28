@@ -25,6 +25,9 @@ from typing import Any, Dict, List, Optional, Sequence
 
 from netmedic.helper_verbs import (
     ALL_VERBS,
+    HELPER_VERSION,
+    INDEX_TXT_PATH,
+    PINNED_VPN_INSTALL_SHA256,
     VerbPlan,
     VerbValidationError,
     plan_to_dict,
@@ -177,6 +180,10 @@ def _run_argv(argv: List[str], timeout: Optional[int]) -> subprocess.CompletedPr
     )
 
 
+FIXED_PATH = "/usr/sbin:/usr/bin:/sbin:/bin"
+FIXED_BASH = "/bin/bash"
+
+
 def _execute_vpn_script(
     marker_cmd: List[str], timeout: Optional[int], staging_dir: str = ROOT_STAGE_DIR
 ) -> Dict[str, Any]:
@@ -190,12 +197,22 @@ def _execute_vpn_script(
     script = marker_cmd[1]
     expected = marker_cmd[2]
     env_pairs = marker_cmd[3:]
+    # F1 defense-in-depth: even if plan_verb is bypassed (in-process call),
+    # the root side only honors the pin, never a caller-invented hash.
+    if expected != PINNED_VPN_INSTALL_SHA256:
+        return {
+            "ok": False,
+            "message": "Security abort: unexpected installer hash (pin mismatch).",
+            "details": None,
+        }
     staged: Optional[str] = None
     try:
         staged = _stage_verified_copy(script, expected, staging_dir)
     except StagingError as exc:
         return {"ok": False, "message": str(exc), "details": None}
-    cmd = ["env", *env_pairs, staged]
+    # F1: fixed minimal env, fixed PATH, explicit bash (also survives /run noexec
+    # since bash reads the file instead of execve on a noexec mount).
+    cmd = ["env", "-i", f"PATH={FIXED_PATH}", *env_pairs, FIXED_BASH, staged]
     try:
         proc = _run_argv(cmd, timeout)
     except subprocess.TimeoutExpired:
@@ -221,12 +238,44 @@ def _execute_vpn_script(
     }
 
 
+def _read_vpn_index() -> Dict[str, Any]:
+    """F2: fixed-path PKI read with O_NOFOLLOW, no cat, no caller path."""
+    try:
+        fd = os.open(INDEX_TXT_PATH, os.O_RDONLY | os.O_NOFOLLOW)
+    except OSError as exc:
+        return {"ok": False, "message": f"Cannot read PKI index: {exc}", "details": None}
+    try:
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode):
+            return {"ok": False, "message": "PKI index is not a regular file", "details": None}
+        # 1 MiB cap (matches audit: subprocess output must be size-capped).
+        chunks: List[bytes] = []
+        remaining = 1 << 20
+        while remaining > 0:
+            block = os.read(fd, min(65536, remaining))
+            if not block:
+                break
+            chunks.append(block)
+            remaining -= len(block)
+        data = b"".join(chunks).decode("utf-8", errors="replace").strip()[:20000]
+        return {"ok": True, "message": "read VPN PKI index", "details": data or None, "verb": "vpn-list"}
+    except OSError as exc:
+        return {"ok": False, "message": f"Cannot read PKI index: {exc}", "details": None}
+    finally:
+        try:
+            os.close(fd)
+        except OSError:
+            pass
+
+
 def execute_plan(plan: VerbPlan, *, timeout: Optional[int] = None) -> Dict[str, Any]:
     """Run planned commands; return helper JSON payload."""
     outputs: List[str] = []
     for argv in plan.commands:
         if argv and argv[0] == "__vpn_script__":
             return _execute_vpn_script(argv, timeout)
+        if argv and argv[0] == "__vpn_list__":
+            return _read_vpn_index()
         try:
             proc = _run_argv(argv, timeout)
         except subprocess.TimeoutExpired:
@@ -296,12 +345,20 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="List supported verbs and exit",
     )
+    parser.add_argument(
+        "--version",
+        action="store_true",
+        help="Print helper version and exit",
+    )
     return parser
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = build_parser()
     args = parser.parse_args(list(argv) if argv is not None else None)
+
+    if args.version:
+        return _emit({"ok": True, "version": HELPER_VERSION}, EXIT_OK)
 
     if args.list_verbs:
         return _emit({"ok": True, "verbs": sorted(ALL_VERBS)}, EXIT_OK)

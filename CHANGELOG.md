@@ -4,6 +4,14 @@ All notable changes to NetMedic Linux are documented here.
 
 ## [Unreleased] — v1.6.1 candidate
 
+### Security (audit F1-F5 + M1)
+- **F1 (vpn-run-script generic root):** caller hash no longer trusted — must equal root pin `PINNED_VPN_INSTALL_SHA256`; `script_id` allowlist (`openvpn-install`); env allowlist (11 Angristan vars only, no `LD_*`/`PATH`/`BASH_ENV`); helper executes with `env -i PATH=fixed` + `/bin/bash` (noexec-safe) and re-checks pin even on in-process calls.
+- **F2 (vpn-list traversal):** `index_path` param removed; fixed-path `O_NOFOLLOW` Python read with 1 MiB cap (no `cat`, no caller path).
+- **F3 (interpreter hijack):** installer pins `/usr/bin/python3`, uses `install -o root`, wrapper runs `-I -s` via root-owned `_run_helper.py` (no `PYTHONPATH`, no venv).
+- **F4 (polkit granularity):** all 12 actions annotate `exec.argv1` with helper verb; `vpn-*`/`toggle-firewall`/`reset-stack` use `auth_admin` (no keep).
+- **F5 (stale helper):** daemon refuses version-mismatched helper (`--version` vs `HELPER_VERSION=1.6.1`); installer syncs version from source.
+- **M1 (downgrade):** legacy elevation and `NETMEDIC_HELPER_PATH` honored only in `NETMEDIC_TEST_MODE=1`; no `PATH` lookup in production.
+
 ### Fixed relative to 1.6.0
 - **C-1 (same-UID script swap):** helper re-stages verified scripts into root-owned `/run/netmedic` (0700, unique per invocation), re-hashes at the exec path, unlinks after. 1.6.0 hashed then exec'd a user-owned path.
 - **B-4/C-16 (fail-closed audit):** privileged intent is recorded before execution; unwritable audit log refuses the action ("Audit unavailable") instead of executing unaudited.

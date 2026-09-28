@@ -249,12 +249,21 @@ def test_execute_rejects_bad_env(tmp_path, monkeypatch):
     assert "env" in res.stderr.lower()
 
 
+def _pin_helper_to(monkeypatch, digest: str):
+    monkeypatch.setattr(
+        "netmedic.helper_verbs.PINNED_VPN_INSTALL_SHA256", digest
+    )
+    monkeypatch.setattr(
+        "netmedic.helper_main.PINNED_VPN_INSTALL_SHA256", digest
+    )
+
+
 def test_execute_success_sealed_copy(tmp_path, monkeypatch):
     content = b"#!/bin/bash\necho hi\n"
     op, _ = _op_with_script(tmp_path, monkeypatch, content)
-    monkeypatch.setattr(
-        AngristanOperator, "EXPECTED_SHA256", hashlib.sha256(content).hexdigest()
-    )
+    digest = hashlib.sha256(content).hexdigest()
+    monkeypatch.setattr(AngristanOperator, "EXPECTED_SHA256", digest)
+    _pin_helper_to(monkeypatch, digest)
     runtime = tmp_path / "runtime"
     runtime.mkdir()
     monkeypatch.setenv("XDG_RUNTIME_DIR", str(runtime))

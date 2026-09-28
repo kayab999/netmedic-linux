@@ -83,12 +83,16 @@ class Config:
         return Config._any_helper_exists()
 
     @staticmethod
+    def _is_test_mode() -> bool:
+        return os.environ.get("NETMEDIC_TEST_MODE") == "1"
+
+    @staticmethod
     def allow_legacy_elevation() -> bool:
-        """Permit raw pkexec <tool> argv (tests / emergency only).
+        """Permit raw pkexec <tool> argv (tests only, M1).
 
         Production must not set this. Tests set NETMEDIC_ALLOW_LEGACY_ELEVATION=1
-        together with NETMEDIC_USE_HELPER=0.
-        Fail-closed when running as root: env override ignored.
+        together with NETMEDIC_USE_HELPER=0 AND NETMEDIC_TEST_MODE=1.
+        Fail-closed when running as root or outside test mode.
         """
         try:
             if os.geteuid() == 0:
@@ -97,6 +101,12 @@ class Config:
                 return False
         except Exception:
             pass
+        if not Config._is_test_mode():
+            if os.environ.get("NETMEDIC_ALLOW_LEGACY_ELEVATION"):
+                logger.warning(
+                    "Ignoring NETMEDIC_ALLOW_LEGACY_ELEVATION outside NETMEDIC_TEST_MODE (fail-closed)."
+                )
+            return False
         return os.environ.get("NETMEDIC_ALLOW_LEGACY_ELEVATION", "").lower() in (
             "1",
             "true",
@@ -105,25 +115,26 @@ class Config:
 
     @staticmethod
     def get_helper_path() -> Path:
-        """Resolve netmedic-helper executable path."""
+        """Resolve netmedic-helper executable path (M1: no PATH fallback in prod)."""
         try:
             is_root = os.geteuid() == 0
         except Exception:
             is_root = False
         override = os.environ.get("NETMEDIC_HELPER_PATH")
-        if override and not is_root:
-            return Path(override)
-        if override and is_root:
-            logger.warning("Ignoring NETMEDIC_HELPER_PATH when euid==0")
+        if override:
+            # M1: honor override only in test mode (or warn and ignore in prod).
+            if Config._is_test_mode() and not is_root:
+                return Path(override)
+            logger.warning("Ignoring NETMEDIC_HELPER_PATH outside test mode / when root")
         if Config.SYSTEM_HELPER_PATH.is_file():
             return Config.SYSTEM_HELPER_PATH
         if Config.SYSTEM_HELPER_ALT_PATH.is_file():
             return Config.SYSTEM_HELPER_ALT_PATH
-        which = __import__("shutil").which("netmedic-helper")
-        if which:
-            return Path(which)
-        # Development fallback: python -m netmedic.helper_main
-        return Path(sys_executable_helper_module())
+        # M1: no shutil.which PATH lookup in production — system paths only.
+        # Dev/test fallback: python -m netmedic.helper_main (requires TEST_MODE).
+        if Config._is_test_mode():
+            return Path(sys_executable_helper_module())
+        return Config.SYSTEM_HELPER_PATH
 
     @staticmethod
     def _ensure_dir(path: Path) -> None:

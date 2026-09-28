@@ -54,20 +54,48 @@ def test_policy_xml_well_formed_and_annotated():
         f"policy missing actions: {expected_ids - policy_ids}"
     )
 
+    # F4: helper verb per polkit action (pkexec disambiguates by argv1).
+    # Reverse map: polkit ID -> helper verb via IPC_TO_VERB.
+    id_to_verb = {}
+    for ipc_action, polkit_id in POLKIT_ACTION_IDS.items():
+        id_to_verb[polkit_id] = IPC_TO_VERB[ipc_action]
+    # High-risk verbs must not use auth_admin_keep (no retention window).
+    no_keep_ids = {
+        "com.kayab.netmedic.reset-stack",
+        "com.kayab.netmedic.toggle-firewall",
+        "com.kayab.netmedic.vpn-create",
+        "com.kayab.netmedic.vpn-revoke",
+        "com.kayab.netmedic.vpn-reconnect",
+        "com.kayab.netmedic.vpn-list",
+        "com.kayab.netmedic.vpn-install",
+        "com.kayab.netmedic.vpn-start",
+    }
+
     for action_el in actions:
         action_id = action_el.get("id")
         if action_id not in expected_ids:
             continue
-        annot_paths = []
+        annot = {}
+        allow_active = None
         for child in action_el:
-            if not (child.tag.endswith("annotate") or child.tag == "annotate"):
-                continue
-            key = child.get("key") or ""
-            if key.endswith("exec.path") or key == "org.freedesktop.policykit.exec.path":
-                annot_paths.append((child.text or "").strip())
-        assert HELPER_PATH in annot_paths, (
+            tag = child.tag
+            if tag.endswith("annotate") or tag == "annotate":
+                key = child.get("key") or ""
+                annot[key] = (child.text or "").strip()
+            if tag.endswith("defaults") or tag == "defaults":
+                for d in child:
+                    if d.tag.endswith("allow_active") or d.tag == "allow_active":
+                        allow_active = (d.text or "").strip()
+        assert HELPER_PATH in annot.get("org.freedesktop.policykit.exec.path", ""), (
             f"{action_id} missing exec.path annotate → {HELPER_PATH}"
         )
+        # F4: argv1 must equal the helper verb for this action.
+        expected_verb = id_to_verb[action_id]
+        assert annot.get("org.freedesktop.policykit.exec.argv1") == expected_verb, (
+            f"{action_id} missing/incorrect exec.argv1 (want {expected_verb})"
+        )
+        if action_id in no_keep_ids:
+            assert allow_active == "auth_admin", f"{action_id} must use auth_admin (no keep)"
 
 
 def test_is_privileged_matches_set():
