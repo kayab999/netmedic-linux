@@ -1,5 +1,6 @@
 from unittest.mock import MagicMock, patch
 
+from netmedic.models import ResultCode
 from netmedic.network import NetworkMedic
 
 
@@ -24,7 +25,7 @@ def test_change_dns_success(mock_which, mock_run, mock_elevated):
     with patch.object(medic, "get_default_interface", return_value="wlan0"):
         result = medic.change_dns("1.1.1.1")
 
-    assert result.success is True
+    assert result.code in (ResultCode.OK, ResultCode.EXECUTED)
     assert "home" in result.message
     assert "1.1.1.1" in result.message
     mock_elevated.assert_called_once_with(
@@ -36,7 +37,7 @@ def test_change_dns_success(mock_which, mock_run, mock_elevated):
 def test_change_dns_rejects_invalid_ip():
     medic = NetworkMedic()
     result = medic.change_dns("not-an-ip")
-    assert result.success is False
+    assert result.code not in (ResultCode.OK, ResultCode.EXECUTED)
     assert "invalid" in result.message.lower() or "inválido" in result.message.lower()
 
 
@@ -44,4 +45,4 @@ def test_change_dns_rejects_invalid_ip():
 def test_change_dns_requires_nmcli(mock_which):
     medic = NetworkMedic()
     result = medic.change_dns("8.8.8.8")
-    assert result.success is False
+    assert result.code not in (ResultCode.OK, ResultCode.EXECUTED)

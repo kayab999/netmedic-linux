@@ -124,45 +124,61 @@ def _finish_privileged(
 def _result_payload(result: NetResult) -> Dict[str, Any]:
     # Code is source of truth; status/success derived for backward compat (E4)
     from netmedic.models import ResultCode
-    try:
-        code = result.code
-        if isinstance(code, str):
-            code = ResultCode(code)
-        # Handle MagicMock from tests (has no real code)
-        if code.__class__.__name__ == "MagicMock":
-            # Fallback to success shim for mocked objects (tests only, not production)
-            is_ok = bool(getattr(result, "success", False))  # sf-success: allow - test mock compat
-        else:
+    details: Any = None
+    data: Any = None
+    message = ""
+    operation = ""
+    if not isinstance(result, NetResult):
+        # Test double (MagicMock medic): mirror legacy truthiness without
+        # touching the NetResult.success shim, which is now warn-always.
+        # Attribute reads on the double are getattr-guarded like before.
+        try:
+            is_ok = bool(getattr(result, "success", False))
+        except Exception:
+            is_ok = False
+        code: Any = ResultCode.OK if is_ok else ResultCode.FAILED
+        message = str(getattr(result, "message", ""))
+        operation = str(getattr(result, "operation", ""))
+        try:
+            details = getattr(result, "details", None)
+            data = getattr(result, "data", None)
+        except Exception:
+            details, data = None, None
+    else:
+        try:
+            code = result.code
+            if isinstance(code, str):
+                code = ResultCode(code)
             is_ok = code in (ResultCode.OK, ResultCode.EXECUTED)
-    except Exception:
-        is_ok = False
-        code = ResultCode.FAILED
+        except Exception:
+            is_ok = False
+            code = ResultCode.FAILED
+        message, operation = result.message, result.operation
+        details, data = result.details, result.data
     try:
         if isinstance(code, ResultCode):
             code_val = code.value
         else:
             code_val = str(code)
-        if code_val.startswith("<MagicMock"):
-            code_val = "ok" if is_ok else "failed"
     except Exception:
         code_val = "ok" if is_ok else "failed"
     payload: Dict[str, Any] = {
         "status": "ok" if is_ok else "error",
         "success": is_ok,
-        "message": result.message,
-        "operation": result.operation,
+        "message": message,
+        "operation": operation,
         "code": code_val,
     }
-    if result.details is not None:
-        payload["details"] = result.details
-    if result.data is not None:
-        if isinstance(result.data, list):
+    if details is not None:
+        payload["details"] = details
+    if data is not None:
+        if isinstance(data, list):
             payload["data"] = [
                 {"name": c.name, "active": c.active} if hasattr(c, "name") else c
-                for c in result.data
+                for c in data
             ]
         else:
-            payload["data"] = result.data
+            payload["data"] = data
     return payload
 
 

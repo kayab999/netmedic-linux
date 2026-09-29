@@ -1,4 +1,5 @@
 from unittest.mock import patch, MagicMock
+from netmedic.models import ResultCode
 from netmedic.operators.wifi import WifiOperator
 from netmedic.operators.vpn.angristan import AngristanOperator
 
@@ -17,7 +18,7 @@ def test_wifi_scan_congestion(mock_run):
     wifi = WifiOperator()
     res = wifi.scan_congestion()
 
-    assert res.success is True
+    assert res.code in (ResultCode.OK, ResultCode.EXECUTED)
     assert "Most congested channel: 1" in res.message
     assert res.data["1"] == 2
     assert res.data["6"] == 1
@@ -36,5 +37,5 @@ def test_angristan_status_running(mock_verify, mock_run, tmp_path, monkeypatch):
     vpn = AngristanOperator()
     res = vpn.check_status()
 
-    assert res.success is True
+    assert res.code in (ResultCode.OK, ResultCode.EXECUTED)
     assert res.message == "running"

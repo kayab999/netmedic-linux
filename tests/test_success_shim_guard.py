@@ -3,6 +3,10 @@
 Only the shim definition in models.py may define .success. Consumers in
 tools/netmedic_mcp.py and netmedic_ai must use code. CommandResult.success
 is legitimate low-level API and is allowlisted via file scope.
+
+M8: the narrowed shim honors no allow-markers anywhere — not in tests,
+not in production. The ratchet below therefore pins ZERO markers in
+shipped code; add none.
 """
 import re
 from pathlib import Path
@@ -24,27 +28,23 @@ def test_no_new_success_shim_usage():
             except Exception:
                 continue
             for idx, line in enumerate(lines, start=1):
-                if "sf-success: allow" in line.lower():
-                    continue
                 if pattern.search(line):
                     stripped = line.strip()
                     if stripped.startswith("#"):
                         continue
                     violations.append(f"{py.relative_to(root)}:{idx}: {line.strip()}")
-    # Also guard NetResult.success in UI layer: new code must use code
-    # Allowlist existing legitimate CommandResult checks via sf-success marker
+    # Also guard NetResult.success in UI layer: new code must use code.
+    # M8: no allow-markers honored anywhere — migrate to .code, no exceptions.
     # For netmedic/netmedic/ui.py we check NetResult specifically
     ui_path = root / "netmedic/netmedic/ui.py"
     if ui_path.is_file():
         for idx, line in enumerate(ui_path.read_text(encoding="utf-8").splitlines(), start=1):
-            if "sf-success: allow" in line.lower():
-                continue
             if ".success" in line and "net_res" in line:
                 violations.append(f"netmedic/netmedic/ui.py:{idx}: {line.strip()} (use .code)")
     assert not violations, (
         "E4: .success shim usage in consumer layer — must use .code (ResultCode):\n"
         + "\n".join(violations)
-        + "\nMigrate to code or add '# sf-success: allow' with justification."
+        + "\nMigrate to code (allow-markers are no longer honored)."
     )
 
 
@@ -58,7 +58,7 @@ def test_shim_mapping_documented():
 
 
 def test_success_allowlist_ratchet():
-    """E2/E4 symmetry: sf-success allow must not grow."""
+    """M8: no allow-markers in shipped code — the narrowed shim honors none."""
     root = Path(__file__).resolve().parent.parent
     count = 0
     for scan_root in ["netmedic/netmedic", "tools", "netmedic_ai"]:
@@ -68,6 +68,5 @@ def test_success_allowlist_ratchet():
             except Exception:
                 continue
             count += text.lower().count("sf-success: allow")
-    # After migration, only shim definition may need allow; current is 0
-    MAX_ALLOWED = 2
+    MAX_ALLOWED = 0
     assert count <= MAX_ALLOWED, f"sf-success allowlist ratchet exceeded: {count} > {MAX_ALLOWED}"

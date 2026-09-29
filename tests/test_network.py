@@ -1,4 +1,5 @@
 from unittest.mock import patch, MagicMock
+from netmedic.models import ResultCode
 from netmedic.network import NetworkMedic
 
 @patch('netmedic.system.CommandRunner.run')
@@ -18,7 +19,7 @@ def test_diagnostics_success(mock_run):
     medic = NetworkMedic()
     res = medic.run_diagnostics()
     
-    assert res.success is True
+    assert res.code in (ResultCode.OK, ResultCode.EXECUTED)
     assert "Gateway Reachable" in res.message
     assert "DNS Resolution OK" in res.message
 
@@ -39,5 +40,5 @@ def test_diagnostics_fail_dns(mock_run):
     medic = NetworkMedic()
     res = medic.run_diagnostics()
     
-    assert res.success is False
+    assert res.code not in (ResultCode.OK, ResultCode.EXECUTED)
     assert "DNS Resolution Failed" in res.message

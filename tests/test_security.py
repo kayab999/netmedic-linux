@@ -1,3 +1,4 @@
+from netmedic.models import ResultCode
 from netmedic.system import CommandRunner
 from netmedic.operators.vpn.angristan import AngristanOperator
 from unittest.mock import patch
@@ -28,7 +29,7 @@ def test_operator_integrity_failure(mock_dir, tmp_path):
     
     # Intentar listar clientes debería fallar por integridad
     res = op.check_status()
-    assert res.success is False
+    assert res.code not in (ResultCode.OK, ResultCode.EXECUTED)
     assert "integrity" in res.details.lower()
 
 def test_operator_integrity_success(tmp_path, monkeypatch):

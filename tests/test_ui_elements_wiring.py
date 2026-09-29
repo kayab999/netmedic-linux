@@ -258,7 +258,7 @@ def test_smart_repair_sequence_actions(main_window):
     ), patch("time.sleep"):
         win.on_smart_repair(None)
 
-    assert captured["result"].success is True
+    assert captured["result"].code in (ResultCode.OK, ResultCode.EXECUTED)
     # New summary includes repairs ratio and pre/post tags
     assert "2/2" in captured["result"].message or "repairs" in captured["result"].message.lower()
     assert [c.args[0] for c in bridge.call.call_args_list] == [

@@ -1,6 +1,7 @@
 import signal
 from unittest.mock import MagicMock, patch
 
+from netmedic.models import ResultCode
 from netmedic.network import NetworkMedic
 from netmedic.runtime import handle_signals
 
@@ -23,7 +24,7 @@ def test_cleanup_on_signal(mock_elevated):
 
     res = medic.cleanup()
 
-    assert res.success is True
+    assert res.code in (ResultCode.OK, ResultCode.EXECUTED)
     assert "medicabcdef" not in medic._created_ifaces
     mock_elevated.assert_called_with("iface-del", {"iface": "medicabcdef"})
 
