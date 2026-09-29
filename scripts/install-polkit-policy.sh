@@ -22,24 +22,35 @@ if [[ ! -f "$HELPER_SRC/helper_main.py" || ! -f "$HELPER_SRC/helper_verbs.py" ]]
   exit 1
 fi
 
-PYTHON3="$(command -v python3)"
-if [[ -z "$PYTHON3" ]]; then
-  echo "python3 not found" >&2
+# F3: fixed system interpreter — never bake a venv/pyenv/conda python into
+# a root-executed wrapper (threat-model item 13).
+PYTHON3="/usr/bin/python3"
+if [[ ! -x "$PYTHON3" ]]; then
+  echo "Error: $PYTHON3 not found/executable (refusing venv interpreter)" >&2
   exit 1
 fi
+# Keep version in sync with netmedic/netmedic/helper_verbs.py HELPER_VERSION.
+HELPER_VERSION="$(python3 -c 'import re;print(re.search(r"HELPER_VERSION\s*=\s*\"([^\"]+)\"", open("netmedic/netmedic/helper_verbs.py").read()).group(1))')"
 
-echo "Installing system helper package → $PKG_DIR"
+echo "Installing system helper package → $PKG_DIR (python $PYTHON3, version $HELPER_VERSION)"
 sudo mkdir -p "$PKG_DIR"
 # Minimal package: only helper modules (stdlib deps).
-sudo tee "$PKG_DIR/__init__.py" >/dev/null <<'EOF'
+sudo tee "$PKG_DIR/__init__.py" >/dev/null <<EOF
 """System-installed NetMedic helper package (elevation only)."""
-__version__ = "1.5.0"
+__version__ = "$HELPER_VERSION"
 EOF
-sudo cp "$HELPER_SRC/helper_verbs.py" "$PKG_DIR/helper_verbs.py"
-sudo cp "$HELPER_SRC/helper_main.py" "$PKG_DIR/helper_main.py"
-# Rewrite import for system layout (package is top-level 'netmedic' on sys.path).
-# Sources already use `from netmedic.helper_verbs` — keep package name.
-sudo chmod 644 "$PKG_DIR"/*.py
+sudo install -o root -g root -m 0644 "$HELPER_SRC/helper_verbs.py" "$PKG_DIR/helper_verbs.py"
+sudo install -o root -g root -m 0644 "$HELPER_SRC/helper_main.py" "$PKG_DIR/helper_main.py"
+# Launcher for -I mode (-I ignores PYTHONPATH, so sys.path is set explicitly).
+sudo tee "$LIB_DIR/_run_helper.py" >/dev/null <<EOF
+"""Root-owned launcher: fixed sys.path, isolated mode safe."""
+import sys
+sys.path.insert(0, "$LIB_DIR")
+from netmedic.helper_main import main
+if __name__ == "__main__":
+    raise SystemExit(main())
+EOF
+sudo chmod 0644 "$LIB_DIR/_run_helper.py"
 sudo chown -R root:root "$LIB_DIR"
 
 echo "Installing privileged helper wrapper → $HELPER_WRAPPER"
@@ -47,11 +58,10 @@ sudo mkdir -p "$LIBEXEC_DIR"
 sudo tee "$HELPER_WRAPPER" >/dev/null <<EOF
 #!/bin/sh
 # NetMedic privileged helper — system-owned (no repo/venv dependency)
-# Note: do not use python -I here; isolated mode ignores PYTHONPATH.
-export PYTHONPATH="${LIB_DIR}"
-exec ${PYTHON3} -s -m netmedic.helper_main "\$@"
+# Fixed interpreter + isolated mode; path is set by _run_helper.py.
+exec $PYTHON3 -I -s $LIB_DIR/_run_helper.py "\$@"
 EOF
-sudo chmod 755 "$HELPER_WRAPPER"
+sudo chmod 0755 "$HELPER_WRAPPER"
 sudo chown root:root "$HELPER_WRAPPER"
 
 echo "Installing polkit policy → $DEST_POLICY"

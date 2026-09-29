@@ -9,7 +9,7 @@ from typing import Any, FrozenSet, List, Mapping, Optional
 
 from netmedic.models import CommandResult
 from netmedic.config import Config
-from netmedic.helper_verbs import VerbValidationError, plan_verb
+from netmedic.helper_verbs import HELPER_VERSION, VerbValidationError, plan_verb
 
 logger = logging.getLogger(__name__)
 
@@ -97,6 +97,44 @@ class CommandRunner:
         return None
 
     @staticmethod
+    def _helper_version_argv() -> List[str]:
+        """Argv to query helper --version without elevation."""
+        helper = str(Config.get_helper_path())
+        if "|" in helper and helper.count("|") >= 2:
+            parts = helper.split("|")
+            return [parts[0], parts[1], parts[2], "--version"]
+        return [helper, "--version"]
+
+    @staticmethod
+    def _check_helper_version() -> Optional[str]:
+        """F5: refuse a stale system helper (fixes only reach users who re-run installer)."""
+        # Dev fallback (python -m) always matches in-repo version.
+        helper = str(Config.get_helper_path())
+        if "|" in helper:
+            return None
+        try:
+            proc = subprocess.run(
+                CommandRunner._helper_version_argv(),
+                capture_output=True,
+                text=True,
+                timeout=5,
+                check=False,
+            )
+        except Exception:
+            return None  # fail-open on version probe; elevation itself is still gated
+        try:
+            payload = json.loads((proc.stdout or "").strip().splitlines()[-1])
+            ver = str(payload.get("version", ""))
+        except Exception:
+            return None
+        if ver and ver != HELPER_VERSION:
+            return (
+                f"Privileged helper version mismatch (have {ver}, want {HELPER_VERSION}). "
+                "Re-run: ./scripts/install-polkit-policy.sh"
+            )
+        return None
+
+    @staticmethod
     def _helper_invocation(verb: str, args: Mapping[str, Any], *, timeout: Optional[int]) -> List[str]:
         """Build argv to run netmedic-helper (optionally under pkexec)."""
         helper = str(Config.get_helper_path())
@@ -139,6 +177,9 @@ class CommandRunner:
             return CommandResult(False, 2, "", str(exc), [verb])
 
         if Config.use_privileged_helper():
+            ver_err = CommandRunner._check_helper_version()
+            if ver_err:
+                return CommandResult(False, 127, "", ver_err, [verb])
             try:
                 final_cmd = CommandRunner._helper_invocation(verb, args, timeout=timeout)
             except FileNotFoundError as exc:

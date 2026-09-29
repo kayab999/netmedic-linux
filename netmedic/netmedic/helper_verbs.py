@@ -53,6 +53,31 @@ ALL_VERBS: frozenset[str] = frozenset({
 INDEX_TXT_PATH = "/etc/openvpn/server/easy-rsa/pki/index.txt"
 DEFAULT_VPN_SERVICE = "openvpn-server@server.service"
 
+# F1: root-side trust anchor. Must match AngristanOperator.EXPECTED_SHA256.
+# The helper never trusts caller-supplied hashes; plan_verb requires the
+# caller value to equal this pin (transitional) and helper_main re-verifies
+# staged bytes against it. Full script_id-only model (no path/hash from
+# caller) is the follow-up once /usr/lib/netmedic/scripts ships the bundle.
+PINNED_VPN_INSTALL_SHA256 = (
+    "65c3b53f652615598696ec062a4d3106540c43666f2722108ecf62a4b87e2f5b"
+)
+VPN_SCRIPT_IDS: frozenset[str] = frozenset({"openvpn-install"})
+# Angristan installer inputs only. No LD_*, PATH, PYTHON*, BASH_ENV, etc.
+VPN_ALLOWED_ENV_KEYS: frozenset[str] = frozenset({
+    "APPROVE_INSTALL",
+    "APPROVE_IP",
+    "IPV6_SUPPORT",
+    "PORT_CHOICE",
+    "PROTOCOL_CHOICE",
+    "DNS",
+    "COMPRESSION_ENABLED",
+    "CUSTOMIZE_ENC",
+    "MENU_OPTION",
+    "CLIENT",
+    "PASS",
+})
+HELPER_VERSION = "1.6.1"
+
 
 @dataclass(frozen=True)
 class VerbPlan:
@@ -194,10 +219,11 @@ def plan_verb(verb: str, args: Optional[Mapping[str, Any]] = None) -> VerbPlan:
         raise VerbValidationError("toggle-firewall action must be 'enable' or 'disable'")
 
     if verb == "vpn-list":
-        path = args.get("index_path", INDEX_TXT_PATH)
-        if not isinstance(path, str) or not path.startswith("/etc/openvpn/"):
-            raise VerbValidationError("vpn-list index_path must be under /etc/openvpn/")
-        return VerbPlan(verb, [["cat", path]], "read VPN PKI index")
+        # F2: fixed path only. index_path param removed — caller cannot pick
+        # root-read paths (was startswith bypass: /etc/openvpn/../shadow).
+        if "index_path" in args:
+            raise VerbValidationError("vpn-list takes no path arguments (fixed PKI index)")
+        return VerbPlan(verb, [["__vpn_list__"]], "read VPN PKI index")
 
     if verb in ("vpn-start-service", "vpn-restart-service"):
         service = validate_service(
@@ -221,9 +247,19 @@ def plan_verb(verb: str, args: Optional[Mapping[str, Any]] = None) -> VerbPlan:
         # stay on purpose (defense in depth — proven equivalent by mutation testing).
         # Canonicalization is enforced at exec time via SHA256 sealed-copy re-hash
         # (helper_main re-hashes FD before exec); planning stage rejects tricks above.
+        # F1: caller hash is never trusted — must equal the root-side pin.
         expected_sha = _require_str(args, "expected_sha256") or ""
         if not re.fullmatch(r"[0-9a-f]{64}", expected_sha):
             raise VerbValidationError("expected_sha256 must be 64 lowercase hex chars")
+        if expected_sha != PINNED_VPN_INSTALL_SHA256:
+            raise VerbValidationError(
+                "expected_sha256 does not match pinned installer (see docs/VPN_REPIN.md)"
+            )
+        # F1: script_id forward-compat. Required going forward; defaults for
+        # old callers during transition, but unknown IDs are rejected.
+        script_id = args.get("script_id", "openvpn-install")
+        if not isinstance(script_id, str) or script_id not in VPN_SCRIPT_IDS:
+            raise VerbValidationError(f"Unknown script_id: {script_id!r}")
         env = args.get("env") or {}
         if not isinstance(env, dict):
             raise VerbValidationError("env must be an object of string values")
@@ -231,15 +267,22 @@ def plan_verb(verb: str, args: Optional[Mapping[str, Any]] = None) -> VerbPlan:
         for key, value in env.items():
             if not isinstance(key, str) or not isinstance(value, str):
                 raise VerbValidationError("env keys and values must be strings")
-            if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", key):
-                raise VerbValidationError(f"Invalid env key: {key!r}")
-            if "\n" in value or "\x00" in value:
+            if key not in VPN_ALLOWED_ENV_KEYS:
+                raise VerbValidationError(f"env key not allowlisted for vpn-run-script: {key!r}")
+            if "\n" in value or "\x00" in value or "=" in key:
+                raise VerbValidationError(f"Invalid env value for {key}")
+            # Values are passed as KEY=val to env(1); reject arg-split tricks.
+            if value.startswith("-"):
+                # Angristan values never start with '-'; blocks env flag injection
+                # if a future refactor mishandles the argv split.
                 raise VerbValidationError(f"Invalid env value for {key}")
             env_pairs.append(f"{key}={value}")
         # Marker command: helper_main executes integrity + env script specially.
+        # Hash emitted is always the pin, never the caller value verbatim
+        # (they are equal by the check above, but pin is canonical).
         return VerbPlan(
             verb,
-            [["__vpn_script__", script, expected_sha, *env_pairs]],
+            [["__vpn_script__", script, PINNED_VPN_INSTALL_SHA256, *env_pairs]],
             "run verified VPN installer script",
         )
 
