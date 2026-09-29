@@ -17,6 +17,7 @@ All notable changes to NetMedic Linux are documented here.
 - **F5 (stale helper):** daemon refuses version-mismatched helper (`--version` vs `HELPER_VERSION=1.6.1`); installer syncs version from source.
 - **M1 (downgrade):** legacy elevation and `NETMEDIC_HELPER_PATH` honored only in `NETMEDIC_TEST_MODE=1`; no `PATH` lookup in production.
 - **M3 (audit hardening):** `_append_entry` uses `O_APPEND|O_CREAT|O_NOFOLLOW` with 0600 at creation + fsync (symlinks refused); denials rate-limited (1/5s/action, suppressed count reported, intents never limited); helper emits one root-side journal record per verb via stdlib syslog.
+- **M4 (validator unification):** new `netmedic/validators.py` (stdlib-only, shipped to the helper) replaces four drifted DNS-regex copies and three iface-name copies; `helper_verbs`, `network.py`, `ipc_actions.py` and `netmedic_ai/param_validation.py` (guarded import + strict fallback) all delegate to it. DNS via `ipaddress` (rejects `"1.1.1.1\n"` and leading-zero octets); ifaces reject a leading `-` and cap at 15 chars; conn names reject a leading `-`. Breaking in the strict direction only; property test updated to the new contract.
 
 ### Fixed relative to 1.6.0
 - **C-1 (same-UID script swap):** helper re-stages verified scripts into root-owned `/run/netmedic` (0700, unique per invocation), re-hashes at the exec path, unlinks after. 1.6.0 hashed then exec'd a user-owned path.

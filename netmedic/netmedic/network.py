@@ -1,22 +1,15 @@
 import logging
 import os
-import re
 import uuid
 import threading
 import shutil
 import json
 from typing import List, Optional, Set, Tuple
 
-_DNS_IP_RE = re.compile(
-    r"^(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)$"
-)
-# Virtual adapters created by NetMedic only — never delete arbitrary iface names from state files.
-_MEDIC_IFACE_RE = re.compile(r"^medic[0-9a-f]{6}$")
-_IFACE_TOKEN_RE = re.compile(r"^[A-Za-z0-9._@+-]+$")
-
 from netmedic.models import NetResult, ResultCode
 from netmedic.system import CommandRunner
 from netmedic.config import Config
+from netmedic.validators import ValidationError, is_medic_iface, validate_dns, validate_iface
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +46,7 @@ class NetworkMedic:
     @staticmethod
     def is_medic_virtual_iface(iface: str) -> bool:
         """True only for NetMedic-owned dummy names (medic + 6 hex digits)."""
-        return isinstance(iface, str) and bool(_MEDIC_IFACE_RE.fullmatch(iface))
+        return is_medic_iface(iface)
 
     @staticmethod
     def _sanitize_iface_list(raw) -> Set[str]:
@@ -414,7 +407,9 @@ class NetworkMedic:
         Tiempo: 2s - 5s.
         Reversibilidad: Sí (Restaurar DHCP o valores previos).
         """
-        if not _DNS_IP_RE.match(server):
+        try:
+            server = validate_dns(server)
+        except ValidationError:
             return NetResult("Change DNS", False, f"DNS inválido: {server}", code=ResultCode.ERROR)
 
         if not self._check_requirement("nmcli"):
@@ -454,7 +449,9 @@ class NetworkMedic:
         iface = self.get_default_interface()
         if not iface:
             return NetResult("Renew IP", False, "No interface detected", code=ResultCode.ERROR)
-        if not _IFACE_TOKEN_RE.fullmatch(iface):
+        try:
+            validate_iface(iface)
+        except ValidationError:
             return NetResult("Renew IP", False, f"Refusing invalid interface name: {iface!r}", code=ResultCode.ERROR)
 
         ip_before = self._get_iface_ipv4(iface)
@@ -572,7 +569,9 @@ class NetworkMedic:
         iface = self.get_default_interface()
         if not iface:
             return NetResult("Restart Adapter", False, "No interface detected", code=ResultCode.ERROR)
-        if not _IFACE_TOKEN_RE.fullmatch(iface):
+        try:
+            validate_iface(iface)
+        except ValidationError:
             return NetResult("Restart Adapter", False, f"Refusing invalid interface name: {iface!r}", code=ResultCode.ERROR)
 
         res = CommandRunner.run_elevated("restart-adapter", {"iface": iface})
