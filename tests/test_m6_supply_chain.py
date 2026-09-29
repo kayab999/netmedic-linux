@@ -88,12 +88,20 @@ def test_lock_has_hashes_for_pip_inputs():
 
 
 def test_dependabot_pip_dirs_exist():
-    """Pip updates must point at dirs that contain manifests."""
-    import yaml as _yaml
-
-    cfg = _yaml.safe_load((REPO / ".github" / "dependabot.yml").read_text())
-    pip_dirs = [u["directory"] for u in cfg["updates"] if u["package-ecosystem"] == "pip"]
+    """Pip updates must point at dirs that contain manifests (stdlib-only)."""
+    text = (REPO / ".github" / "dependabot.yml").read_text()
+    # Parse the small known structure without PyYAML (not a test dep):
+    # a `directory:` line following a `package-ecosystem: "pip"` entry.
+    pip_dirs: list = []
+    want_dir = False
+    for line in text.splitlines():
+        if 'package-ecosystem:' in line:
+            want_dir = '"pip"' in line
+        elif want_dir and "directory:" in line:
+            pip_dirs.append(line.split("directory:")[1].strip().strip('"'))
+            want_dir = False
     assert pip_dirs, "no pip entries"
+    assert 'package-ecosystem: "github-actions"' in text
     for d in pip_dirs:
         assert d != "/", "root pip dir finds no manifests"
         target = REPO / d.lstrip("/")
