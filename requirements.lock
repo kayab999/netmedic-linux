@@ -1,12 +1,32 @@
 # NetMedic locked deps — Ubuntu 22.04/24.04, Python 3.10–3.13 (internal IT)
-# Generated: pip-compile --generate-hashes (pinned 2026-09-24, validated with 3.12 CI)
-# Runtime
-PyGObject==3.56.3
-# Build-time only (M7): icon generation + pyinstaller bundle. NOT a runtime
-# dependency — pyproject no longer lists Pillow (only scripts/generate_icon.py uses it).
-pillow==12.3.0
+#
+# M6: hash-pinned for `--require-hashes` installs. Scope: the cp312
+# manylinux build image (Dockerfile.build, ubuntu:24.04 + python3.12).
+# Hashes below cover exactly the wheels pip selects on that target
+# (verified via `pip download --python-version 3.12`); other platforms
+# must regenerate (see docs/RELEASE_CHECKLIST.md).
+#
+# PyGObject is NOT pip-installed (no wheels): it comes from apt
+# (python3-gi) in CI/Dockerfile, so it carries no hash here.
+# Pillow is build-time only (icon generation + pyinstaller bundle);
+# pyproject no longer lists it as a runtime dependency.
+
+# Runtime (apt-provided, no pip hash)
+# PyGObject==3.56.3  # from apt python3-gi — do NOT pip install (needs meson/gcc)
+
+# Build / release (pip, hash-pinned)
+pillow==12.3.0 \
+    --hash=sha256:78cb2c6865a35ab8ff8b75fd122f6033b92a62c82801110e48ddd6c936a45d91
+pyinstaller==6.19.0 \
+    --hash=sha256:a0fc5f6b3c55aa54353f0c74ffa59b1115433c1850c6f655d62b461a2ed6cbbe
+pyinstaller-hooks-contrib==2026.2 \
+    --hash=sha256:fc29f0481b58adf78ce9c1d9cf135fe96f38c708f74b2aa0670ef93e59578ab9
+# Transitive closure on the cp312 manylinux target (pip download, 2026-09-29)
+altgraph==0.17.5 \
+    --hash=sha256:f3a22400bce1b0c701683820ac4f3b159cd301acab067c51c653e06961600597
+packaging==26.3 \
+    --hash=sha256:d7193f7c8e4e93f444fde0262bf90af30e16fa0ad0ad44cb553c87339b23cd1c
+setuptools==84.0.0 \
+    --hash=sha256:51a52592b3b99e102b609654876bd65f19f999935166d1352678931132b0c670
 # Optional AI (install with: pip install -r requirements.lock netmedic_ai/ + llama-cpp-python)
 # llama-cpp-python>=0.2.57  # pinned per-model in ops; GPU builds use CMAKE_ARGS (see install.sh --with-ai)
-# Build / release
-pyinstaller==6.19.0
-pyinstaller-hooks-contrib==2026.2
