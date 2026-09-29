@@ -2,6 +2,11 @@
 
 All notable changes to NetMedic Linux are documented here.
 
+## [Unreleased] — M8 architecture
+
+### Changed
+- **M8.1 (ActionSpec table):** `action_catalog.ACTIONS` (21 rows: 12 privileged + 7 safe + 2 internal, with `keep_auth` retention flags) is now the single source; `PRIVILEGED/SAFE/DISRUPTIVE_ACTIONS`, `POLKIT_ACTION_IDS`, `IPC_TO_VERB` and `ALL_VERBS` are derived (legacy names kept as re-exports). The hardcoded 8-ID `no_keep_ids` list in the policy contract test is table-driven. Installer ships `action_catalog.py` root-side (helper runs `-I`). Guardian: new `test_action_table_self_consistent`.
+
 ## [Unreleased] — M2 and follow-ups (post-v1.6.1)
 
 ### Fixed

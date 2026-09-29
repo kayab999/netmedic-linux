@@ -17,7 +17,7 @@ if [[ ! -f "$SRC_POLICY" ]]; then
 fi
 
 HELPER_SRC="$ROOT/netmedic/netmedic"
-if [[ ! -f "$HELPER_SRC/helper_main.py" || ! -f "$HELPER_SRC/helper_verbs.py" || ! -f "$HELPER_SRC/validators.py" ]]; then
+if [[ ! -f "$HELPER_SRC/helper_main.py" || ! -f "$HELPER_SRC/helper_verbs.py" || ! -f "$HELPER_SRC/validators.py" || ! -f "$HELPER_SRC/action_catalog.py" ]]; then
   echo "Missing helper sources under $HELPER_SRC" >&2
   exit 1
 fi
@@ -42,6 +42,7 @@ EOF
 sudo install -o root -g root -m 0644 "$HELPER_SRC/helper_verbs.py" "$PKG_DIR/helper_verbs.py"
 sudo install -o root -g root -m 0644 "$HELPER_SRC/helper_main.py" "$PKG_DIR/helper_main.py"
 sudo install -o root -g root -m 0644 "$HELPER_SRC/validators.py" "$PKG_DIR/validators.py"
+sudo install -o root -g root -m 0644 "$HELPER_SRC/action_catalog.py" "$PKG_DIR/action_catalog.py"
 # Launcher for -I mode (-I ignores PYTHONPATH, so sys.path is set explicitly).
 sudo tee "$LIB_DIR/_run_helper.py" >/dev/null <<EOF
 """Root-owned launcher: fixed sys.path, isolated mode safe."""

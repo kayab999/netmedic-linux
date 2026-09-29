@@ -18,36 +18,31 @@ from netmedic.validators import (
     validate_service as _validate_service,
 )
 
-# IPC action → helper verb
-IPC_TO_VERB: Dict[str, str] = {
-    "flush_dns": "flush-dns",
-    "renew_ip": "renew-ip",
-    "change_dns": "change-dns",
-    "restart_adapter": "restart-adapter",
-    "reset_tcp_ip_stack": "reset-stack",
-    "toggle_firewall": "toggle-firewall",
-    "vpn_list_clients": "vpn-list",
-    "vpn_reconnect": "vpn-restart-service",
-    "vpn_start_service": "vpn-start-service",
-    "vpn_install": "vpn-run-script",
-    "vpn_create_client": "vpn-run-script",
-    "vpn_revoke_client": "vpn-run-script",
-}
+# M8: single-sourced from action_catalog.ACTIONS. Re-exported here so
+# existing `from netmedic.helper_verbs import IPC_TO_VERB, ALL_VERBS`
+# imports (daemon, tests) keep working during the migration.
+from netmedic.action_catalog import ALL_HELPER_VERBS as ALL_VERBS
+from netmedic.action_catalog import IPC_TO_VERB as IPC_TO_VERB
 
-ALL_VERBS: frozenset[str] = frozenset({
-    "flush-dns",
-    "renew-ip",
-    "change-dns",
-    "restart-adapter",
-    "reset-stack",
-    "toggle-firewall",
-    "vpn-list",
-    "vpn-start-service",
-    "vpn-restart-service",
-    "vpn-run-script",
-    "iface-del",
-    "iface-add-dummy",
-})
+__all__ = [
+    "ALL_VERBS",
+    "IPC_TO_VERB",
+    "HELPER_VERSION",
+    "INDEX_TXT_PATH",
+    "DEFAULT_VPN_SERVICE",
+    "PINNED_VPN_INSTALL_SHA256",
+    "VPN_SCRIPT_IDS",
+    "VPN_ALLOWED_ENV_KEYS",
+    "VerbPlan",
+    "VerbValidationError",
+    "plan_verb",
+    "plan_to_dict",
+    "validate_iface",
+    "validate_dns",
+    "validate_client_name",
+    "validate_conn_name",
+    "validate_service",
+]
 
 INDEX_TXT_PATH = "/etc/openvpn/server/easy-rsa/pki/index.txt"
 DEFAULT_VPN_SERVICE = "openvpn-server@server.service"
