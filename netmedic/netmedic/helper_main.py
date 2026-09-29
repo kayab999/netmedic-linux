@@ -46,6 +46,28 @@ EXIT_CANCELLED = 126
 logger = logging.getLogger(__name__)
 
 
+def _journal_result(verb: str, ok: bool, message: str) -> None:
+    """M3: root-side record of every verb outcome (tamper-evident).
+
+    The daemon-side audit file is same-UID writable, so it cannot stand
+    against the named adversary. This record is emitted as root (post-pkexec)
+    to the system journal via stdlib syslog — journald captures it with the
+    process credentials. Best-effort: never raises, never touches stdout
+    (the JSON protocol lives there).
+    """
+    try:
+        import syslog as _syslog
+
+        _syslog.openlog("netmedic-helper", _syslog.LOG_PID, _syslog.LOG_AUTH)
+        try:
+            level = _syslog.LOG_INFO if ok else _syslog.LOG_WARNING
+            _syslog.syslog(level, f"verb={verb} ok={int(ok)} {message[:300]}")
+        finally:
+            _syslog.closelog()
+    except Exception:
+        logger.debug("helper journal emit failed", exc_info=True)
+
+
 def _emit(payload: Dict[str, Any], code: int) -> int:
     sys.stdout.write(json.dumps(payload, separators=(",", ":"), ensure_ascii=False) + "\n")
     sys.stdout.flush()
@@ -398,6 +420,17 @@ def _read_vpn_index() -> Dict[str, Any]:
 
 
 def execute_plan(plan: VerbPlan, *, timeout: Optional[int] = None) -> Dict[str, Any]:
+    """Run planned commands; return helper JSON payload.
+
+    M3: exactly one root-side journal record per verb execution, whatever
+    the outcome (success, op failure, integrity abort, timeout).
+    """
+    result = _execute_plan_inner(plan, timeout=timeout)
+    _journal_result(plan.verb, bool(result.get("ok")), str(result.get("message") or ""))
+    return result
+
+
+def _execute_plan_inner(plan: VerbPlan, *, timeout: Optional[int] = None) -> Dict[str, Any]:
     """Run planned commands; return helper JSON payload."""
     outputs: List[str] = []
     for argv in plan.commands:

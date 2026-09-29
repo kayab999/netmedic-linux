@@ -16,6 +16,7 @@ All notable changes to NetMedic Linux are documented here.
 - **F4 (polkit granularity):** all 12 actions annotate `exec.argv1` with helper verb; `vpn-*`/`toggle-firewall`/`reset-stack` use `auth_admin` (no keep).
 - **F5 (stale helper):** daemon refuses version-mismatched helper (`--version` vs `HELPER_VERSION=1.6.1`); installer syncs version from source.
 - **M1 (downgrade):** legacy elevation and `NETMEDIC_HELPER_PATH` honored only in `NETMEDIC_TEST_MODE=1`; no `PATH` lookup in production.
+- **M3 (audit hardening):** `_append_entry` uses `O_APPEND|O_CREAT|O_NOFOLLOW` with 0600 at creation + fsync (symlinks refused); denials rate-limited (1/5s/action, suppressed count reported, intents never limited); helper emits one root-side journal record per verb via stdlib syslog.
 
 ### Fixed relative to 1.6.0
 - **C-1 (same-UID script swap):** helper re-stages verified scripts into root-owned `/run/netmedic` (0700, unique per invocation), re-hashes at the exec path, unlinks after. 1.6.0 hashed then exec'd a user-owned path.

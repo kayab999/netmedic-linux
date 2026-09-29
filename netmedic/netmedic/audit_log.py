@@ -1,12 +1,23 @@
-"""Structured audit log for privileged IPC operations."""
+"""Structured audit log for privileged IPC operations.
+
+M3 trust note: this file lives under the caller's UID (XDG state dir), so
+it is evidence, not tamper-proof truth, against a same-UID attacker. The
+tamper-evident records are the root-side ones the helper emits to the
+system journal on every verb outcome (see helper_main._journal_result).
+What M3 hardens here: no symlink following, 0600 at creation (not
+open-then-chmod), fsync per record, and denial rate-limiting so a local
+client cannot rotate evidence away by spamming denials.
+"""
 from __future__ import annotations
 
 import json
 import logging
 import os
+import stat
 import threading
+import time
 from datetime import datetime, timezone
-from typing import Any, Dict
+from typing import Any, Dict, Tuple
 
 from netmedic.config import Config
 
@@ -69,15 +80,62 @@ def _rotate_audit_if_needed(path) -> None:
         pass
 
 
+# M3: denial/auth-failure rate limit — one record per key per window, with
+# a suppressed counter so rotation cannot be forced by spamming denials.
+_DENIAL_WINDOW_S = 5.0
+_denial_state: Dict[Tuple[str, str], Tuple[float, int]] = {}
+
+
+def _denial_allowed(action: str, outcome: str) -> Tuple[bool, int]:
+    """Return (allowed, suppressed_count) for a denial-class record."""
+    now = time.monotonic()
+    key = (action, outcome)
+    with _lock:
+        window_start, suppressed = _denial_state.get(key, (0.0, 0))
+        if now - window_start < _DENIAL_WINDOW_S:
+            _denial_state[key] = (window_start, suppressed + 1)
+            return False, suppressed + 1
+        _denial_state[key] = (now, 0)
+        return True, suppressed
+
+
+def _reset_denial_state() -> None:
+    """Test hook: clear the denial rate-limiter."""
+    with _lock:
+        _denial_state.clear()
+
+
 def _append_entry(entry: Dict[str, Any]) -> None:
-    """Append one entry; raises OSError on failure (fail-closed callers)."""
-    line = json.dumps(entry, separators=(",", ":"), ensure_ascii=False)
+    """Append one entry; raises OSError on failure (fail-closed callers).
+
+    M3: O_APPEND|O_CREAT|O_NOFOLLOW with 0600 at creation (umask-proof via
+    O_CREAT mode + fchmod guard), fsync before close. Symlinked audit.log
+    is refused instead of followed.
+    """
+    line = (json.dumps(entry, separators=(",", ":"), ensure_ascii=False) + "\n").encode("utf-8")
     path = get_audit_log_path()
     with _lock:
         _rotate_audit_if_needed(path)
-        with open(path, "a", encoding="utf-8") as handle:
-            handle.write(line + "\n")
-        os.chmod(path, 0o600)
+        fd = os.open(str(path), os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+        try:
+            try:
+                st = os.fstat(fd)
+                if not stat.S_ISREG(st.st_mode):
+                    raise OSError("audit log is not a regular file")
+                if stat.S_IMODE(st.st_mode) != 0o600:
+                    os.fchmod(fd, 0o600)
+            except OSError:
+                raise
+            mv = memoryview(line)
+            while mv:
+                written = os.write(fd, mv)
+                mv = mv[written:]
+            os.fsync(fd)
+        finally:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
 
 
 def record(
@@ -95,6 +153,15 @@ def record(
     Best-effort: failures are logged, never raised — the intent record
     (record_intent) is the fail-closed gate, written before execution.
     """
+    if outcome == "denied":
+        # M3: rate-limit denial records (rotation-spam guard). Intent records
+        # are never limited — record_intent stays the fail-closed gate.
+        allowed, suppressed = _denial_allowed(action, outcome)
+        if not allowed:
+            logger.debug("Suppressing duplicate denial audit for %s", action)
+            return
+    else:
+        suppressed = 0
     entry = {
         "ts": datetime.now(timezone.utc).isoformat(),
         "event": "privileged_ipc",
@@ -107,6 +174,8 @@ def record(
         "duration_ms": round(duration_ms, 2),
         "params": _sanitize_params(params),
     }
+    if suppressed:
+        entry["suppressed_denials"] = suppressed
     if result.get("requires_polkit"):
         entry["requires_polkit"] = True
     if result.get("requires_confirmation"):
