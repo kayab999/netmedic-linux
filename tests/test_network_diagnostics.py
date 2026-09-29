@@ -298,7 +298,7 @@ def test_probe_delegates(medic, monkeypatch):
 def test_diagnostics_all_ok(medic, monkeypatch):
     _diag_mocks(medic, monkeypatch, nm=(True, "nm: full"))
     res = medic.run_diagnostics()
-    assert res.success is True
+    assert res.code in (ResultCode.OK, ResultCode.EXECUTED)
     assert res.code == ResultCode.OK
     assert "Gateway Reachable" in res.message
 
@@ -306,7 +306,7 @@ def test_diagnostics_all_ok(medic, monkeypatch):
 def test_diagnostics_no_gateway(medic, monkeypatch):
     _diag_mocks(medic, monkeypatch, gw=None)
     res = medic.run_diagnostics()
-    assert res.success is False
+    assert res.code not in (ResultCode.OK, ResultCode.EXECUTED)
     assert "Gateway Not Found" in res.message
     assert res.code == ResultCode.FAILED
 
@@ -316,7 +316,7 @@ def test_diagnostics_gw_unreachable(medic, monkeypatch):
                 net=(False, {"1.1.1.1:80": False, "8.8.8.8:icmp": False}, "all fail"))
     res = medic.run_diagnostics()
     assert "Gateway Unreachable" in res.message
-    assert res.success is False
+    assert res.code not in (ResultCode.OK, ResultCode.EXECUTED)
 
 
 def test_diagnostics_partial_tcp_blocked(medic, monkeypatch):
@@ -354,7 +354,7 @@ def test_diagnostics_nm_divergence(medic, monkeypatch):
 def test_diagnostics_nm_divergence_ok_side(medic, monkeypatch):
     _diag_mocks(medic, monkeypatch, nm=(False, "nm: limited"))
     res = medic.run_diagnostics()
-    assert res.success is True
+    assert res.code in (ResultCode.OK, ResultCode.EXECUTED)
     assert "nm_divergence" in res.details
 
 
@@ -366,7 +366,7 @@ def test_diagnostics_nm_exception(medic, monkeypatch):
 
     monkeypatch.setattr("netmedic.probes.check_nm_connectivity", boom)
     res = medic.run_diagnostics()
-    assert res.success is True
+    assert res.code in (ResultCode.OK, ResultCode.EXECUTED)
     assert res.data["nm"] == "nm: skipped"
 
 
@@ -385,7 +385,7 @@ def test_read_firewall_status(medic, monkeypatch):
 def test_toggle_firewall_unknown(medic, monkeypatch):
     _run_router(monkeypatch, {"ufw": _cmd(True, "???")})
     res = medic.toggle_firewall()
-    assert res.success is False
+    assert res.code not in (ResultCode.OK, ResultCode.EXECUTED)
     assert "Cannot determine" in res.message
 
 
@@ -402,7 +402,7 @@ def test_toggle_firewall_enable_ok(medic, monkeypatch):
         staticmethod(lambda verb, args=None, **k: _cmd(True) if (verb, args) == ("toggle-firewall", {"action": "enable"}) else _cmd(False, "", "wrong")),
     )
     res = medic.toggle_firewall()
-    assert res.success is True
+    assert res.code in (ResultCode.OK, ResultCode.EXECUTED)
     assert "ON" in res.message
 
 
@@ -413,7 +413,7 @@ def test_toggle_firewall_elevate_fail_and_mismatch(medic, monkeypatch):
         staticmethod(lambda verb, args=None, **k: _cmd(False, "", "denied")),
     )
     res = medic.toggle_firewall()
-    assert res.success is False
+    assert res.code not in (ResultCode.OK, ResultCode.EXECUTED)
     assert "failed" in res.message
 
     calls = {"n": 0}
@@ -428,7 +428,7 @@ def test_toggle_firewall_elevate_fail_and_mismatch(medic, monkeypatch):
         staticmethod(lambda verb, args=None, **k: _cmd(True)),
     )
     res = medic.toggle_firewall()
-    assert res.success is False
+    assert res.code not in (ResultCode.OK, ResultCode.EXECUTED)
     assert "Failed to toggle" in res.message
 
 
@@ -843,13 +843,13 @@ def test_restart_adapter_down_then_details(medic, monkeypatch):
 
 def test_cleanup_paths(medic, monkeypatch):
     res = medic.cleanup()
-    assert res.success is True
+    assert res.code in (ResultCode.OK, ResultCode.EXECUTED)
     assert "Nothing to clean" in res.message
 
     medic._created_ifaces = {"medicabcdef", "medic123456"}
     monkeypatch.setattr(NetworkMedic, "_delete_medic_iface", staticmethod(lambda i: True))
     res = medic.cleanup()
-    assert res.success is True
+    assert res.code in (ResultCode.OK, ResultCode.EXECUTED)
     assert medic._created_ifaces == set()
 
     medic._created_ifaces = {"medicabcdef", "medic123456"}
@@ -857,7 +857,7 @@ def test_cleanup_paths(medic, monkeypatch):
         NetworkMedic, "_delete_medic_iface", staticmethod(lambda i: i == "medicabcdef")
     )
     res = medic.cleanup()
-    assert res.success is False
+    assert res.code not in (ResultCode.OK, ResultCode.EXECUTED)
     assert "Failed on" in res.message
     assert medic._created_ifaces == {"medic123456"}
 
@@ -868,7 +868,7 @@ def test_create_virtual_adapter(medic, monkeypatch):
         staticmethod(lambda verb, args=None, **k: _cmd(True)),
     )
     res = medic.create_virtual_adapter()
-    assert res.success is True
+    assert res.code in (ResultCode.OK, ResultCode.EXECUTED)
     assert len(medic._created_ifaces) == 1
     assert medic._state_file.exists()
 
@@ -876,7 +876,7 @@ def test_create_virtual_adapter(medic, monkeypatch):
         "netmedic.network.CommandRunner.run_elevated",
         staticmethod(lambda verb, args=None, **k: _cmd(False, "", "denied")),
     )
-    assert medic.create_virtual_adapter().success is False
+    assert medic.create_virtual_adapter().code not in (ResultCode.OK, ResultCode.EXECUTED)
 
 
 def test_diagnostics_portal_hijack_not_healthy(medic, monkeypatch):
@@ -887,7 +887,7 @@ def test_diagnostics_portal_hijack_not_healthy(medic, monkeypatch):
         portal=(True, "possible captive portal (redirect detected)"),
     )
     res = medic.run_diagnostics()
-    assert res.success is False
+    assert res.code not in (ResultCode.OK, ResultCode.EXECUTED)
     assert res.code == ResultCode.PARTIAL
     assert "Portal detected" in res.message
     assert res.details["captive_portal_hint"] == "possible captive portal (redirect detected)"
@@ -898,7 +898,7 @@ def test_diagnostics_portal_hijack_not_healthy(medic, monkeypatch):
 def test_diagnostics_no_portal_stays_healthy(medic, monkeypatch):
     _diag_mocks(medic, monkeypatch, portal=(False, "no portal (204)"))
     res = medic.run_diagnostics()
-    assert res.success is True
+    assert res.code in (ResultCode.OK, ResultCode.EXECUTED)
     assert res.code == ResultCode.OK
 
 

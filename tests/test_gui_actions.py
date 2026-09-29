@@ -12,7 +12,7 @@ def test_payload_to_net_result_success():
         "flush_dns",
         {"status": "ok", "success": True, "message": "flushed"},
     )
-    assert res.success is True
+    assert res.code in (ResultCode.OK, ResultCode.EXECUTED)
     assert res.operation == "Flush DNS"
     assert res.message == "flushed"
 
@@ -26,7 +26,7 @@ def test_payload_to_net_result_error_with_polkit_hint():
             "requires_polkit": True,
         },
     )
-    assert res.success is False
+    assert res.code not in (ResultCode.OK, ResultCode.EXECUTED)
     assert "polkit" in (res.details or "").lower()
 
 
@@ -82,7 +82,7 @@ def test_payload_vpn_list_converts_dicts():
             ],
         },
     )
-    assert res.success is True
+    assert res.code in (ResultCode.OK, ResultCode.EXECUTED)
     assert isinstance(res.data[0], VPNClient)
     assert res.data[0].name == "laptop"
     assert res.data[0].active is True
@@ -94,7 +94,7 @@ def test_bridge_unavailable():
     client.is_available.return_value = False
     bridge = GuiActionBridge(client=client)
     res = bridge.call("network_status")
-    assert res.success is False
+    assert res.code not in (ResultCode.OK, ResultCode.EXECUTED)
     assert "not available" in res.message.lower()
     client.request.assert_not_called()
 
@@ -109,7 +109,7 @@ def test_bridge_privileged_defaults_confirmed():
     }
     bridge = GuiActionBridge(client=client)
     res = bridge.call("flush_dns")
-    assert res.success is True
+    assert res.code in (ResultCode.OK, ResultCode.EXECUTED)
     client.request.assert_called_once_with("flush_dns", {}, confirmed=True)
 
 
@@ -123,7 +123,7 @@ def test_bridge_safe_action_not_auto_confirmed():
     }
     bridge = GuiActionBridge(client=client)
     res = bridge.call("network_status")
-    assert res.success is True
+    assert res.code in (ResultCode.OK, ResultCode.EXECUTED)
     client.request.assert_called_once_with("network_status", {}, confirmed=False)
 
 

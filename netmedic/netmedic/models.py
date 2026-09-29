@@ -58,25 +58,16 @@ class NetResult:
 
     def __getattribute__(self, name: str) -> Any:
         if name == "success":
-            # Emit deprecation outside try that would swallow error-warnings
+            # M8: narrowed deprecation — warn for every external read.
+            # The old version exempted callers by filename and by an inline
+            # allow-marker comment, which meant tests ran different code
+            # than production. Only models.py internals (__post_init__,
+            # to_log_entry) are exempt.
             try:
                 current = inspect.currentframe()
                 frame = current.f_back if current is not None else None
                 filename = frame.f_code.co_filename if frame is not None and frame.f_code else ""
-                should_warn = True
-                if "models.py" in filename:
-                    should_warn = False
-                elif "tests" in filename:
-                    should_warn = False
-                else:
-                    try:
-                        info = inspect.getframeinfo(frame) if frame else None
-                        line = "".join(info.code_context or []) if info and info.code_context else ""
-                        if "sf-success: allow" in line.lower():
-                            should_warn = False
-                    except Exception:
-                        should_warn = True
-                if should_warn:
+                if "models.py" not in filename:
                     warnings.warn("NetResult.success is deprecated, use code (ResultCode)", UserWarning, stacklevel=2)
             except Warning:
                 raise

@@ -1,4 +1,5 @@
 from unittest.mock import patch, MagicMock
+from netmedic.models import ResultCode
 from netmedic.network import NetworkMedic
 
 
@@ -12,7 +13,7 @@ def test_network_medic_diagnostics_integration(mock_run):
     with patch.object(NetworkMedic, "get_gateway_ip", return_value="192.168.1.1"):
         res = medic.run_diagnostics()
 
-    assert res.success is True
+    assert res.code in (ResultCode.OK, ResultCode.EXECUTED)
     assert "Gateway Reachable" in res.message
     assert "DNS Resolution OK" in res.message
     assert "Internet Access OK" in res.message
@@ -27,5 +28,5 @@ def test_network_medic_flush_dns_integration(mock_elevated, mock_active):
     medic = NetworkMedic()
     res = medic.flush_dns()
 
-    assert res.success is True
+    assert res.code in (ResultCode.OK, ResultCode.EXECUTED)
     mock_elevated.assert_called_once_with("flush-dns")

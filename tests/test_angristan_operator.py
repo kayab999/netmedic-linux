@@ -12,7 +12,7 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 from netmedic.helper_verbs import plan_verb, validate_service
-from netmedic.models import CommandResult, NetResult
+from netmedic.models import CommandResult, NetResult, ResultCode
 from netmedic.operators.base import OperatorStatus
 from netmedic.operators.vpn.angristan import AngristanOperator
 from netmedic.operators.vpn.base import VPNClient
@@ -107,7 +107,7 @@ def test_download_uses_tls_flags(tmp_path, monkeypatch):
         staticmethod(fake_run),
     )
     res = op._download_script()
-    assert res.success is True
+    assert res.code in (ResultCode.OK, ResultCode.EXECUTED)
     assert "--proto=https" in seen["cmd"]
     assert "--tlsv1.2" in seen["cmd"]
     assert "--retry" in seen["cmd"]
@@ -122,7 +122,7 @@ def test_download_failure(tmp_path, monkeypatch):
         staticmethod(lambda cmd, timeout=None, **k: CommandResult(False, 1, "", "conn refused", list(cmd))),
     )
     res = op._download_script()
-    assert res.success is False
+    assert res.code not in (ResultCode.OK, ResultCode.EXECUTED)
     assert "Download failed" in res.message
 
 
@@ -134,7 +134,7 @@ def test_download_empty_file(tmp_path, monkeypatch):
         staticmethod(lambda cmd, timeout=None, **k: CommandResult(True, 0, "", "", list(cmd))),
     )
     res = op._download_script()
-    assert res.success is False
+    assert res.code not in (ResultCode.OK, ResultCode.EXECUTED)
     assert "Empty" in res.message
 
 
@@ -145,7 +145,7 @@ def test_download_integrity_failure(tmp_path, monkeypatch):
         staticmethod(lambda cmd, timeout=None, **k: CommandResult(True, 0, "", "", list(cmd))),
     )
     res = op._download_script()
-    assert res.success is False
+    assert res.code not in (ResultCode.OK, ResultCode.EXECUTED)
     assert "Integrity" in res.message
 
 
@@ -160,7 +160,7 @@ def test_download_bad_header(tmp_path, monkeypatch):
         staticmethod(lambda cmd, timeout=None, **k: CommandResult(True, 0, "", "", list(cmd))),
     )
     res = op._download_script()
-    assert res.success is False
+    assert res.code not in (ResultCode.OK, ResultCode.EXECUTED)
     assert "header" in res.message.lower()
 
 
@@ -185,7 +185,7 @@ def test_download_validation_error(tmp_path, monkeypatch):
 
     monkeypatch.setattr("builtins.open", fake_open)
     res = op._download_script()
-    assert res.success is False
+    assert res.code not in (ResultCode.OK, ResultCode.EXECUTED)
     assert "Validation failed" in res.message
 
 
@@ -200,7 +200,7 @@ def test_download_success_sets_exec(tmp_path, monkeypatch):
         staticmethod(lambda cmd, timeout=None, **k: CommandResult(True, 0, "", "", list(cmd))),
     )
     res = op._download_script()
-    assert res.success is True
+    assert res.code in (ResultCode.OK, ResultCode.EXECUTED)
     assert oct(script.stat().st_mode & 0o777) == oct(0o500)
 
 
@@ -317,14 +317,14 @@ def test_execute_sealed_rehash_failure(tmp_path, monkeypatch):
 def test_check_status_not_installed(tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
     res = AngristanOperator().check_status()
-    assert res.success is True
+    assert res.code in (ResultCode.OK, ResultCode.EXECUTED)
     assert res.message == OperatorStatus.NOT_INSTALLED.value
 
 
 def test_check_status_integrity_fail(tmp_path, monkeypatch):
     op, _ = _op_with_script(tmp_path, monkeypatch, b"#!/bin/bash\ntampered\n")
     res = op.check_status()
-    assert res.success is False
+    assert res.code not in (ResultCode.OK, ResultCode.EXECUTED)
     assert "integrity" in (res.details or "").lower()
 
 
@@ -354,7 +354,7 @@ def test_check_status_exception(tmp_path, monkeypatch):
 
     monkeypatch.setattr(op, "_verify_integrity", boom)
     res = op.check_status()
-    assert res.success is False
+    assert res.code not in (ResultCode.OK, ResultCode.EXECUTED)
     assert res.message == OperatorStatus.ERROR.value
 
 
@@ -363,7 +363,7 @@ def test_install_dl_failure(tmp_path, monkeypatch):
     bad = NetResult("Download Script", False, "Download failed")
     monkeypatch.setattr(op, "_download_script", lambda: bad)
     res = op.install()
-    assert res.success is False
+    assert res.code not in (ResultCode.OK, ResultCode.EXECUTED)
     assert res.message == "Download failed"
 
 
@@ -378,7 +378,7 @@ def test_install_execute_failure(tmp_path, monkeypatch):
         lambda env, timeout: CommandResult(False, 1, "", "elev fail", []),
     )
     res = op.install()
-    assert res.success is False
+    assert res.code not in (ResultCode.OK, ResultCode.EXECUTED)
     assert "Installation failed" in res.message
 
 
@@ -398,7 +398,7 @@ def test_install_service_down(tmp_path, monkeypatch):
         lambda: NetResult(op.name, True, OperatorStatus.STOPPED.value),
     )
     res = op.install()
-    assert res.success is False
+    assert res.code not in (ResultCode.OK, ResultCode.EXECUTED)
     assert "service down" in res.message
 
 
@@ -418,7 +418,7 @@ def test_install_success(tmp_path, monkeypatch):
         lambda: NetResult(op.name, True, OperatorStatus.RUNNING.value),
     )
     res = op.install()
-    assert res.success is True
+    assert res.code in (ResultCode.OK, ResultCode.EXECUTED)
     assert "successful" in res.message
 
 
@@ -435,7 +435,7 @@ def _pkiresponse(*lines):
 def test_list_clients_not_installed(tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
     res = AngristanOperator().list_clients()
-    assert res.success is False
+    assert res.code not in (ResultCode.OK, ResultCode.EXECUTED)
     assert "not installed" in res.message.lower()
 
 
@@ -452,7 +452,7 @@ def test_list_clients_elevate_fail(tmp_path, monkeypatch):
         staticmethod(lambda verb, args=None, timeout=None, **k: CommandResult(False, 1, "", "denied", [])),
     )
     res = op.list_clients()
-    assert res.success is False
+    assert res.code not in (ResultCode.OK, ResultCode.EXECUTED)
     assert "PKI" in res.message
 
 
@@ -477,7 +477,7 @@ def test_list_clients_parses_mixed(tmp_path, monkeypatch):
         ),
     )
     res = op.list_clients()
-    assert res.success is True
+    assert res.code in (ResultCode.OK, ResultCode.EXECUTED)
     names = {c.name: c.active for c in res.data}
     assert names == {"laptop": True, "old": False}
 
@@ -498,14 +498,14 @@ def test_list_clients_parse_error(tmp_path, monkeypatch):
         staticmethod(lambda verb, args=None, timeout=None, **k: bad),
     )
     res = op.list_clients()
-    assert res.success is False
+    assert res.code not in (ResultCode.OK, ResultCode.EXECUTED)
     assert "Parse" in res.message
 
 
 def test_add_client_invalid_name(tmp_path, monkeypatch):
     op, _ = _op_with_script(tmp_path, monkeypatch, b"")
     res = op.add_client("bad name!")
-    assert res.success is False
+    assert res.code not in (ResultCode.OK, ResultCode.EXECUTED)
     assert "Invalid client name" in res.message
 
 
@@ -514,7 +514,7 @@ def test_add_client_duplicate(tmp_path, monkeypatch):
     existing = NetResult(op.name, True, "ok", data=[VPNClient(name="laptop", active=True)])
     monkeypatch.setattr(op, "list_clients", lambda: existing)
     res = op.add_client("laptop")
-    assert res.success is False
+    assert res.code not in (ResultCode.OK, ResultCode.EXECUTED)
     assert "already exists" in res.message
 
 
@@ -529,7 +529,7 @@ def test_add_client_execute_fail(tmp_path, monkeypatch):
         lambda env, timeout: CommandResult(False, 1, "", "elev fail", []),
     )
     res = op.add_client("laptop")
-    assert res.success is False
+    assert res.code not in (ResultCode.OK, ResultCode.EXECUTED)
     assert "Failed to execute" in res.message
 
 
@@ -550,7 +550,7 @@ def test_add_client_success_verified(tmp_path, monkeypatch):
         lambda env, timeout: CommandResult(True, 0, "", "", []),
     )
     res = op.add_client("laptop")
-    assert res.success is True
+    assert res.code in (ResultCode.OK, ResultCode.EXECUTED)
     assert "verified" in res.message
 
 
@@ -565,20 +565,20 @@ def test_add_client_not_found_after_exec(tmp_path, monkeypatch):
         lambda env, timeout: CommandResult(True, 0, "", "", []),
     )
     res = op.add_client("ghost")
-    assert res.success is False
+    assert res.code not in (ResultCode.OK, ResultCode.EXECUTED)
     assert "not found in PKI" in res.message
 
 
 def test_revoke_invalid_and_fail(tmp_path, monkeypatch):
     op, _ = _op_with_script(tmp_path, monkeypatch, b"")
-    assert op.revoke_client("bad!").success is False
+    assert op.revoke_client("bad!").code not in (ResultCode.OK, ResultCode.EXECUTED)
     monkeypatch.setattr(
         op,
         "_execute_verified_script",
         lambda env, timeout: CommandResult(False, 1, "", "elev fail", []),
     )
     res = op.revoke_client("laptop")
-    assert res.success is False
+    assert res.code not in (ResultCode.OK, ResultCode.EXECUTED)
     assert "Failed to revoke" in res.message
 
 
@@ -595,7 +595,7 @@ def test_revoke_success_verified(tmp_path, monkeypatch):
         lambda: NetResult(op.name, True, "ok", data=[VPNClient(name="laptop", active=False)]),
     )
     res = op.revoke_client("laptop")
-    assert res.success is True
+    assert res.code in (ResultCode.OK, ResultCode.EXECUTED)
     assert "revoked and verified" in res.message
 
 
@@ -612,7 +612,7 @@ def test_revoke_not_marked(tmp_path, monkeypatch):
         lambda: NetResult(op.name, True, "ok", data=[VPNClient(name="laptop", active=True)]),
     )
     res = op.revoke_client("laptop")
-    assert res.success is False
+    assert res.code not in (ResultCode.OK, ResultCode.EXECUTED)
     assert "not marked revoked" in res.message
 
 
@@ -629,7 +629,7 @@ def _op_installed_ok(tmp_path, monkeypatch, content=b"#!/bin/bash\nok\n"):
 def test_start_service_paths(tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
     res = AngristanOperator().start_service()
-    assert res.success is False
+    assert res.code not in (ResultCode.OK, ResultCode.EXECUTED)
     assert "NOT_INSTALLED" in res.message or "not" in res.message.lower()
 
     op = _op_installed_ok(tmp_path, monkeypatch)
@@ -645,20 +645,20 @@ def test_start_service_paths(tmp_path, monkeypatch):
         "netmedic.operators.vpn.angristan.CommandRunner.is_service_active",
         staticmethod(lambda svc: True),
     )
-    assert op.start_service().success is True
+    assert op.start_service().code in (ResultCode.OK, ResultCode.EXECUTED)
     monkeypatch.setattr(
         "netmedic.operators.vpn.angristan.CommandRunner.is_service_active",
         staticmethod(lambda svc: False),
     )
     res = op.start_service()
-    assert res.success is False
+    assert res.code not in (ResultCode.OK, ResultCode.EXECUTED)
     assert "Failed to start" in res.message
 
 
 def test_restart_service_paths(tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
     res = AngristanOperator().restart_service()
-    assert res.success is False
+    assert res.code not in (ResultCode.OK, ResultCode.EXECUTED)
 
     op = _op_installed_ok(tmp_path, monkeypatch)
     monkeypatch.setattr(op, "_verify_integrity", lambda: False)
@@ -673,12 +673,12 @@ def test_restart_service_paths(tmp_path, monkeypatch):
         "netmedic.operators.vpn.angristan.CommandRunner.is_service_active",
         staticmethod(lambda svc: True),
     )
-    assert op.restart_service().success is True
+    assert op.restart_service().code in (ResultCode.OK, ResultCode.EXECUTED)
     monkeypatch.setattr(
         "netmedic.operators.vpn.angristan.CommandRunner.is_service_active",
         staticmethod(lambda svc: False),
     )
-    assert op.restart_service().success is False
+    assert op.restart_service().code not in (ResultCode.OK, ResultCode.EXECUTED)
 
 
 def test_stop_is_app_local_only(tmp_path, monkeypatch):
