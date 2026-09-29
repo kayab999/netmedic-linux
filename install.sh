@@ -96,10 +96,13 @@ if [ "$INSTALL_AI" -eq 0 ] && [ "$NONINTERACTIVE" -eq 0 ] && [ -t 0 ]; then
 fi
 if [ "$INSTALL_AI" -eq 1 ]; then
     echo -e "${BLUE}[3b/6] Installing AI pilot dependencies...${NC}"
+    # M5: upstream renamed these for the GGML backend; the pre-rename
+    # CUBLAS/VULKAN flag names are ignored, silently building CPU-only
+    # wheels on GPU hosts.
     if command -v nvidia-smi &>/dev/null; then
-        export CMAKE_ARGS="-DLLAMA_CUBLAS=on"
+        export CMAKE_ARGS="-DGGML_CUDA=on"
     elif [ -d /usr/include/vulkan ] || command -v vulkaninfo &>/dev/null; then
-        export CMAKE_ARGS="-DLLAMA_VULKAN=on"
+        export CMAKE_ARGS="-DGGML_VULKAN=on"
     fi
     pip install -e "netmedic_ai[runtime]"
     pip install -e "netmedic[ai]"
