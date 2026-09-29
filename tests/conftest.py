@@ -12,6 +12,16 @@ def _reset_ipc_client_singleton():
 
 
 @pytest.fixture(autouse=True)
+def _reset_audit_denial_limiter():
+    """Isolate the M3 denial rate-limiter: module-global, order-sensitive."""
+    from netmedic.audit_log import _reset_denial_state
+
+    _reset_denial_state()
+    yield
+    _reset_denial_state()
+
+
+@pytest.fixture(autouse=True)
 def _skip_polkit_in_tests(monkeypatch):
     """Tests mock polkit explicitly; default to skip for direct dispatch calls."""
     monkeypatch.setenv("NETMEDIC_TEST_MODE", "1")

@@ -1,3 +1,4 @@
+import dataclasses
 import logging
 import threading
 import time
@@ -165,6 +166,137 @@ def _result_payload(result: NetResult) -> Dict[str, Any]:
     return payload
 
 
+@dataclasses.dataclass(frozen=True)
+class _DispatchCtx:
+    """Per-request dispatch context (M8: handler table calls, not if-chain)."""
+
+    medic: NetworkMedic
+    session: IPCSession
+    wifi: WifiOperator
+    vpn: AngristanOperator
+    action: str
+    params: Dict[str, Any]
+    peer_uid: int
+    peer_pid: int
+    started: float
+    privileged: bool
+
+    def finish(self, result: Dict[str, Any]) -> Dict[str, Any]:
+        return _finish_privileged(
+            self.action, self.params, result,
+            peer_uid=self.peer_uid, peer_pid=self.peer_pid,
+            started=self.started, privileged=self.privileged,
+        )
+
+
+def _handle_get_session_token(ctx: _DispatchCtx) -> Dict[str, Any]:
+    token = ctx.session.get_token()
+    if not token:
+        return {"status": "error", "message": "IPC session token not yet available."}
+    return {"status": "ok", "session_token": token}
+
+
+def _handle_user_intent_action(ctx: _DispatchCtx) -> Dict[str, Any]:
+    return _handle_user_intent(ctx.params)
+
+
+def _handle_network_status(ctx: _DispatchCtx) -> Dict[str, Any]:
+    return _result_payload(ctx.medic.run_diagnostics())
+
+
+def _handle_wifi_diagnostics(ctx: _DispatchCtx) -> Dict[str, Any]:
+    return _result_payload(ctx.wifi.scan_congestion())
+
+
+def _handle_flush_dns(ctx: _DispatchCtx) -> Dict[str, Any]:
+    return ctx.finish(_result_payload(ctx.medic.flush_dns()))
+
+
+def _handle_renew_ip(ctx: _DispatchCtx) -> Dict[str, Any]:
+    return ctx.finish(_result_payload(ctx.medic.renew_ip()))
+
+
+def _handle_vpn_reconnect(ctx: _DispatchCtx) -> Dict[str, Any]:
+    return ctx.finish(_result_payload(ctx.vpn.restart_service()))
+
+
+def _handle_donate(ctx: _DispatchCtx) -> Dict[str, Any]:
+    return {"status": "ok", "message": "Opening donation page.", "url": DONATE_URL}
+
+
+def _handle_change_dns(ctx: _DispatchCtx) -> Dict[str, Any]:
+    server = ctx.params.get("server", "1.1.1.1")
+    return ctx.finish(_result_payload(ctx.medic.change_dns(server)))
+
+
+def _handle_restart_adapter(ctx: _DispatchCtx) -> Dict[str, Any]:
+    return ctx.finish(_result_payload(ctx.medic.restart_adapter()))
+
+
+def _handle_reset_tcp_ip_stack(ctx: _DispatchCtx) -> Dict[str, Any]:
+    return ctx.finish(_result_payload(ctx.medic.reset_tcp_ip_stack()))
+
+
+def _handle_toggle_firewall(ctx: _DispatchCtx) -> Dict[str, Any]:
+    return ctx.finish(_result_payload(ctx.medic.toggle_firewall()))
+
+
+def _handle_firewall_status(ctx: _DispatchCtx) -> Dict[str, Any]:
+    status = ctx.medic.get_firewall_status()
+    return {"status": "ok", "message": status, "data": status}
+
+
+def _handle_vpn_status(ctx: _DispatchCtx) -> Dict[str, Any]:
+    return _result_payload(ctx.vpn.check_status())
+
+
+def _handle_vpn_list_clients(ctx: _DispatchCtx) -> Dict[str, Any]:
+    return ctx.finish(_result_payload(ctx.vpn.list_clients()))
+
+
+def _handle_vpn_create_client(ctx: _DispatchCtx) -> Dict[str, Any]:
+    name = ctx.params.get("name", "")
+    return ctx.finish(_result_payload(ctx.vpn.add_client(name)))
+
+
+def _handle_vpn_revoke_client(ctx: _DispatchCtx) -> Dict[str, Any]:
+    name = ctx.params.get("name", "")
+    return ctx.finish(_result_payload(ctx.vpn.revoke_client(name)))
+
+
+def _handle_vpn_install(ctx: _DispatchCtx) -> Dict[str, Any]:
+    return ctx.finish(_result_payload(ctx.vpn.install()))
+
+
+def _handle_vpn_start_service(ctx: _DispatchCtx) -> Dict[str, Any]:
+    return ctx.finish(_result_payload(ctx.vpn.start_service()))
+
+
+# M8: the dispatch table. Adding an action = adding one entry here plus
+# the ActionSpec row; the if-chain it replaces lived in dispatch below.
+_HANDLERS: Dict[str, Callable[[_DispatchCtx], Dict[str, Any]]] = {
+    "get_session_token": _handle_get_session_token,
+    "user_intent": _handle_user_intent_action,
+    "network_status": _handle_network_status,
+    "wifi_diagnostics": _handle_wifi_diagnostics,
+    "flush_dns": _handle_flush_dns,
+    "renew_ip": _handle_renew_ip,
+    "vpn_reconnect": _handle_vpn_reconnect,
+    "donate": _handle_donate,
+    "change_dns": _handle_change_dns,
+    "restart_adapter": _handle_restart_adapter,
+    "reset_tcp_ip_stack": _handle_reset_tcp_ip_stack,
+    "toggle_firewall": _handle_toggle_firewall,
+    "firewall_status": _handle_firewall_status,
+    "vpn_status": _handle_vpn_status,
+    "vpn_list_clients": _handle_vpn_list_clients,
+    "vpn_create_client": _handle_vpn_create_client,
+    "vpn_revoke_client": _handle_vpn_revoke_client,
+    "vpn_install": _handle_vpn_install,
+    "vpn_start_service": _handle_vpn_start_service,
+}
+
+
 def create_action_dispatcher(
     medic: NetworkMedic,
     session: IPCSession,
@@ -276,105 +408,20 @@ def create_action_dispatcher(
                         peer_uid=peer_uid, peer_pid=peer_pid, started=started, privileged=privileged,
                     )
 
-            if action == "user_intent":
-                return _handle_user_intent(params)
-
-            if action == "network_status":
-                return _result_payload(medic.run_diagnostics())
-
-            if action == "wifi_diagnostics":
-                return _result_payload(wifi.scan_congestion())
-
-            if action == "flush_dns":
+            handler = _HANDLERS.get(action)
+            if handler is None:
+                result = {"status": "error", "message": f"Unknown action: {action}"}
                 return _finish_privileged(
-                    action, params, _result_payload(medic.flush_dns()),
+                    action, params, result,
                     peer_uid=peer_uid, peer_pid=peer_pid, started=started, privileged=privileged,
                 )
-
-            if action == "renew_ip":
-                return _finish_privileged(
-                    action, params, _result_payload(medic.renew_ip()),
-                    peer_uid=peer_uid, peer_pid=peer_pid, started=started, privileged=privileged,
-                )
-
-            if action == "vpn_reconnect":
-                return _finish_privileged(
-                    action, params, _result_payload(vpn.restart_service()),
-                    peer_uid=peer_uid, peer_pid=peer_pid, started=started, privileged=privileged,
-                )
-
-            if action == "donate":
-                return {"status": "ok", "message": "Opening donation page.", "url": DONATE_URL}
-
-            if action == "change_dns":
-                server = params.get("server", "1.1.1.1")
-                return _finish_privileged(
-                    action, params, _result_payload(medic.change_dns(server)),
-                    peer_uid=peer_uid, peer_pid=peer_pid, started=started, privileged=privileged,
-                )
-
-            if action == "restart_adapter":
-                return _finish_privileged(
-                    action, params, _result_payload(medic.restart_adapter()),
-                    peer_uid=peer_uid, peer_pid=peer_pid, started=started, privileged=privileged,
-                )
-
-            if action == "reset_tcp_ip_stack":
-                return _finish_privileged(
-                    action, params, _result_payload(medic.reset_tcp_ip_stack()),
-                    peer_uid=peer_uid, peer_pid=peer_pid, started=started, privileged=privileged,
-                )
-
-            if action == "toggle_firewall":
-                return _finish_privileged(
-                    action, params, _result_payload(medic.toggle_firewall()),
-                    peer_uid=peer_uid, peer_pid=peer_pid, started=started, privileged=privileged,
-                )
-
-            if action == "firewall_status":
-                status = medic.get_firewall_status()
-                return {"status": "ok", "message": status, "data": status}
-
-            if action == "vpn_status":
-                return _result_payload(vpn.check_status())
-
-            if action == "vpn_list_clients":
-                return _finish_privileged(
-                    action, params, _result_payload(vpn.list_clients()),
-                    peer_uid=peer_uid, peer_pid=peer_pid, started=started, privileged=privileged,
-                )
-
-            if action == "vpn_create_client":
-                name = params.get("name", "")
-                return _finish_privileged(
-                    action, params, _result_payload(vpn.add_client(name)),
-                    peer_uid=peer_uid, peer_pid=peer_pid, started=started, privileged=privileged,
-                )
-
-            if action == "vpn_revoke_client":
-                name = params.get("name", "")
-                return _finish_privileged(
-                    action, params, _result_payload(vpn.revoke_client(name)),
-                    peer_uid=peer_uid, peer_pid=peer_pid, started=started, privileged=privileged,
-                )
-
-            if action == "vpn_install":
-                return _finish_privileged(
-                    action, params, _result_payload(vpn.install()),
-                    peer_uid=peer_uid, peer_pid=peer_pid, started=started, privileged=privileged,
-                )
-
-            if action == "vpn_start_service":
-                return _finish_privileged(
-                    action, params, _result_payload(vpn.start_service()),
-                    peer_uid=peer_uid, peer_pid=peer_pid, started=started, privileged=privileged,
-                )
-
-            result = {"status": "error", "message": f"Unknown action: {action}"}
-            return _finish_privileged(
-                action, params, result,
-                peer_uid=peer_uid, peer_pid=peer_pid, started=started, privileged=privileged,
+            ctx = _DispatchCtx(
+                medic=medic, session=session, wifi=wifi, vpn=vpn,
+                action=action, params=params,
+                peer_uid=peer_uid, peer_pid=peer_pid,
+                started=started, privileged=privileged,
             )
+            return handler(ctx)
         except Exception:
             logger.exception("IPC dispatch failed for action=%s", action)
             result = {"status": "error", "message": "Internal IPC error."}
