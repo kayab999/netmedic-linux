@@ -75,7 +75,7 @@ Consumidores in-repo (`tools/netmedic_mcp.py`, `netmedic_ai/toolkit.py: _run_too
 |---|---|---|---|
 | `vpn-run-script` (install/create/revoke) (`helper_verbs.py: plan "vpn-run-script"`) | script sellado `/run/netmedic/sealed.sh` via `/bin/bash` con `env -i PATH=fixed` + allowlist env | ✅ SHA256 pinned en root (helper ignora hash del caller, solo pin), doble hash + `check_status` RUNNING + PKI index (`angristan.py`) | OK = servicio/PKI verificado — **modelo a replicar** |
 | `vpn-start-service` / `vpn-restart-service` (`helper_verbs.py: plan "vpn-start-service"`) | `systemctl start/restart openvpn-server@…` | ✅ `is_service_active()` (`angristan.py: start_service/restart_service`) | OK = servicio activo |
-| `vpn-list-clients` (`helper_verbs.py: plan "vpn-list"`) | lectura Python `O_NOFOLLOW` de `/etc/openvpn/server/easy-rsa/pki/index.txt` (sin `cat`, sin path del caller) | ✅ (read-only informativo) | OK = lista parseada |
+| `vpn-list` (`helper_verbs.py: plan "vpn-list"`) | lectura Python `O_NOFOLLOW` de `/etc/openvpn/server/easy-rsa/pki/index.txt` (sin `cat`, sin path del caller) | ✅ (read-only informativo) | OK = lista parseada |
 
 ### 3.5 Internos / lifecycle
 

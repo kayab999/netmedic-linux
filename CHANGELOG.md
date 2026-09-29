@@ -5,6 +5,7 @@ All notable changes to NetMedic Linux are documented here.
 ## [Unreleased] — M8 architecture
 
 ### Changed
+- **M8.2 (policy generator):** `scripts/generate_policy.py` renders `assets/com.kayab.netmedic.policy` from the table (`--write` regenerates, `--check` fails on drift, wired into CI); `ActionSpec.message` holds the 12 auth prompts; `test_generated_policy_matches` pins asset==render; `test_registry_keys_match_action_table` pins VERBS.md identity keys to the table; fixed stale `vpn-list-clients` header in VERBS.md §3.4. (Caught during implementation: `--` is illegal inside XML comments — generator text avoids it.)
 - **M8.1 (ActionSpec table):** `action_catalog.ACTIONS` (21 rows: 12 privileged + 7 safe + 2 internal, with `keep_auth` retention flags) is now the single source; `PRIVILEGED/SAFE/DISRUPTIVE_ACTIONS`, `POLKIT_ACTION_IDS`, `IPC_TO_VERB` and `ALL_VERBS` are derived (legacy names kept as re-exports). The hardcoded 8-ID `no_keep_ids` list in the policy contract test is table-driven. Installer ships `action_catalog.py` root-side (helper runs `-I`). Guardian: new `test_action_table_self_consistent`.
 
 ## [Unreleased] — M2 and follow-ups (post-v1.6.1)

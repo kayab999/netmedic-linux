@@ -81,6 +81,11 @@ jobs:
         if: matrix.helper_mode == '0'
         run: ruff check netmedic/ netmedic_ai/ tools/ tests/
 
+      - name: Generated policy in sync
+        if: matrix.helper_mode == '0'
+        # M8: policy XML is generated from action_catalog.ACTIONS.
+        run: python scripts/generate_policy.py --check
+
       - name: Typecheck (strict, 10 modules)
         if: matrix.helper_mode == '0' && matrix.python-version == '3.12'
         run: |

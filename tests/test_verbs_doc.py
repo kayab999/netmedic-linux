@@ -106,6 +106,36 @@ def test_reference_liveness():
         assert not re.search(r"\.py:\d+", pc), f"post_condition for {row.get('verb')} still contains file:line, use symbolic file/symbol"
 
 
+def test_registry_keys_match_action_table():
+    """M8: registry machine keys (verb/ipc/helper/catalog) equal the table.
+
+    post_condition/file/symbol stay hand-documented (liveness-checked
+    above); the identity keys must not drift from action_catalog.ACTIONS.
+    """
+    from netmedic.action_catalog import ACTIONS
+
+    registry = _parse_verbs_registry()
+    by_ipc = {s.ipc_action: s for s in ACTIONS if s.ipc_action is not None}
+    by_verb = {s.helper_verb: s for s in ACTIONS if s.helper_verb is not None}
+    for row in registry:
+        catalog = row.get("catalog")
+        ipc = row.get("ipc_action")
+        hv = row.get("helper_verb")
+        if catalog == "privileged":
+            assert ipc in by_ipc, f"row {row.get('verb')}: unknown ipc {ipc}"
+            assert by_ipc[ipc].helper_verb == hv, f"row {row.get('verb')}: helper drift"
+            assert by_ipc[ipc].tier == "privileged"
+        elif catalog == "safe":
+            assert ipc in by_ipc, f"row {row.get('verb')}: unknown ipc {ipc}"
+            assert by_ipc[ipc].tier == "safe"
+            assert hv is None, f"row {row.get('verb')}: safe row must not name a verb"
+        elif catalog == "internal":
+            assert ipc is None, f"row {row.get('verb')}: internal row must have null ipc"
+            assert hv in by_verb and by_verb[hv].tier == "internal", f"row {row.get('verb')}: verb drift"
+        else:
+            raise AssertionError(f"row {row.get('verb')}: unknown catalog {catalog}")
+
+
 def test_post_condition_symbol_liveness():
     """E2: post_condition symbolic refs must be resolvable."""
     registry = _parse_verbs_registry()
