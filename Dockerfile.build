@@ -35,12 +35,14 @@ COPY scripts/build_binary.sh ./scripts/build_binary.sh
 COPY netmedic.spec ./
 
 # NOTE: PyGObject comes from apt (python3-gi), not pip — PyPI sdist would
-# need a C toolchain (meson/gcc) inside the image. Pillow/PyInstaller have
-# wheels and stay pinned. Same split as CI build-smoke.
+# need a C toolchain (meson/gcc) inside the image.
+# M6: binary inputs install ONLY from the hash-pinned lock
+# (--require-hashes); unpinned `pip install` on the runner is banned for
+# shipped artifacts. Lock scope (cp312 manylinux) matches this image.
 # --system-site-packages exposes apt's gi to the venv.
 RUN python3.12 -m venv --system-site-packages /opt/buildenv \
     && /opt/buildenv/bin/pip install --upgrade pip wheel setuptools \
-    && /opt/buildenv/bin/pip install "pyinstaller==6.19.0" "pillow==12.3.0" \
+    && /opt/buildenv/bin/pip install --require-hashes -r requirements.lock \
     && /opt/buildenv/bin/pip install --no-deps -e netmedic/ \
     && ln -s /opt/buildenv /src/venv
 

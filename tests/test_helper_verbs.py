@@ -224,6 +224,9 @@ def test_run_elevated_helper_mode_builds_pkexec(monkeypatch):
         "netmedic.config.Config.get_helper_path",
         staticmethod(lambda: Path("/usr/libexec/netmedic/helper")),
     )
+    # Unit scope: plumbing only — the version handshake has its own tests
+    # and would probe the real installed helper binary here.
+    monkeypatch.setattr(CommandRunner, "_check_helper_version", staticmethod(lambda: None))
     captured = {}
 
     def fake_run(command, require_root=False, timeout=None):
@@ -253,6 +256,7 @@ def test_run_elevated_helper_surfaces_details_as_stdout(monkeypatch):
         "netmedic.config.Config.get_helper_path",
         staticmethod(lambda: Path("/usr/libexec/netmedic/helper")),
     )
+    monkeypatch.setattr(CommandRunner, "_check_helper_version", staticmethod(lambda: None))
 
     def fake_run(command, require_root=False, timeout=None):
         from netmedic.models import CommandResult

@@ -5,17 +5,23 @@ on:
     tags:
       - "v*"
 
+# M6: least privilege by default. The publish job alone gets
+# contents:write, gated behind the `release` environment.
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  release:
+  build:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.12"
 
@@ -29,13 +35,16 @@ jobs:
             iputils-ping curl xvfb dbus-x11
 
       - name: Install Python packages
+        # M6: pinned (were unpinned latest). Build venv consumes the
+        # hash-pinned lock (cp312 scope matches setup-python 3.12).
         run: |
-          python -m pip install --upgrade pip wheel setuptools pytest pytest-cov pyinstaller cyclonedx-bom hypothesis
+          python -m pip install --upgrade pip wheel setuptools "pytest==9.1.0" "pytest-cov==7.1.0" "hypothesis==6.168.1" "cyclonedx-bom==8.6.2"
           pip install -e netmedic/ --config-settings editable_mode=strict
           pip install -e netmedic_ai/
           # build_binary.sh requires ./venv (same split as CI build-smoke)
           python -m venv venv
-          ./venv/bin/pip install --upgrade pip wheel setuptools pyinstaller pillow
+          ./venv/bin/pip install --upgrade pip wheel setuptools
+          ./venv/bin/pip install --require-hashes -r requirements.lock
           ./venv/bin/pip install -e netmedic/ --config-settings editable_mode=strict
 
       - name: Test
@@ -52,6 +61,46 @@ jobs:
           TAG="${GITHUB_REF_NAME#v}"
           ./scripts/prepare_release_assets.sh "$TAG"
 
+      - name: Attest build provenance
+        # M6: SLSA provenance for the shipped binary (does not replace the
+        # GPG signature yet — removal of the long-lived key is a follow-up
+        # once verifiers migrate; see SECURITY_ADVISORY notes).
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
+        with:
+          subject-path: |
+            dist/netmedic
+            dist/SHA256SUMS
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-dist
+          path: |
+            dist/netmedic
+            dist/SHA256SUMS
+            dist/sbom-python-*.txt
+            dist/sbom-cyclonedx-*.json
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: build
+    # M6: write token exists ONLY here, behind the `release` environment.
+    # The long-lived GPG key is also scoped to this gated job.
+    environment: release
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: release-dist
+          path: release-upload
+
       - name: Sign checksums (required on tags)
         env:
           RELEASE_GPG_PRIVATE_KEY: ${{ secrets.RELEASE_GPG_PRIVATE_KEY }}
@@ -61,24 +110,15 @@ jobs:
             echo "$RELEASE_GPG_PRIVATE_KEY" | gpg --batch --import
             gpg --batch --yes --armor --detach-sign \
               --local-user "$RELEASE_GPG_KEY_ID" \
-              --output dist/SHA256SUMS.asc \
-              dist/SHA256SUMS
+              --output release-upload/SHA256SUMS.asc \
+              release-upload/SHA256SUMS
           else
             echo "::error::GPG signing required for v* releases but secrets missing (RELEASE_GPG_PRIVATE_KEY/KEY_ID)."
             exit 1
           fi
 
-      - name: Stage release artifacts
-        run: |
-          mkdir -p release-upload
-          cp dist/netmedic dist/SHA256SUMS dist/sbom-python-*.txt release-upload/
-          if ls dist/sbom-cyclonedx-*.json >/dev/null 2>&1; then
-            cp dist/sbom-cyclonedx-*.json release-upload/
-          fi
-          cp dist/SHA256SUMS.asc release-upload/
-
       - name: Publish GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           generate_release_notes: true
           files: release-upload/*

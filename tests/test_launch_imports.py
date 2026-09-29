@@ -10,7 +10,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 def test_version_import():
     from netmedic import __version__
 
-    assert __version__ == "1.6.2"
+    assert __version__ == "1.6.4"
 
 
 def test_main_window_import():

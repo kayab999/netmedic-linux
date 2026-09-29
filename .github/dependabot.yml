@@ -1,7 +1,14 @@
 version: 2
 updates:
+  # M6: pip manifests live in per-package dirs, not repo root — the old
+  # directory: "/" entry found nothing, so pip updates never happened.
   - package-ecosystem: "pip"
-    directory: "/"
+    directory: "/netmedic"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+  - package-ecosystem: "pip"
+    directory: "/netmedic_ai"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5

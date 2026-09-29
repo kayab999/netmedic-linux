@@ -102,6 +102,7 @@ def test_run_elevated_timeout_never_escapes(monkeypatch):
         raise subprocess.TimeoutExpired(command, timeout or 1)
 
     monkeypatch.setattr(CommandRunner, "run", staticmethod(raising_run))
+    monkeypatch.setattr(CommandRunner, "_check_helper_version", staticmethod(lambda: None))
     monkeypatch.setenv("NETMEDIC_USE_HELPER", "1")
     res = CommandRunner.run_elevated("flush-dns", {})
     assert res.success is False
@@ -118,6 +119,69 @@ def test_run_elevated_legacy_timeout_never_escapes(monkeypatch):
     res = CommandRunner.run_elevated("flush-dns", {})
     assert res.success is False
     assert "Timeout" in res.stderr
+
+
+def test_helper_version_mismatch_refuses_elevation(monkeypatch):
+    """F5: stale system helper is refused with a re-run hint (127)."""
+    import json
+    import subprocess as _subprocess
+
+    monkeypatch.setenv("NETMEDIC_USE_HELPER", "1")
+    monkeypatch.setattr("os.geteuid", lambda: 1000)
+    monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/pkexec")
+    from pathlib import Path
+
+    monkeypatch.setattr(
+        "netmedic.config.Config.get_helper_path",
+        staticmethod(lambda: Path("/usr/libexec/netmedic/helper")),
+    )
+
+    def fake_popen_run(argv, **kwargs):
+        if argv[-1] == "--version":
+            out = json.dumps({"ok": True, "version": "0.0.0-stale"})
+        else:  # pragma: no cover - refused before elevation
+            out = json.dumps({"ok": True, "message": "x", "details": None})
+        return _subprocess.CompletedProcess(list(argv), 0, out, "")
+
+    monkeypatch.setattr(_subprocess, "run", fake_popen_run)
+    res = CommandRunner.run_elevated("flush-dns", {})
+    assert res.success is False
+    assert res.returncode == 127
+    assert "version mismatch" in res.stderr
+    assert "install-polkit-policy" in res.stderr
+
+
+def test_helper_version_match_proceeds(monkeypatch):
+    """F5: matching helper version does not block elevation."""
+    import json
+    import subprocess as _subprocess
+
+    from netmedic.helper_verbs import HELPER_VERSION
+    from netmedic.models import CommandResult
+
+    monkeypatch.setenv("NETMEDIC_USE_HELPER", "1")
+    monkeypatch.setattr("os.geteuid", lambda: 1000)
+    monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/pkexec")
+    from pathlib import Path
+
+    monkeypatch.setattr(
+        "netmedic.config.Config.get_helper_path",
+        staticmethod(lambda: Path("/usr/libexec/netmedic/helper")),
+    )
+
+    def fake_popen_run(argv, **kwargs):
+        out = json.dumps({"ok": True, "version": HELPER_VERSION})
+        return _subprocess.CompletedProcess(list(argv), 0, out, "")
+
+    monkeypatch.setattr(_subprocess, "run", fake_popen_run)
+
+    def fake_run(command, require_root=False, timeout=None):
+        payload = json.dumps({"ok": True, "message": "flushed", "details": None})
+        return CommandResult(True, 0, payload, "", list(command))
+
+    monkeypatch.setattr(CommandRunner, "run", staticmethod(fake_run))
+    res = CommandRunner.run_elevated("flush-dns", {})
+    assert res.success is True
 
 
 @patch("os.geteuid", return_value=1000)
