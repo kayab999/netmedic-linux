@@ -134,6 +134,22 @@ def test_action_table_self_consistent():
     assert len(no_keep) == 8
 
 
+def test_generated_policy_matches_asset():
+    """M8: the checked-in policy XML is exactly what the table generates."""
+    import subprocess
+    import sys
+
+    root = Path(__file__).resolve().parents[1]
+    proc = subprocess.run(
+        [sys.executable, str(root / "scripts" / "generate_policy.py"), "--check"],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    assert proc.returncode == 0, f"policy drifted from table: {proc.stdout}{proc.stderr}"
+
+
 def test_is_privileged_matches_set():
     for action in PRIVILEGED_ACTIONS:
         assert is_privileged(action)

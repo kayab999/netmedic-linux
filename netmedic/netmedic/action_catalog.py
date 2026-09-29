@@ -25,6 +25,8 @@ class ActionSpec:
       Meaningful only when polkit_id is set; low-impact verbs keep the
       5-minute window, high-risk verbs re-prompt every time.
     - description: human text, feeds generated policy/docs.
+    - message: polkit auth prompt. Meaningful only when polkit_id is set;
+      defaults to "" for safe/internal rows (no prompt exists).
     """
 
     ipc_action: Optional[str]
@@ -34,35 +36,48 @@ class ActionSpec:
     disruptive: bool
     keep_auth: bool
     description: str
+    message: str = ""
 
 
 ACTIONS: Tuple[ActionSpec, ...] = (
     # Privileged: fixed helper verbs behind polkit.
     ActionSpec("flush_dns", "flush-dns", "com.kayab.netmedic.flush-dns",
-               "privileged", False, True, "Flush DNS resolver cache"),
+               "privileged", False, True, "Flush DNS resolver cache",
+               "NetMedic needs permission to flush the DNS cache"),
     ActionSpec("renew_ip", "renew-ip", "com.kayab.netmedic.renew-ip",
-               "privileged", False, True, "Renew DHCP IP address"),
+               "privileged", False, True, "Renew DHCP IP address",
+               "NetMedic needs permission to renew the IP address"),
     ActionSpec("change_dns", "change-dns", "com.kayab.netmedic.change-dns",
-               "privileged", False, True, "Change DNS server"),
+               "privileged", False, True, "Change DNS server",
+               "NetMedic needs permission to change DNS settings"),
     ActionSpec("restart_adapter", "restart-adapter", "com.kayab.netmedic.restart-adapter",
-               "privileged", True, True, "Restart network adapter"),
+               "privileged", True, True, "Restart network adapter",
+               "NetMedic needs permission to cycle the network adapter"),
     ActionSpec("reset_tcp_ip_stack", "reset-stack", "com.kayab.netmedic.reset-stack",
-               "privileged", True, False, "Reset TCP/IP stack"),
+               "privileged", True, False, "Reset TCP/IP stack",
+               "NetMedic needs permission to restart NetworkManager"),
     ActionSpec("toggle_firewall", "toggle-firewall", "com.kayab.netmedic.toggle-firewall",
-               "privileged", True, False, "Toggle UFW firewall"),
+               "privileged", True, False, "Toggle UFW firewall",
+               "NetMedic needs permission to change firewall state"),
     ActionSpec("vpn_create_client", "vpn-run-script", "com.kayab.netmedic.vpn-create",
-               "privileged", False, False, "Create VPN client"),
+               "privileged", False, False, "Create VPN client",
+               "NetMedic needs permission to create a VPN client profile"),
     ActionSpec("vpn_revoke_client", "vpn-run-script", "com.kayab.netmedic.vpn-revoke",
-               "privileged", True, False, "Revoke VPN client"),
+               "privileged", True, False, "Revoke VPN client",
+               "NetMedic needs permission to revoke a VPN client profile"),
     ActionSpec("vpn_reconnect", "vpn-restart-service", "com.kayab.netmedic.vpn-reconnect",
-               "privileged", False, False, "Reconnect VPN service"),
+               "privileged", False, False, "Reconnect VPN service",
+               "NetMedic needs permission to restart the VPN service"),
     # Elevates via pkexec to read EasyRSA index; must not be unauthenticated.
     ActionSpec("vpn_list_clients", "vpn-list", "com.kayab.netmedic.vpn-list",
-               "privileged", False, False, "List VPN clients"),
+               "privileged", False, False, "List VPN clients",
+               "NetMedic needs permission to read the VPN client certificate index"),
     ActionSpec("vpn_install", "vpn-run-script", "com.kayab.netmedic.vpn-install",
-               "privileged", True, False, "Install OpenVPN server"),
+               "privileged", True, False, "Install OpenVPN server",
+               "NetMedic needs permission to install and configure the OpenVPN server"),
     ActionSpec("vpn_start_service", "vpn-start-service", "com.kayab.netmedic.vpn-start",
-               "privileged", False, False, "Start OpenVPN service"),
+               "privileged", False, False, "Start OpenVPN service",
+               "NetMedic needs permission to start the OpenVPN service"),
     # Safe: no elevation, no helper verb.
     ActionSpec("user_intent", None, None, "safe", False, False, "AI guardrail validation"),
     ActionSpec("network_status", None, None, "safe", False, False, "Multi-target connectivity probes"),
