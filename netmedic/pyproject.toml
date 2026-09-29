@@ -4,16 +4,17 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "netmedic"
-version = "1.6.0"
+version = "1.6.2"
 authors = [
     { name = "Kayab Software", email = "support@kayabsoftware.com" },
 ]
 description = "Professional network diagnostics, repair, and infrastructure management for Linux."
-# Breaking (1.6.0): floor 3.10 — 3.8 EOL, Pillow>=10/PyGObject>=3.42, X|Y typing, CI 3.10-3.12 on Ubuntu 22.04/24.04
-requires-python = ">=3.10,<3.13"
+# Floor 3.10 — 3.8 EOL, PyGObject>=3.42, X|Y typing, CI 3.10-3.12 on Ubuntu 22.04/24.04.
+# M7: ceiling raised to <3.14 — 3.13 verified (suite green); Pillow dropped
+# from runtime (only scripts/generate_icon.py uses it; build image pins its own).
+requires-python = ">=3.10,<3.14"
 dependencies = [
     "PyGObject>=3.42",
-    "pillow>=10.0",
 ]
 
 [project.scripts]
