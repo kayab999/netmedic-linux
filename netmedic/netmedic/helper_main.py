@@ -12,10 +12,12 @@ under pkexec as root).
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import hashlib
 import json
 import logging
 import os
+import signal
 import stat
 import subprocess
 import sys
@@ -169,15 +171,142 @@ def _stage_verified_copy(script: str, expected: str, staging_dir: str = ROOT_STA
     return staged
 
 
+def _kill_process_group(proc: subprocess.Popen) -> None:
+    """M2: kill the whole group, not just the direct child.
+
+    Verbs like renew-ip run two commands and VPN scripts fork; killing only
+    the leader orphans root children that outlive the daemon timeout.
+    Runs as the same euid as the children (root under pkexec), so killpg
+    succeeds here — unlike the daemon side after setuid (see system.py).
+    """
+    try:
+        pgid = os.getpgid(proc.pid)
+    except (ProcessLookupError, PermissionError, OSError):
+        return
+    try:
+        os.killpg(pgid, signal.SIGTERM)
+    except (ProcessLookupError, PermissionError, OSError):
+        return
+    try:
+        proc.wait(timeout=2)
+        return
+    except subprocess.TimeoutExpired:
+        pass
+    except Exception:
+        return
+    try:
+        os.killpg(pgid, signal.SIGKILL)
+    except (ProcessLookupError, PermissionError, OSError):
+        return
+    try:
+        proc.wait(timeout=2)
+    except Exception:
+        pass
+
+
 def _run_argv(argv: List[str], timeout: Optional[int]) -> subprocess.CompletedProcess:
-    return subprocess.run(
+    """M2: Popen + communicate + killpg (replaces subprocess.run timeout).
+
+    subprocess.run(timeout=...) kills only the direct child; two-command
+    verbs and forked VPN scripts outlived the daemon limit. Same signature
+    (raises TimeoutExpired) so execute_plan is unchanged.
+    """
+    limit = timeout or 60
+    proc = subprocess.Popen(
         argv,
-        capture_output=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
         text=True,
-        timeout=timeout or 60,
-        check=False,
         start_new_session=True,
     )
+    try:
+        stdout, stderr = proc.communicate(timeout=limit)
+    except subprocess.TimeoutExpired:
+        _kill_process_group(proc)
+        try:
+            stdout, stderr = proc.communicate(timeout=2)
+        except Exception:
+            stdout, stderr = "", ""
+            try:
+                proc.kill()
+            except Exception:
+                pass
+        raise subprocess.TimeoutExpired(proc.args, limit, output=stdout, stderr=stderr) from None
+    return subprocess.CompletedProcess(proc.args, proc.returncode or 0, stdout, stderr)
+
+
+@dataclasses.dataclass
+class DeadlineResult:
+    """M2: outcome of deadline-enforced execution (JSON-serializable)."""
+
+    stdout: str
+    stderr: str
+    exit_code: int
+    elapsed: float
+    timeout: bool
+    process_group_killed: bool
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "stdout": self.stdout,
+            "stderr": self.stderr,
+            "exit_code": self.exit_code,
+            "elapsed": self.elapsed,
+            "timeout": self.timeout,
+            "process_group_killed": self.process_group_killed,
+        }
+
+
+def execute_with_deadline(
+    command: List[str],
+    deadline: float = 30.0,
+    env: Optional[Dict[str, str]] = None,
+    cwd: Optional[str] = None,
+) -> DeadlineResult:
+    """M2: run *command* with a hard process-group deadline (no signals).
+
+    Uses Popen + killpg only (no SIGALRM: not thread-safe, breaks pytest).
+    Default env is the F1 fixed minimal env when caller passes none.
+    """
+    import time as _time
+
+    start = _time.time()
+    base_env = {"PATH": FIXED_PATH, "HOME": "/root", "TERM": "dumb"}
+    if env is not None:
+        base_env = dict(env)
+    proc = subprocess.Popen(
+        command,
+        preexec_fn=os.setsid,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        env=base_env,
+        cwd=cwd,
+        text=True,
+    )
+    try:
+        stdout, stderr = proc.communicate(timeout=deadline)
+        return DeadlineResult(
+            stdout=stdout or "",
+            stderr=stderr or "",
+            exit_code=proc.returncode or 0,
+            elapsed=_time.time() - start,
+            timeout=False,
+            process_group_killed=False,
+        )
+    except subprocess.TimeoutExpired:
+        _kill_process_group(proc)
+        try:
+            stdout, stderr = proc.communicate(timeout=2)
+        except Exception:
+            stdout, stderr = "", ""
+        return DeadlineResult(
+            stdout=stdout or "",
+            stderr=((stderr or "") + f"\n[M2] Deadline exceeded: {deadline}s. Process group killed.").strip(),
+            exit_code=-signal.SIGKILL,
+            elapsed=_time.time() - start,
+            timeout=True,
+            process_group_killed=True,
+        )
 
 
 FIXED_PATH = "/usr/sbin:/usr/bin:/sbin:/bin"
