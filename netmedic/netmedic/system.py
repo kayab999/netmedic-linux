@@ -13,6 +13,12 @@ from netmedic.helper_verbs import HELPER_VERSION, VerbValidationError, plan_verb
 
 logger = logging.getLogger(__name__)
 
+# M2: IPC margin (seconds) added to the helper deadline for the daemon-side
+# wait. The helper enforces the bare deadline via process-group kill; the
+# daemon must not fire first.
+_IPC_MARGIN_FALLBACK = 5
+
+
 # Basenames allowed under require_root=True. Path is resolved via shutil.which
 # or absolute path; argv shape is still caller-controlled within these tools.
 # NOTE: bash/sh removed (P0 hardening) — no legit elevated path needs a shell;
@@ -31,6 +37,9 @@ _ROOT_ALLOWED_BINARIES: FrozenSet[str] = frozenset({
 
 
 class CommandRunner:
+    # M2: extra seconds the daemon waits beyond the helper deadline.
+    _IPC_MARGIN = _IPC_MARGIN_FALLBACK
+
     SENSITIVE_PATTERNS = [
         r"(?i)password",
         r"(?i)pass",
@@ -180,6 +189,11 @@ class CommandRunner:
             ver_err = CommandRunner._check_helper_version()
             if ver_err:
                 return CommandResult(False, 127, "", ver_err, [verb])
+            # M2: one deadline for the whole verb, enforced inside the helper
+            # via killpg. The daemon timeout is helper deadline + IPC margin so
+            # the daemon never reports a timeout while root work continues and
+            # retries overlap. Helper gets the bare deadline (--timeout).
+            daemon_timeout = timeout + CommandRunner._IPC_MARGIN
             try:
                 final_cmd = CommandRunner._helper_invocation(verb, args, timeout=timeout)
             except FileNotFoundError as exc:
@@ -189,9 +203,9 @@ class CommandRunner:
             # escape as a traceback — headless with no polkit agent must get
             # a structured result, never a hang or an unhandled exception.
             try:
-                result = CommandRunner.run(final_cmd, require_root=False, timeout=timeout)
+                result = CommandRunner.run(final_cmd, require_root=False, timeout=daemon_timeout)
             except subprocess.TimeoutExpired:
-                return CommandResult(False, -1, "", f"Timeout ({timeout}s) exceeded", final_cmd)
+                return CommandResult(False, -1, "", f"Timeout ({daemon_timeout}s) exceeded", final_cmd)
             if result.stdout:
                 try:
                     payload = json.loads(result.stdout.splitlines()[-1])
@@ -354,13 +368,23 @@ class CommandRunner:
 
     @staticmethod
     def _terminate_process_group(proc: subprocess.Popen) -> None:
+        # M2 note: after pkexec setuid(0) the user-owned daemon gets EPERM
+        # signalling the root child. That is expected — the helper enforces
+        # the real deadline via killpg on its own (same-euid) children.
+        # Here we attempt cleanup best-effort and never raise.
         try:
             os.killpg(proc.pid, signal.SIGTERM)
             proc.communicate(timeout=3)
+        except PermissionError as exc:
+            logger.warning(
+                "Cannot signal elevated child (EPERM after pkexec setuid); "
+                "helper-side deadline owns enforcement: %s",
+                exc,
+            )
         except (ProcessLookupError, subprocess.TimeoutExpired):
             try:
                 os.killpg(proc.pid, signal.SIGKILL)
-            except ProcessLookupError:
+            except (ProcessLookupError, PermissionError):
                 pass
             try:
                 proc.wait(timeout=2)

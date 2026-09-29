@@ -126,9 +126,14 @@ class NetMedicIPCServer:
             return {"status": "error", "message": "Internal IPC error."}
 
     def stop(self) -> None:
-        """Gracefully stop the IPC server."""
+        """Stop the IPC server without hanging behind in-flight calls.
+
+        M2: shutdown(wait=True) blocked until an in-flight elevated call
+        (up to the helper deadline) finished. Cancel pending futures and
+        return immediately; running handlers still own their cleanup.
+        """
         self.running = False
-        self._pool.shutdown(wait=True, cancel_futures=False)
+        self._pool.shutdown(wait=False, cancel_futures=True)
         if self.thread:
             self.thread.join(timeout=2.0)
             self.thread = None

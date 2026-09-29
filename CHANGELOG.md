@@ -2,6 +2,11 @@
 
 All notable changes to NetMedic Linux are documented here.
 
+## [Unreleased] — M2 and follow-ups (post-v1.6.1)
+
+### Fixed
+- **M2 (timeout enforcement):** helper `_run_argv` now uses Popen + `killpg` instead of `subprocess.run(timeout)` (which killed only the direct child). New `execute_with_deadline()` + `DeadlineResult` (no signals; SIGALRM is not thread-safe). Daemon waits helper deadline + 5s IPC margin instead of firing first; EPERM-after-setuid documented as expected. `IPCBridge.stop()` no longer joins behind in-flight elevated calls.
+
 ## [Unreleased] — v1.6.1 candidate
 
 ### Security (audit F1-F5 + M1)
