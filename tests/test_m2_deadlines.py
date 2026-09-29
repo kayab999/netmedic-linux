@@ -82,6 +82,68 @@ def test_kill_process_group_dead_proc_no_raise():
     _kill_process_group(proc)  # must not raise
 
 
+def test_grandchild_processes_killed(tmp_path):
+    """Parent -> child -> grandchild chain all die (nested groups)."""
+    script = tmp_path / "nested.sh"
+    script.write_text("#!/bin/sh\nsh -c 'sleep 60' &\nsleep 60\n")
+    os.chmod(script, 0o700)
+    before = _sleep_pids()
+    res = execute_with_deadline(["/bin/sh", str(script)], deadline=0.5)
+    assert res.timeout is True
+    time.sleep(0.5)
+    assert set(_sleep_pids()) - before == set()
+
+
+def test_concurrent_run_argv_isolated():
+    """Two simultaneous calls: timeout on one must not kill the other."""
+    import threading
+
+    results = {}
+
+    def slow():
+        try:
+            _run_argv(["sleep", "100"], timeout=1)
+        except subprocess.TimeoutExpired:
+            results["slow"] = "timeout"
+        else:
+            results["slow"] = "unexpected-ok"
+
+    def fast():
+        proc = _run_argv(["echo", "alive"], timeout=5)
+        results["fast"] = proc.stdout.strip()
+
+    t_slow = threading.Thread(target=slow)
+    t_fast = threading.Thread(target=fast)
+    t_slow.start()
+    time.sleep(0.2)  # let the slow call own its group first
+    t_fast.start()
+    t_slow.join(timeout=10)
+    t_fast.join(timeout=10)
+    assert results.get("slow") == "timeout"
+    assert results.get("fast") == "alive"
+
+
+def test_no_signal_handlers_installed():
+    """M2 installs no process-global handlers (thread-safe by design)."""
+    before = signal.getsignal(signal.SIGALRM)
+    execute_with_deadline(["echo", "hi"], deadline=5.0)
+    try:
+        _run_argv(["echo", "hi"], timeout=5)
+    except subprocess.TimeoutExpired as exc:
+        raise AssertionError("echo should not time out") from exc
+    assert signal.getsignal(signal.SIGALRM) == before
+
+
+def test_partial_output_captured_on_timeout(tmp_path):
+    """Buffered stdout before the hang is returned, not lost."""
+    script = tmp_path / "partial.sh"
+    script.write_text("#!/bin/sh\necho m2-partial\nsleep 60\n")
+    os.chmod(script, 0o700)
+    res = execute_with_deadline(["/bin/sh", str(script)], deadline=0.5)
+    assert res.timeout is True
+    assert "m2-partial" in res.stdout
+
+
 def test_kill_process_group_stat_modes_untouched(tmp_path):
     # Sanity: helper staging perms unaffected by M2 (regression guard).
     from netmedic.helper_main import _stage_verified_copy
