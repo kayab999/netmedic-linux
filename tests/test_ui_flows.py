@@ -159,14 +159,31 @@ def test_apply_window_icon_paths(win, tmp_path, monkeypatch):
     assert w.set_icon_name.called
 
 
-def test_apply_window_icon_success(win, tmp_path, monkeypatch):
-    from PIL import Image
+def _write_minimal_png(path):
+    """Write a valid 8x8 RGB PNG with stdlib only (M7: no Pillow in test env)."""
+    import struct
+    import zlib
 
+    def chunk(ctype: bytes, data: bytes) -> bytes:
+        out = ctype + data
+        return struct.pack(">I", len(data)) + out + struct.pack(">I", zlib.crc32(out))
+
+    ihdr = struct.pack(">IIBBBBB", 8, 8, 8, 2, 0, 0, 0)
+    raw = b"".join(b"\x00" + b"\x80\x80\x80" * 8 for _ in range(8))
+    path.write_bytes(
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", ihdr)
+        + chunk(b"IDAT", zlib.compress(raw))
+        + chunk(b"IEND", b"")
+    )
+
+
+def test_apply_window_icon_success(win, tmp_path, monkeypatch):
     from netmedic import ui as uimod
 
     w, _ = win
     icon = tmp_path / "icon.png"
-    Image.new("RGB", (8, 8)).save(icon)
+    _write_minimal_png(icon)
     monkeypatch.setattr(uimod, "resolve_app_icon_path", lambda: icon)
     w._apply_window_icon()  # real set_icon_from_file, covers success return
 
