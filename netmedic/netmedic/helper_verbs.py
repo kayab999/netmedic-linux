@@ -9,15 +9,14 @@ import re
 from dataclasses import dataclass
 from typing import Any, Dict, List, Mapping, Optional
 
-# Keep patterns aligned with network.py / operators.
-_DNS_IP_RE = re.compile(
-    r"^(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)$"
+from netmedic.validators import (
+    ValidationError as _ValidationError,
+    validate_client_name as _validate_client_name,
+    validate_conn_name as _validate_conn_name,
+    validate_dns as _validate_dns,
+    validate_iface as _validate_iface,
+    validate_service as _validate_service,
 )
-_IFACE_RE = re.compile(r"^[A-Za-z0-9._@+-]+$")
-_MEDIC_IFACE_RE = re.compile(r"^medic[0-9a-f]{6}$")
-_CLIENT_NAME_RE = re.compile(r"^[a-zA-Z0-9_-]+$")
-_CONN_NAME_RE = re.compile(r"^[A-Za-z0-9 ._@+-]{1,128}$")
-_SERVICE_RE = re.compile(r"^[A-Za-z0-9@._+-]+$")
 
 # IPC action → helper verb
 IPC_TO_VERB: Dict[str, str] = {
@@ -88,8 +87,8 @@ class VerbPlan:
     message: str = ""
 
 
-class VerbValidationError(ValueError):
-    """Invalid verb name or arguments."""
+class VerbValidationError(_ValidationError):
+    """Invalid verb name or arguments (subclass: except ValueError still works)."""
 
 
 def _require_str(args: Mapping[str, Any], key: str, *, required: bool = True) -> Optional[str]:
@@ -103,40 +102,36 @@ def _require_str(args: Mapping[str, Any], key: str, *, required: bool = True) ->
     return value
 
 
+def _reraise_as_verb(fn, *args, **kwargs):
+    try:
+        return fn(*args, **kwargs)
+    except _ValidationError as exc:
+        raise VerbValidationError(str(exc)) from None
+
+
 def validate_iface(iface: str, *, medic_only: bool = False) -> str:
-    if not _IFACE_RE.fullmatch(iface):
-        raise VerbValidationError(f"Invalid interface name: {iface!r}")
-    if medic_only and not _MEDIC_IFACE_RE.fullmatch(iface):
-        raise VerbValidationError(f"Refusing non-medic interface: {iface!r}")
-    return iface
+    """Re-export of validators.validate_iface as VerbValidationError."""
+    return _reraise_as_verb(_validate_iface, iface, medic_only=medic_only)
 
 
 def validate_dns(server: str) -> str:
-    if not _DNS_IP_RE.fullmatch(server):
-        raise VerbValidationError(f"Invalid DNS server IP: {server}")
-    return server
+    """Re-export of validators.validate_dns as VerbValidationError."""
+    return _reraise_as_verb(_validate_dns, server)
 
 
 def validate_client_name(name: str) -> str:
-    if not _CLIENT_NAME_RE.fullmatch(name):
-        raise VerbValidationError("Invalid client name (use a-z, 0-9, -, _)")
-    return name
+    """Re-export of validators.validate_client_name as VerbValidationError."""
+    return _reraise_as_verb(_validate_client_name, name)
 
 
 def validate_conn_name(name: str) -> str:
-    if not _CONN_NAME_RE.fullmatch(name):
-        raise VerbValidationError(f"Invalid connection name: {name!r}")
-    return name
+    """Re-export of validators.validate_conn_name as VerbValidationError."""
+    return _reraise_as_verb(_validate_conn_name, name)
 
 
 def validate_service(name: str) -> str:
-    if not _SERVICE_RE.fullmatch(name):
-        raise VerbValidationError(f"Invalid service name: {name!r}")
-    # Allowlist: only OpenVPN server units + NetworkManager (fixed reset-stack uses
-    # NetworkManager directly; param path is VPN-only). Prevents `systemctl restart <arbitrary>`.
-    if not (name.startswith("openvpn-server@") and name.endswith(".service")):
-        raise VerbValidationError(f"Service not allowlisted (want openvpn-server@*.service): {name!r}")
-    return name
+    """Re-export of validators.validate_service as VerbValidationError."""
+    return _reraise_as_verb(_validate_service, name)
 
 
 def plan_verb(verb: str, args: Optional[Mapping[str, Any]] = None) -> VerbPlan:

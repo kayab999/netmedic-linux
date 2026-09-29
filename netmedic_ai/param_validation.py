@@ -5,9 +5,33 @@ import re
 
 from netmedic_ai.toolkit import registry
 
-_DNS_IP_RE = re.compile(
-    r"^(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)$"
-)
+try:
+    # Canonical validators (M4 single source) when netmedic is installed.
+    from netmedic.validators import (
+        ValidationError as _ValidationError,
+        validate_dns as _validate_dns,
+        validate_iface as _validate_iface,
+    )
+except ImportError:  # pragma: no cover - standalone netmedic_ai installs
+    import ipaddress as _ipaddress
+
+    class _ValidationError(ValueError):
+        pass
+
+    def _validate_dns(server: str) -> str:
+        try:
+            return str(_ipaddress.IPv4Address(server))
+        except _ipaddress.AddressValueError:
+            raise _ValidationError(f"Invalid DNS server IP: {server}") from None
+
+    _IFACE_FB = re.compile(r"^[A-Za-z0-9._@+-]+$")
+
+    def _validate_iface(iface: str, *, medic_only: bool = False) -> str:
+        if not isinstance(iface, str) or not _IFACE_FB.fullmatch(iface):
+            raise _ValidationError(f"Invalid interface name: {iface!r}")
+        if iface.startswith("-") or len(iface) > 15:
+            raise _ValidationError(f"Invalid interface name: {iface!r}")
+        return iface
 
 
 def validate_tool_params(action_name: str, params: dict) -> str | None:
@@ -28,12 +52,16 @@ def validate_tool_params(action_name: str, params: dict) -> str | None:
 
     if action_name == "change_dns":
         server = params.get("server", "1.1.1.1")
-        if not _DNS_IP_RE.match(server):
+        try:
+            _validate_dns(server)
+        except _ValidationError:
             return f"Invalid DNS server IP: {server}"
 
     if action_name == "vpn_reconnect":
         iface = params.get("interface", "default")
-        if not re.match(r"^[a-zA-Z0-9._-]+$", iface):
+        try:
+            _validate_iface(iface)
+        except _ValidationError:
             return f"Invalid interface name: {iface}"
 
     return None

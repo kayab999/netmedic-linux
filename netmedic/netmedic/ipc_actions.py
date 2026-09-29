@@ -59,20 +59,21 @@ def _validate_dispatch_params(action: str, params: Dict[str, Any]) -> Optional[s
         server = tool_params.get("server", "1.1.1.1")
         if not isinstance(server, str):
             return "Parameter 'server' must be a string."
-        import re
+        from netmedic.validators import ValidationError, validate_dns
 
-        if not re.fullmatch(
-            r"(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)",
-            server,
-        ):
+        try:
+            validate_dns(server)
+        except ValidationError:
             return f"Invalid DNS server IP: {server}"
     if action in ("vpn_create_client", "vpn_revoke_client"):
         name = tool_params.get("name", "")
         if not isinstance(name, str) or not name:
             return "Parameter 'name' is required."
-        import re
+        from netmedic.validators import ValidationError, validate_client_name
 
-        if not re.fullmatch(r"[a-zA-Z0-9_-]+", name):
+        try:
+            validate_client_name(name)
+        except ValidationError:
             return "Invalid client name (use a-z, 0-9, -, _)"
     if action == "user_intent":
         req = tool_params.get("user_request", "")
