@@ -3,7 +3,8 @@
 A user authorizes an action, not a narrative. Attacker-controlled diagnostic
 strings (SSID/hostname) must appear as inert text, never as instructions.
 """
-import gi
+import pytest
+gi = pytest.importorskip("gi")
 
 gi.require_version("Gtk", "3.0")
 from gi.repository import Gtk  # noqa: E402

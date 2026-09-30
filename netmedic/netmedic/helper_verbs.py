@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import Any, Dict, List, Mapping, Optional
+from typing import Any, Callable, Dict, List, Mapping, Optional
 
 from netmedic.validators import (
     ValidationError as _ValidationError,
@@ -97,7 +97,7 @@ def _require_str(args: Mapping[str, Any], key: str, *, required: bool = True) ->
     return value
 
 
-def _reraise_as_verb(fn, *args, **kwargs):
+def _reraise_as_verb(fn: Callable[..., str], *args: Any, **kwargs: Any) -> str:
     try:
         return fn(*args, **kwargs)
     except _ValidationError as exc:

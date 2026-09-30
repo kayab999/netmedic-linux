@@ -86,10 +86,10 @@ jobs:
         # M8: policy XML is generated from action_catalog.ACTIONS.
         run: python scripts/generate_policy.py --check
 
-      - name: Typecheck (strict, 10 modules)
+      - name: Typecheck (strict, 13 modules)
         if: matrix.helper_mode == '0' && matrix.python-version == '3.12'
         run: |
-          mypy --config-file mypy.ini netmedic/netmedic/ipc_security.py netmedic/netmedic/helper_verbs.py netmedic/netmedic/action_catalog.py netmedic/netmedic/models.py netmedic/netmedic/ipc_bridge.py netmedic/netmedic/ipc_actions.py netmedic/netmedic/runtime.py netmedic/netmedic/lifecycle.py netmedic/netmedic/config.py netmedic/netmedic/polkit_auth.py
+          mypy --config-file mypy.ini netmedic/netmedic/ipc_security.py netmedic/netmedic/helper_verbs.py netmedic/netmedic/action_catalog.py netmedic/netmedic/models.py netmedic/netmedic/ipc_bridge.py netmedic/netmedic/ipc_actions.py netmedic/netmedic/runtime.py netmedic/netmedic/lifecycle.py netmedic/netmedic/config.py netmedic/netmedic/polkit_auth.py netmedic/netmedic/helper_main.py netmedic/netmedic/system.py netmedic/netmedic/validators.py
 
       - name: pip-audit
         if: matrix.helper_mode == '0' && matrix.python-version == '3.12'
@@ -104,6 +104,17 @@ jobs:
         # Sprint-1: total 85% (runtime 100%, ui 98%, ui_vpn 100%,
         # network 99%, angristan 98%). Gate 80 ratchets without tripping.
         run: xvfb-run -a python -m pytest tests/ -q --cov=netmedic --cov-report=term-missing --cov-fail-under=80
+
+      - name: Critical path coverage (per-file gates)
+        if: matrix.helper_mode == '0'
+        env:
+          NO_AT_BRIDGE: "1"
+        # M9: separate runs so ui.py at 98% cannot mask the root path.
+        # Gates sit 1 point under measured values — ratchet upward, never down.
+        run: |
+          xvfb-run -a python -m pytest tests/ -q -p no:cacheprovider --cov=netmedic.helper_main --cov-report= --cov-fail-under=70
+          xvfb-run -a python -m pytest tests/ -q -p no:cacheprovider --cov=netmedic.system --cov-report= --cov-fail-under=76
+          xvfb-run -a python -m pytest tests/ -q -p no:cacheprovider --cov=netmedic.polkit_auth --cov-report= --cov-fail-under=82
 
       - name: Test (helper-mode unit contracts NETMEDIC_USE_HELPER=1)
         if: matrix.helper_mode == '1'
