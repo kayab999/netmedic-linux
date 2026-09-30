@@ -17,13 +17,25 @@ from netmedic.helper_main import (
 def _sleep_pids():
     try:
         out = subprocess.run(
-            ["pgrep", "sleep"], capture_output=True, text=True, timeout=2  # noqa: S607 (test-only process query (pgrep sleep) with fixed argv)
+            ["pgrep", "sleep"], capture_output=True, text=True, timeout=2  # noqa: S607 (test-only process query with fixed argv)
         )
     except Exception:
         return set()
     if out.returncode != 0:
         return set()
     return {p for p in out.stdout.split() if p.strip()}
+
+
+def _assert_no_new_sleepers(before, timeout=10.0):
+    """Poll for orphan reaping: fixed sleeps flake under full-suite load."""
+    deadline = time.monotonic() + timeout
+    orphans: set = set()
+    while time.monotonic() < deadline:
+        orphans = set(_sleep_pids()) - before
+        if not orphans:
+            return
+        time.sleep(0.2)
+    assert orphans == set(), f"orphaned sleepers: {orphans}"
 
 
 def test_fast_command_no_timeout():
@@ -46,8 +58,7 @@ def test_slow_command_group_killed():
     assert res.exit_code == -signal.SIGKILL
     assert elapsed < 5.0
     assert "Deadline exceeded" in res.stderr
-    time.sleep(0.3)
-    assert set(_sleep_pids()) <= before
+    _assert_no_new_sleepers(before)
 
 
 def test_spawned_children_die_with_group(tmp_path):
@@ -58,9 +69,7 @@ def test_spawned_children_die_with_group(tmp_path):
     before = _sleep_pids()
     res = execute_with_deadline(["/bin/sh", str(script)], deadline=0.5)
     assert res.timeout is True
-    time.sleep(0.5)
-    orphans = set(_sleep_pids()) - before
-    assert orphans == set(), f"orphaned sleepers: {orphans}"
+    _assert_no_new_sleepers(before)
 
 
 def test_run_argv_kills_group_on_timeout():
@@ -72,12 +81,11 @@ def test_run_argv_kills_group_on_timeout():
         pass
     else:
         raise AssertionError("expected TimeoutExpired")
-    time.sleep(0.3)
-    assert set(_sleep_pids()) <= before
+    _assert_no_new_sleepers(before)
 
 
 def test_kill_process_group_dead_proc_no_raise():
-    proc = subprocess.Popen(["true"])  # noqa: S607 (test-only process query (pgrep sleep) with fixed argv)
+    proc = subprocess.Popen(["true"])  # noqa: S607 (fixed argv, no shell; trivial binary)
     proc.wait()
     _kill_process_group(proc)  # must not raise
 
@@ -90,8 +98,7 @@ def test_grandchild_processes_killed(tmp_path):
     before = _sleep_pids()
     res = execute_with_deadline(["/bin/sh", str(script)], deadline=0.5)
     assert res.timeout is True
-    time.sleep(0.5)
-    assert set(_sleep_pids()) - before == set()
+    _assert_no_new_sleepers(before)
 
 
 def test_concurrent_run_argv_isolated():
