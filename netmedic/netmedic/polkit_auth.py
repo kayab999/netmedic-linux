@@ -115,7 +115,7 @@ def check_authorization(
         cmd.append("--allow-user-interaction")
 
     try:
-        proc = subprocess.run(
+        proc = subprocess.run(  # noqa: S603 (fixed argv built from allowlisted flags; no shell)
             cmd,
             capture_output=True,
             text=True,

@@ -23,7 +23,7 @@ def test_netmedic_console_script():
     netmedic_bin = REPO_ROOT / "venv" / "bin" / "netmedic"
     if not netmedic_bin.is_file():
         pytest.skip("venv/bin/netmedic not installed")
-    result = subprocess.run(
+    result = subprocess.run(  # noqa: S603 (test invokes venv python --help; fixed argv)
         [str(netmedic_bin), "--help"],
         capture_output=True,
         text=True,
@@ -49,7 +49,7 @@ def test_strict_snapshot_contains_all_source_modules():
         pytest.skip("venv/bin/python not installed")
     env = os.environ.copy()
     env["PYTHONPATH"] = ""
-    result = subprocess.run(
+    result = subprocess.run(  # noqa: S603 (test invokes venv python -c probe; fixed argv)
         [
             str(venv_python),
             "-c",
@@ -83,7 +83,7 @@ def test_installed_interpreter_imports_dock_stack():
         pytest.skip("venv/bin/python not installed")
     env = os.environ.copy()
     env["PYTHONPATH"] = ""
-    result = subprocess.run(
+    result = subprocess.run(  # noqa: S603 (test invokes venv python -c probe; fixed argv)
         [
             str(venv_python),
             "-c",
@@ -105,7 +105,7 @@ def test_show_error_dialog_importable_when_ui_missing():
         pytest.skip("venv/bin/python not installed")
     env = os.environ.copy()
     env["PYTHONPATH"] = ""
-    result = subprocess.run(
+    result = subprocess.run(  # noqa: S603 (test invokes venv python -c probe; fixed argv)
         [
             str(venv_python),
             "-c",

@@ -63,7 +63,7 @@ def handle_signals(signum: int, frame: Optional[FrameType]) -> None:
     try:
         from netmedic.gui import quit_gui_if_running
         quit_gui_if_running()
-    except Exception:
+    except Exception:  # noqa: S110 (GUI teardown during shutdown; must not block exit)
         pass
 
     sys.exit(0)

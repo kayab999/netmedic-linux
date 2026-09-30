@@ -545,8 +545,8 @@ class MainWindow(Gtk.Window):
     def _spawn_browser(self, url: str):
         import subprocess
         try:
-            proc = subprocess.Popen(
-                ["xdg-open", url],
+            proc = subprocess.Popen(  # noqa: S603 (fixed argv; sole caller passes constant DONATE_URL)
+                ["xdg-open", url],  # noqa: S607 (xdg-open by name; sole caller passes constant DONATE_URL)
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )

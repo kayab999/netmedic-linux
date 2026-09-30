@@ -44,13 +44,13 @@ def test_crash_resilience(isolated_state):
     env, state_dir = isolated_state
     cmd = _headless_cmd()
 
-    process = subprocess.Popen(cmd, cwd=str(REPO_ROOT), env=env)
+    process = subprocess.Popen(cmd, cwd=str(REPO_ROOT), env=env)  # noqa: S603 (test invokes fixed probe argv)
     assert _wait_for(state_dir / "ipc.pid"), "PID file should be created on startup"
 
     process.kill()
     process.wait()
 
-    process2 = subprocess.Popen(cmd, cwd=str(REPO_ROOT), env=env)
+    process2 = subprocess.Popen(cmd, cwd=str(REPO_ROOT), env=env)  # noqa: S603 (test invokes fixed probe argv)
     try:
         assert _wait_for(state_dir / "ipc.pid"), "App should recover after SIGKILL"
         assert process2.poll() is None, "App should stay running after recovery"

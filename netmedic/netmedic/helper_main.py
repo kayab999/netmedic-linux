@@ -222,7 +222,7 @@ def _kill_process_group(proc: subprocess.Popen[str]) -> None:
         return
     try:
         proc.wait(timeout=2)
-    except Exception:
+    except Exception:  # noqa: S110 (best-effort re-kill during timeout cleanup; proc already reaped or dead)
         pass
 
 
@@ -234,7 +234,7 @@ def _run_argv(argv: List[str], timeout: Optional[int]) -> subprocess.CompletedPr
     (raises TimeoutExpired) so execute_plan is unchanged.
     """
     limit = timeout or 60
-    proc = subprocess.Popen(
+    proc = subprocess.Popen(  # noqa: S603 (fixed argv from VerbPlan allowlist; no shell)
         argv,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -251,7 +251,7 @@ def _run_argv(argv: List[str], timeout: Optional[int]) -> subprocess.CompletedPr
             stdout, stderr = "", ""
             try:
                 proc.kill()
-            except Exception:
+            except Exception:  # noqa: S110 (best-effort kill of timed-out child; killpg already ran)
                 pass
         raise subprocess.TimeoutExpired(proc.args, limit, output=stdout, stderr=stderr) from None
     return subprocess.CompletedProcess(proc.args, proc.returncode or 0, stdout, stderr)
@@ -296,7 +296,7 @@ def execute_with_deadline(
     base_env = {"PATH": FIXED_PATH, "HOME": "/root", "TERM": "dumb"}
     if env is not None:
         base_env = dict(env)
-    proc = subprocess.Popen(
+    proc = subprocess.Popen(  # noqa: S603 (fixed argv (/bin/bash + staged root-owned script); no shell)
         command,
         preexec_fn=os.setsid,
         stdout=subprocess.PIPE,

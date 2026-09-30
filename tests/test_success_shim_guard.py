@@ -25,7 +25,7 @@ def test_no_new_success_shim_usage():
                 continue
             try:
                 lines = py.read_text(encoding="utf-8").splitlines()
-            except Exception:
+            except Exception:  # noqa: S112 (test scanner loop; unreadable files are skipped)
                 continue
             for idx, line in enumerate(lines, start=1):
                 if pattern.search(line):
@@ -65,7 +65,7 @@ def test_success_allowlist_ratchet():
         for py in (root / scan_root).rglob("*.py"):
             try:
                 text = py.read_text(encoding="utf-8")
-            except Exception:
+            except Exception:  # noqa: S112 (test scanner loop; unreadable files are skipped)
                 continue
             count += text.lower().count("sf-success: allow")
     MAX_ALLOWED = 0

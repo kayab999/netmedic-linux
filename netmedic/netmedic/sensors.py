@@ -20,7 +20,7 @@ def _read_resolvers() -> List[str]:
     resolvers: List[str] = []
     try:
         proc = subprocess.run(
-            ["resolvectl", "status"],
+            ["resolvectl", "status"],  # noqa: S607 (read-only probe with fixed argv; resolved via PATH like nmcli/ip elsewhere)
             capture_output=True,
             text=True,
             timeout=5,
@@ -95,7 +95,7 @@ def get_network_snapshot() -> Dict[str, Any]:
 
     try:
         proc = subprocess.run(
-            ["ip", "-j", "link"],
+            ["ip", "-j", "link"],  # noqa: S607 (read-only probe with fixed argv; resolved via PATH like nmcli/ip elsewhere)
             capture_output=True,
             text=True,
             timeout=5,
@@ -136,7 +136,7 @@ def get_network_snapshot() -> Dict[str, Any]:
         snapshot["internet_probes"] = per
         # Latency via ping for backwards compat
         ping_res = subprocess.run(
-            ["ping", "-c", "1", "-W", "1", "8.8.8.8"],
+            ["ping", "-c", "1", "-W", "1", "8.8.8.8"],  # noqa: S607 (read-only latency probe with fixed argv and target)
             capture_output=True,
             text=True,
             timeout=5,
@@ -146,14 +146,14 @@ def get_network_snapshot() -> Dict[str, Any]:
             match = re.search(r"time[=<]([\d.]+)", ping_res.stdout)
             if match:
                 snapshot["latency_ms"] = float(match.group(1))
-    except (subprocess.SubprocessError, ValueError, OSError, Exception):
+    except (subprocess.SubprocessError, ValueError, OSError, Exception):  # noqa: S110 (best-effort sensor parse; snapshot keeps other keys)
         pass
 
     try:
         from netmedic.network import NetworkMedic
 
         snapshot["firewall"] = NetworkMedic.read_firewall_status()
-    except Exception:
+    except Exception:  # noqa: S110 (best-effort firewall read; snapshot keeps other keys)
         pass
 
     return snapshot

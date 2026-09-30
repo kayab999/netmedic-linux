@@ -1,18 +1,13 @@
 [lint]
 select = ["E", "F", "B", "S"]
 ignore = [
+  # E501: long lines are docs/URLs/tables — line length is not a security gate
   "E501",
-  # S101: pytest uses assert pervasively — gated by guardian tests, not bandit
+  # S101: pytest uses assert pervasively (tests), plus type-narrowing asserts
+  # in production — gated by guardian tests, not bandit
   "S101",
-  # S603/S607: subprocess argv-only (no shell) with fixed-verb allowlist;
-  # full paths resolved via helper/pkexec. See helper_verbs.py + system.py allowlist.
-  "S603",
-  "S607",
-  # S110/S112: best-effort teardown/probe paths log nearby or are intentionally silent
-  "S110",
-  "S112",
-  # S108: sealed VPN staging uses XDG_RUNTIME_DIR/netmedic (0700), not world /tmp
-  "S108",
+  # M10: S603/S607/S110/S112/S108 moved to per-line noqa with documented
+  # reasons at each site. Do not re-add globally: each instance is auditable.
 ]
 
 [lint.per-file-ignores]

@@ -40,7 +40,7 @@ def _resolve_asset_dir() -> Path:
         pkg_data = _res_files("netmedic_ai")
         if (pkg_data / MODEL_FILENAME).is_file():
             return Path(str(pkg_data))
-    except Exception:
+    except Exception:  # noqa: S110 (optional package-data probe; falls through to _MEIPASS/checkout)
         pass
     meipass = getattr(sys, "_MEIPASS", None)
     if meipass and Path(meipass, MODEL_FILENAME).is_file():

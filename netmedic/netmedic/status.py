@@ -25,7 +25,7 @@ def _pkaction_ids() -> List[str]:
     if not pkaction:
         return []
     try:
-        proc = subprocess.run(
+        proc = subprocess.run(  # noqa: S603 (fixed argv (pkaction path resolved by caller); no shell)
             [pkaction],
             capture_output=True,
             text=True,

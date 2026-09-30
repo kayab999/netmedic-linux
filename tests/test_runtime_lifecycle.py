@@ -97,7 +97,7 @@ def test_setup_logging_new_and_existing(tmp_path, monkeypatch):
             root.removeHandler(h)
             try:
                 h.close()
-            except Exception:
+            except Exception:  # noqa: S110 (test teardown best-effort; failure must not fail the test)
                 pass
         for h in saved_handlers:
             root.addHandler(h)

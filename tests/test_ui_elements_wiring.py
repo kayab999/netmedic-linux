@@ -80,7 +80,7 @@ def main_window():
         win.is_destroyed = True
         try:
             win.destroy()
-        except Exception:
+        except Exception:  # noqa: S110 (test GTK stub fallback; real path covered when GTK present)
             pass
         _run_idles_once()
 

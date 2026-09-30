@@ -2,7 +2,7 @@
 
 Professional network diagnostics, repair, and infrastructure management for Linux. NetMedic combines a GTK3 interface with a hardened privileged IPC core, optional AI orchestration, and VPN lifecycle management.
 
-**Version:** 1.6.0 · **License:** [MIT](LICENSE)
+**Version:** 1.8.0 · **License:** [MIT](LICENSE)
 
 ---
 
@@ -77,7 +77,7 @@ pkaction --action-id com.kayab.netmedic.flush-dns
 netmedic-linux/
 ├── netmedic/          # Core application package
 ├── netmedic_ai/       # Optional AI pilot module
-├── tests/             # Test suite (438 tests, 57 files; 436 passed, 2 root-only netns skips)
+├── tests/             # Test suite (546 tests, 69 files; 2 root-only netns skips)
 ├── docs/              # User & developer documentation
 ├── scripts/           # Build & packaging scripts
 ├── assets/            # Icon and desktop entry template
@@ -99,7 +99,7 @@ netmedic-linux/
 | [Architecture](docs/ARCHITECTURE.md) | System design overview |
 | [IPC API](docs/IPC_API.md) | Integration guide for automation clients |
 | [Threat Model](docs/THREAT_MODEL.md) | Trust boundaries and residual risks |
-| [Privileged Helper](docs/PRIVILEGED_HELPER.md) | v1.5 design: fixed-argv elevation |
+| [Privileged Helper](docs/PRIVILEGED_HELPER.md) | Fixed-argv elevation (v1.5 design, as built v1.6.1+) |
 | [Ops Runbook](docs/OPS.md) | Install, health, headless, audit, env matrix (internal IT) |
 | [Contributing](CONTRIBUTING.md) | Contribution guidelines |
 | [Changelog](CHANGELOG.md) | Version history |
@@ -113,7 +113,7 @@ netmedic-linux/
 ./install.sh                              # Full setup + test run
 venv/bin/python -m pytest tests/ -v
 venv/bin/ruff check netmedic/ netmedic_ai/ tools/ tests/
-venv/bin/mypy --config-file mypy.ini netmedic/netmedic/ipc_security.py netmedic/netmedic/helper_verbs.py
+venv/bin/mypy --config-file mypy.ini netmedic/netmedic/ipc_security.py netmedic/netmedic/helper_verbs.py netmedic/netmedic/action_catalog.py netmedic/netmedic/models.py netmedic/netmedic/ipc_bridge.py netmedic/netmedic/ipc_actions.py netmedic/netmedic/runtime.py netmedic/netmedic/lifecycle.py netmedic/netmedic/config.py netmedic/netmedic/polkit_auth.py netmedic/netmedic/helper_main.py netmedic/netmedic/system.py netmedic/netmedic/validators.py
 ./scripts/build_binary.sh                 # PyInstaller build
 ./scripts/prepare_release_assets.sh       # Binary + SHA256SUMS + SBOM
 ```
@@ -125,7 +125,7 @@ See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for details.
 ## System Requirements
 
 - **OS:** Ubuntu 22.04/24.04 (primary; Debian/Fedora/Arch best-effort)
-- **Python:** 3.10–3.12 (pinned in CI; see `requirements.lock`)
+- **Python:** 3.10–3.13 (pinned in CI; see `requirements.lock`)
 - **System packages:** GTK3, GObject introspection, NetworkManager (`nmcli`), PolicyKit
 - **Optional AI:** `llama-cpp-python`, ~950 MB GGUF model (not bundled in repo)
 

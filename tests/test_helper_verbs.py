@@ -91,7 +91,7 @@ def test_vpn_run_script_validates_sha_and_path():
         plan_verb(
             "vpn-run-script",
             {
-                "script": "/tmp/x.sh",
+                "script": "/tmp/x.sh",  # noqa: S108 (attacker-path fixture string; never created/executed)
                 "expected_sha256": "deadbeef",
                 "env": {},
             },
@@ -101,19 +101,19 @@ def test_vpn_run_script_validates_sha_and_path():
         plan_verb(
             "vpn-run-script",
             {
-                "script": "/tmp/openvpn-install.sh",
+                "script": "/tmp/openvpn-install.sh",  # noqa: S108 (attacker-path fixture string; never created/executed)
                 "expected_sha256": "ab" * 32,
                 "env": {},
             },
         )
     # F1: dangerous env rejected (allowlist only).
-    for bad_env in ({"LD_PRELOAD": "/tmp/x.so"}, {"PATH": "/tmp"}, {"BASH_ENV": "/tmp/x"}):
+    for bad_env in ({"LD_PRELOAD": "/tmp/x.so"}, {"PATH": "/tmp"}, {"BASH_ENV": "/tmp/x"}):  # noqa: S108 (attacker-path fixture string; never created/executed)
         with pytest.raises(VerbValidationError, match="allowlisted"):
             plan_verb(
                 "vpn-run-script",
                 {
                     "script_id": "openvpn-install",
-                    "script": "/tmp/openvpn-install.sh",
+                    "script": "/tmp/openvpn-install.sh",  # noqa: S108 (attacker-path fixture string; never created/executed)
                     "expected_sha256": pin,
                     "env": bad_env,
                 },
@@ -123,7 +123,7 @@ def test_vpn_run_script_validates_sha_and_path():
             "vpn-run-script",
             {
                 "script_id": "evil",
-                "script": "/tmp/openvpn-install.sh",
+                "script": "/tmp/openvpn-install.sh",  # noqa: S108 (attacker-path fixture string; never created/executed)
                 "expected_sha256": pin,
                 "env": {},
             },
@@ -132,7 +132,7 @@ def test_vpn_run_script_validates_sha_and_path():
         "vpn-run-script",
         {
             "script_id": "openvpn-install",
-            "script": "/tmp/openvpn-install.sh",
+            "script": "/tmp/openvpn-install.sh",  # noqa: S108 (attacker-path fixture string; never created/executed)
             "expected_sha256": pin,
             "env": {"MENU_OPTION": "1", "CLIENT": "laptop"},
         },
@@ -327,12 +327,12 @@ def test_vpn_run_script_rejects_non_normalized():
     with pytest.raises(VerbValidationError):
         plan_verb(
             "vpn-run-script",
-            {"script": "/tmp//x.sh", "expected_sha256": pin, "env": {}},
+            {"script": "/tmp//x.sh", "expected_sha256": pin, "env": {}},  # noqa: S108 (attacker-path fixture string; never created/executed)
         )
     with pytest.raises(VerbValidationError):
         plan_verb(
             "vpn-run-script",
-            {"script": "/tmp/a/../x.sh", "expected_sha256": pin, "env": {}},
+            {"script": "/tmp/a/../x.sh", "expected_sha256": pin, "env": {}},  # noqa: S108 (attacker-path fixture string; never created/executed)
         )
 
 
@@ -345,7 +345,7 @@ def test_vpn_run_script_rejects_bad_env_key():
         plan_verb(
             "vpn-run-script",
             {
-                "script": "/tmp/openvpn-install.sh",
+                "script": "/tmp/openvpn-install.sh",  # noqa: S108 (attacker-path fixture string; never created/executed)
                 "expected_sha256": pin,
                 "env": {"BAD-KEY!": "1"},
             },
@@ -354,7 +354,7 @@ def test_vpn_run_script_rejects_bad_env_key():
         plan_verb(
             "vpn-run-script",
             {
-                "script": "/tmp/openvpn-install.sh",
+                "script": "/tmp/openvpn-install.sh",  # noqa: S108 (attacker-path fixture string; never created/executed)
                 "expected_sha256": pin,
                 "env": {"MENU_OPTION": "a\nb"},
             },
@@ -364,7 +364,7 @@ def test_vpn_run_script_rejects_bad_env_key():
         plan_verb(
             "vpn-run-script",
             {
-                "script": "/tmp/openvpn-install.sh",
+                "script": "/tmp/openvpn-install.sh",  # noqa: S108 (attacker-path fixture string; never created/executed)
                 "expected_sha256": pin,
                 "env": {"ok_key": "1"},
             },

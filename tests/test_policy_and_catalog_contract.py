@@ -140,7 +140,7 @@ def test_generated_policy_matches_asset():
     import sys
 
     root = Path(__file__).resolve().parents[1]
-    proc = subprocess.run(
+    proc = subprocess.run(  # noqa: S603 (test runs generate_policy.py --check; fixed argv)
         [sys.executable, str(root / "scripts" / "generate_policy.py"), "--check"],
         capture_output=True,
         text=True,
