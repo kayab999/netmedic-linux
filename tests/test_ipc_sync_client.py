@@ -5,7 +5,7 @@ from netmedic.ipc_sync_client import SyncIPCClient
 
 @patch("netmedic.ipc_sync_client.os.path.exists", return_value=False)
 def test_request_requires_running_instance(mock_exists):
-    client = SyncIPCClient(sock_path="/tmp/missing.sock")
+    client = SyncIPCClient(sock_path="/tmp/missing.sock")  # noqa: S108 (nonexistent-socket fixture path; never created)
     result = client.request("network_status")
     assert result["status"] == "error"
     assert "not available" in result["message"]
@@ -18,7 +18,7 @@ def test_privileged_request_attaches_token(mock_exists, mock_raw):
         {"status": "ok", "session_token": "abc"},
         {"status": "ok", "message": "done"},
     ]
-    client = SyncIPCClient(sock_path="/tmp/ipc.sock")
+    client = SyncIPCClient(sock_path="/tmp/ipc.sock")  # noqa: S108 (fixture socket path under tmp_path; test-scoped)
     result = client.request("flush_dns", confirmed=True)
     assert result["status"] == "ok"
     assert mock_raw.call_count == 2

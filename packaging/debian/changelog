@@ -1,3 +1,10 @@
+netmedic (1.8.0-1) unstable; urgency=medium
+
+  * v1.8.0: M8 architecture (ActionSpec table, generated policy,
+    dispatcher table, headless repair) + M9 true-strict typing.
+
+ -- Kayab Software <support@kayabsoftware.com>  Tue, 30 Sep 2026 00:00:00 +0000
+
 netmedic (1.6.0-1) unstable; urgency=medium
 
   * v1.6.0: honest-repair ResultCode, two-phase audit, root-owned VPN

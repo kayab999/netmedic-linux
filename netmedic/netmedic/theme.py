@@ -216,7 +216,7 @@ def apply_theme():
         settings = Gtk.Settings.get_default()
         if settings is not None:
             settings.set_property("gtk-application-prefer-dark-theme", True)
-    except Exception:
+    except Exception:  # noqa: S110 (cosmetic theme preference; failure keeps default theme)
         pass
     screen = Gdk.Screen.get_default()
     if screen:

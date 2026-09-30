@@ -71,7 +71,7 @@ class NetResult:
                     warnings.warn("NetResult.success is deprecated, use code (ResultCode)", UserWarning, stacklevel=2)
             except Warning:
                 raise
-            except Exception:
+            except Exception:  # noqa: S110 (frame inspection is best-effort; warning already emitted or impossible)
                 pass
         return object.__getattribute__(self, name)
 

@@ -43,13 +43,13 @@ pip install -e netmedic_ai/
 ./venv/bin/netmedic --headless
 ```
 
-## Testing (438 tests, 57 files; CI gate `--cov-fail-under=75`, currently 83%)
+## Testing (546 tests, 69 files; CI gate `--cov-fail-under=80`, currently 85%+)
 
 ```bash
 ./venv/bin/python -m pytest tests/ -v
 ```
 
-Test categories (see `tests/` — 57 files):
+Test categories (see `tests/` — 69 files):
 - IPC + auth: `test_ipc*.py`, `test_polkit_*.py`, `test_action_catalog.py`, `test_audit_log.py`, `test_security.py`
 - Helper verbs + contracts: `test_helper_verbs.py`, `test_command_runner_allowlist.py`, `test_policy_and_catalog_contract.py`, `test_verbs_doc.py`
 - Operators + diagnostics: `test_operators.py`, `test_angristan_operator.py`, `test_network*.py`, `test_probes.py`, `test_sensors*.py`
@@ -63,12 +63,14 @@ Test categories (see `tests/` — 57 files):
 
 ```bash
 ./venv/bin/ruff check netmedic/ netmedic_ai/ tools/ tests/
-./venv/bin/mypy --config-file mypy.ini netmedic/netmedic/ipc_security.py netmedic/netmedic/helper_verbs.py netmedic/netmedic/action_catalog.py netmedic/netmedic/models.py netmedic/netmedic/ipc_bridge.py netmedic/netmedic/ipc_actions.py netmedic/netmedic/runtime.py netmedic/netmedic/lifecycle.py netmedic/netmedic/config.py netmedic/netmedic/polkit_auth.py
+./venv/bin/mypy --config-file mypy.ini netmedic/netmedic/ipc_security.py netmedic/netmedic/helper_verbs.py netmedic/netmedic/action_catalog.py netmedic/netmedic/models.py netmedic/netmedic/ipc_bridge.py netmedic/netmedic/ipc_actions.py netmedic/netmedic/runtime.py netmedic/netmedic/lifecycle.py netmedic/netmedic/config.py netmedic/netmedic/polkit_auth.py netmedic/netmedic/helper_main.py netmedic/netmedic/system.py netmedic/netmedic/validators.py
 ```
 
 ruff selects `E,F,B,S` (see `ruff.toml` for documented test/sim exceptions).
-mypy is strict on 10 modules; the dependency-graph cascade is silenced via
-`netmedic.* ignore_errors` (most-specific match keeps strict files strict).
+mypy is strict on 13 modules; unstrict followers have explicit per-file
+ratchet-queue sections. Never use a glob allowlist section: in mypy 2.x a
+glob with `ignore_errors` shadows specific strict sections, silently
+vacuating them (caught by probe in M9; `test_m9_typing.py` bans the pattern).
 
 ## Building Binaries
 

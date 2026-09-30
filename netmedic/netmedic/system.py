@@ -122,7 +122,7 @@ class CommandRunner:
         if "|" in helper:
             return None
         try:
-            proc = subprocess.run(
+            proc = subprocess.run(  # noqa: S603 (fixed argv (helper path + verb + JSON); no shell)
                 CommandRunner._helper_version_argv(),
                 capture_output=True,
                 text=True,
@@ -313,7 +313,7 @@ class CommandRunner:
 
         proc = None
         try:
-            proc = subprocess.Popen(
+            proc = subprocess.Popen(  # noqa: S603 (fixed argv (allowlisted tool or helper); no shell)
                 final_cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
@@ -388,7 +388,7 @@ class CommandRunner:
                 pass
             try:
                 proc.wait(timeout=2)
-            except Exception:
+            except Exception:  # noqa: S110 (best-effort wait after SIGKILL; proc already dead or reaped)
                 pass
         except Exception:
             logger.debug("Failed to terminate process group cleanly", exc_info=True)

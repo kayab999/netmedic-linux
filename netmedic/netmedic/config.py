@@ -99,7 +99,7 @@ class Config:
                 if os.environ.get("NETMEDIC_ALLOW_LEGACY_ELEVATION"):
                     logger.warning("Ignoring NETMEDIC_ALLOW_LEGACY_ELEVATION when euid==0")
                 return False
-        except Exception:
+        except Exception:  # noqa: S110 (getuid may be unavailable on odd platforms; fail-closed below)
             pass
         if not Config._is_test_mode():
             if os.environ.get("NETMEDIC_ALLOW_LEGACY_ELEVATION"):

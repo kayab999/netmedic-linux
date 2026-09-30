@@ -1,4 +1,4 @@
-# Privileged Helper Design (v1.5 target)
+# Privileged Helper Design (v1.5 target — as built v1.6.1, hardened through v1.8.0)
 
 ## Problem
 
@@ -25,7 +25,7 @@ The fine-grained polkit action IDs gate **IPC entry**, not the **actual root com
 4. **No shell**; argv-only execution.
 5. **Backward-compatible IPC API** (action names unchanged).
 
-## Non-goals (v1.5)
+## Non-goals (v1.5, reaffirmed v1.8.0)
 
 - Multi-user mutually untrusted operators
 - Network-exposed helper
@@ -176,14 +176,20 @@ pkexec --disable-internal-agent /usr/libexec/netmedic/helper flush-dns
 2. **Pass iface/conn as flags or JSON:** flags for simple verbs; JSON for multi-field (`change-dns`).
 3. **Whether IPC polkit check remains** once helper is annotated: keep both initially (double prompt risk). Prefer **server-side polkit only** *or* **helper polkit only** after UX validation — not both interactive prompts.
 
-## Acceptance criteria (v1.5)
+## Acceptance criteria (v1.5 — all met as of v1.6.1, re-verified v1.8.0)
 
-- [ ] Every `require_root=True` production call site goes through a helper verb.
-- [ ] No `pkexec nmcli|ip|ufw|systemctl|env …` direct construction outside helper.
-- [ ] Polkit policy annotations point at helper path.
-- [ ] VPN script execution re-hashes under elevated context.
-- [ ] Tests cover invalid iface / DNS / client name at helper boundary.
-- [ ] Threat model and ARCHITECTURE updated for single elevation path.
+- [x] Every `require_root=True` production call site goes through a helper verb.
+  (`system.py` refuses direct elevation outside `TEST_MODE`-gated legacy.)
+- [x] No `pkexec nmcli|ip|ufw|systemctl|env …` direct construction outside helper.
+  (Production path is `pkexec helper <verb>` only; raw argv survives in tests.)
+- [x] Polkit policy annotations point at helper path.
+  (Enforced by `test_policy_and_catalog_contract.py`: `exec.path` + per-verb `argv1`.)
+- [x] VPN script execution re-hashes under elevated context.
+  (Root-owned staging in `/run/netmedic` + double hash; F1 pin in v1.6.1.)
+- [x] Tests cover invalid iface / DNS / client name at helper boundary.
+  (`test_helper_verbs.py`, `test_m4_validators.py`.)
+- [x] Threat model and ARCHITECTURE updated for single elevation path.
+  (Both at v1.6; `VERBS.md` is the live verb contract.)
 
 ## Related
 

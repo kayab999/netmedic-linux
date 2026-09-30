@@ -4,9 +4,9 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "netmedic-ai"
-version = "1.5.0"
+version = "1.8.0"
 description = "AI pilot for NetMedic network orchestration"
-requires-python = ">=3.10,<3.13"
+requires-python = ">=3.10,<3.14"
 dependencies = []
 
 [project.optional-dependencies]

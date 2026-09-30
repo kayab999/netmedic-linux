@@ -17,7 +17,7 @@ from netmedic.helper_main import (
 def _sleep_pids():
     try:
         out = subprocess.run(
-            ["pgrep", "sleep"], capture_output=True, text=True, timeout=2
+            ["pgrep", "sleep"], capture_output=True, text=True, timeout=2  # noqa: S607 (test-only process query (pgrep sleep) with fixed argv)
         )
     except Exception:
         return set()
@@ -77,7 +77,7 @@ def test_run_argv_kills_group_on_timeout():
 
 
 def test_kill_process_group_dead_proc_no_raise():
-    proc = subprocess.Popen(["true"])
+    proc = subprocess.Popen(["true"])  # noqa: S607 (test-only process query (pgrep sleep) with fixed argv)
     proc.wait()
     _kill_process_group(proc)  # must not raise
 

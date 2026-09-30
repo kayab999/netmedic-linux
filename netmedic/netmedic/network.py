@@ -321,7 +321,7 @@ class NetworkMedic:
         try:
             from netmedic.probes import check_nm_connectivity
             nm_full, nm_details = check_nm_connectivity()
-        except Exception:
+        except Exception:  # noqa: S110 (optional NM-divergence probe; absence degrades to fewer details)
             pass
 
         msg = " | ".join(results)

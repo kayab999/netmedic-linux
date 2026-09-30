@@ -43,7 +43,7 @@ def test_service_allowlist_rejects_arbitrary():
     for bad in ("ssh.service", "dbus.service", "NetworkManager.service", ""):
         try:
             validate_service(bad)
-        except Exception:
+        except Exception:  # noqa: S112 (test fixture loop; iteration failure is the assertion)
             continue
         raise AssertionError(f"validate_service accepted {bad!r}")
 
