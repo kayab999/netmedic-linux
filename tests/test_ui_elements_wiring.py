@@ -6,12 +6,12 @@ state, confirmation gates, and IPC action routing for each control.
 """
 
 from __future__ import annotations
+import pytest
 
 import os
 from unittest.mock import MagicMock, patch
 
-import gi
-import pytest
+gi = pytest.importorskip("gi")
 
 gi.require_version("Gtk", "3.0")
 from gi.repository import Gtk, GLib  # noqa: E402

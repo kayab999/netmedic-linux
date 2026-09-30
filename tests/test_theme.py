@@ -4,7 +4,8 @@ Unstyled container surfaces (Gtk.Frame etc.) followed the system gtk-theme
 while the rest of the window is dark — white frames on dock launch. These
 tests pin the fix: explicit container selectors + dark-variant preference.
 """
-import gi
+import pytest
+gi = pytest.importorskip("gi")
 
 gi.require_version("Gtk", "3.0")
 from gi.repository import Gtk  # noqa: E402

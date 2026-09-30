@@ -7,7 +7,8 @@ palette blocks every button under it. Window chrome (titlebar) stays usable —
 exactly the failure mode reported when function buttons did nothing.
 """
 
-import gi
+import pytest
+gi = pytest.importorskip("gi")
 
 gi.require_version("Gtk", "3.0")
 from gi.repository import Gtk  # noqa: E402

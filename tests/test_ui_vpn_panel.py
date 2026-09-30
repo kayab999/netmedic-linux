@@ -5,13 +5,13 @@ shown), GuiActionBridge + AngristanOperator mocked, GLib.idle_add executed
 inline via an InlineExecutor so all async paths run synchronously.
 """
 from __future__ import annotations
+import pytest
 
 import os
 from concurrent.futures import Future
 from unittest.mock import MagicMock, patch
 
-import gi
-import pytest
+gi = pytest.importorskip("gi")
 
 gi.require_version("Gtk", "3.0")
 from gi.repository import Gtk, GLib  # noqa: E402, F401

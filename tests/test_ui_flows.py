@@ -11,8 +11,8 @@ import concurrent.futures
 import os
 from unittest.mock import ANY, MagicMock, patch
 
-import gi
 import pytest
+gi = pytest.importorskip("gi")
 
 gi.require_version("Gtk", "3.0")
 from gi.repository import Gtk, GLib  # noqa: E402, F401

@@ -144,7 +144,7 @@ class CommandRunner:
         return None
 
     @staticmethod
-    def _helper_invocation(verb: str, args: Mapping[str, Any], *, timeout: Optional[int]) -> List[str]:
+    def _helper_invocation(verb: str, args: Mapping[str, Any], *, timeout: Optional[float]) -> List[str]:
         """Build argv to run netmedic-helper (optionally under pkexec)."""
         helper = str(Config.get_helper_path())
         json_args = json.dumps(dict(args), separators=(",", ":"))
@@ -168,7 +168,7 @@ class CommandRunner:
         verb: str,
         args: Optional[Mapping[str, Any]] = None,
         *,
-        timeout: Optional[int] = None,
+        timeout: Optional[float] = None,
     ) -> CommandResult:
         """Run a fixed helper verb (Phase D production path).
 
@@ -275,7 +275,7 @@ class CommandRunner:
     def run(
         command: List[str],
         require_root: bool = False,
-        timeout: Optional[int] = None,
+        timeout: Optional[float] = None,
         *,
         _legacy_ok: bool = False,
     ) -> CommandResult:
@@ -367,7 +367,7 @@ class CommandRunner:
             return CommandResult(False, -1, "", str(e), final_cmd)
 
     @staticmethod
-    def _terminate_process_group(proc: subprocess.Popen) -> None:
+    def _terminate_process_group(proc: subprocess.Popen[str]) -> None:
         # M2 note: after pkexec setuid(0) the user-owned daemon gets EPERM
         # signalling the root child. That is expected — the helper enforces
         # the real deadline via killpg on its own (same-euid) children.

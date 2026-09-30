@@ -193,7 +193,7 @@ def _stage_verified_copy(script: str, expected: str, staging_dir: str = ROOT_STA
     return staged
 
 
-def _kill_process_group(proc: subprocess.Popen) -> None:
+def _kill_process_group(proc: subprocess.Popen[str]) -> None:
     """M2: kill the whole group, not just the direct child.
 
     Verbs like renew-ip run two commands and VPN scripts fork; killing only
@@ -226,7 +226,7 @@ def _kill_process_group(proc: subprocess.Popen) -> None:
         pass
 
 
-def _run_argv(argv: List[str], timeout: Optional[int]) -> subprocess.CompletedProcess:
+def _run_argv(argv: List[str], timeout: Optional[int]) -> subprocess.CompletedProcess[str]:
     """M2: Popen + communicate + killpg (replaces subprocess.run timeout).
 
     subprocess.run(timeout=...) kills only the direct child; two-command
