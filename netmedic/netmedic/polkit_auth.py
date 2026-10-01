@@ -24,6 +24,22 @@ def skip_polkit() -> bool:
     return False
 
 
+def _parse_start_time(data: str) -> Optional[int]:
+    """Parse starttime ticks from /proc/<pid>/stat text (pure, testable)."""
+    # comm may contain spaces/parens; starttime is field 22 after ") ".
+    close_paren = data.rfind(")")
+    if close_paren < 0:
+        return None
+    fields = data[close_paren + 2 :].split()
+    # After ")": state is fields[0] → starttime is fields[19] (stat field 22).
+    if len(fields) < 20:
+        return None
+    try:
+        return int(fields[19])
+    except ValueError:
+        return None
+
+
 def process_start_time(pid: int) -> Optional[int]:
     """Return Linux process starttime ticks from /proc/<pid>/stat, or None."""
     if pid <= 0:
@@ -31,17 +47,9 @@ def process_start_time(pid: int) -> Optional[int]:
     try:
         with open(f"/proc/{pid}/stat", "r", encoding="utf-8") as handle:
             data = handle.read()
-        # comm may contain spaces/parens; starttime is field 22 after ") ".
-        close_paren = data.rfind(")")
-        if close_paren < 0:
-            return None
-        fields = data[close_paren + 2 :].split()
-        # After ")": state is fields[0] → starttime is fields[19] (stat field 22).
-        if len(fields) < 20:
-            return None
-        return int(fields[19])
-    except (OSError, ValueError, IndexError):
+    except OSError:
         return None
+    return _parse_start_time(data)
 
 
 def _process_subject_spec(pid: int, uid: int) -> Tuple[str, Optional[int]]:

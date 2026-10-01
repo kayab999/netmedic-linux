@@ -68,6 +68,16 @@ def test_iface_leading_dash_rejected():
             helper_verbs.validate_iface(bad)
 
 
+def test_iface_dot_names_rejected():
+    """N3: '.' and '..' pass the charset regex; the kernel would ENODEV,
+    but the app validator must not rely on that."""
+    for bad in (".", ".."):
+        with pytest.raises(ValueError):
+            V.validate_iface(bad)
+        with pytest.raises(ValueError):
+            helper_verbs.validate_iface(bad)
+
+
 def test_iface_length_cap():
     assert V.validate_iface("a" * 15) == "a" * 15  # IFNAMSIZ-1
     with pytest.raises(ValueError):
