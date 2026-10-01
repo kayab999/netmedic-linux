@@ -65,6 +65,10 @@ def validate_iface(iface: str, *, medic_only: bool = False) -> str:
     """Return *iface* or raise ValidationError (leading dash, length)."""
     if not isinstance(iface, str) or not _IFACE_RE.fullmatch(iface):
         raise ValidationError(f"Invalid interface name: {iface!r}")
+    # N3: the kernel rejects "." and ".." (ENODEV), but the app validator
+    # must not rely on the kernel to save it.
+    if iface in (".", ".."):
+        raise ValidationError(f"Invalid interface name: {iface!r}")
     if iface.startswith("-"):
         raise ValidationError(f"Invalid interface name: {iface!r}")
     if len(iface) > MAX_IFACE_LEN:
