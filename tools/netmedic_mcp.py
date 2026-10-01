@@ -9,6 +9,8 @@ sys.path.insert(0, os.path.join(_REPO_ROOT, ".."))
 
 from fastmcp import FastMCP
 from netmedic.ipc_sync_client import SyncIPCClient
+from netmedic.models import NetResult, ResultCode
+from netmedic.repair import RepairCallbacks, RepairDeps, run_smart_repair
 
 mcp = FastMCP("NetMedic")
 ipc = SyncIPCClient()
@@ -112,17 +114,50 @@ def get_network_status() -> str:
     return _ipc_message(result)
 
 
+def _to_netresult(response: dict, operation: str) -> NetResult:
+    """Convert an IPC response dict to NetResult (code-first, like _ipc_message)."""
+    is_ok = response.get("status") == "ok"
+    code = response.get("code", "ok" if is_ok else "failed")
+    if isinstance(code, str):
+        try:
+            code = ResultCode(code)
+        except ValueError:
+            code = ResultCode.OK if is_ok else ResultCode.FAILED
+    return NetResult(
+        operation=operation,
+        success=is_ok,
+        message=response.get("message", ""),
+        data=response.get("data"),
+        details=response.get("details"),
+        code=code,
+    )
+
+
 @mcp.tool()
 def smart_repair() -> str:
-    """Run automated non-destructive repairs (DNS flush, IP renewal)."""
+    """Run Smart Repair (diagnose → conditional flush/renew → verify → verdict).
+
+    Same honest flow as the GUI: healthy networks are SKIPPED without
+    elevation, and the verdict compares pre/post state. MCP has no
+    interface context, so settle detection is a no-op (verify round-trips
+    still apply).
+    """
     blocked = _require_mutating("smart_repair") or _require_instance()
     if blocked:
         return blocked
-    lines = [
-        f"DNS Flush: {_ipc_message(ipc.request('flush_dns', confirmed=True))}",
-        f"IP Renewal: {_ipc_message(ipc.request('renew_ip', confirmed=True))}",
-    ]
-    return "\n".join(lines)
+    deps = RepairDeps(
+        diagnose=lambda: _to_netresult(ipc.request("network_status"), "Diagnostics"),
+        act=lambda action: _to_netresult(ipc.request(action, confirmed=True), action),
+        settle=lambda _iface, _timeout: None,
+        default_iface=lambda: None,
+        verify=True,
+    )
+    result = run_smart_repair(deps, RepairCallbacks.silent())
+    if result.code == ResultCode.SKIPPED:
+        return f"Healthy — nothing repaired ({result.message})"
+    if result.code in (ResultCode.OK, ResultCode.EXECUTED):
+        return result.message
+    return f"Error: {result.message}"
 
 
 @mcp.tool()
