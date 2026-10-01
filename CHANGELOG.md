@@ -2,6 +2,18 @@
 
 All notable changes to NetMedic Linux are documented here.
 
+## [Unreleased] — N1–N3 follow-ups (post-v1.8.1)
+
+### Fixed
+- **N3:** `validate_iface` rejects `"."`/`".."` explicitly (charset regex
+  let them through; the kernel is no longer the backstop).
+- **N1:** MCP `smart_repair()` drives headless `run_smart_repair`
+  (diagnose → conditional flush/renew → verify → delta) instead of a
+  manual flush+renew chain; verdict rendered as human text.
+- **N2:** `plan_verb` F(48) → per-verb planner table (worst B);
+  `run_smart_repair` F(61) → phase functions (worst C); radon target
+  (nothing above rank C) met. Includes the N3 + N1 merges.
+
 ## [Unreleased] — M8 architecture + M9 typing + M10 governance
 
 ### Changed
