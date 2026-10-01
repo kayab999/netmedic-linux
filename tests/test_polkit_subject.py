@@ -3,10 +3,43 @@
 from unittest.mock import patch
 
 from netmedic.polkit_auth import (
+    _parse_start_time,
     _process_subject_spec,
     check_authorization,
     process_start_time,
 )
+
+
+def _stat_line(comm="netmedic", start="12345"):
+    fields = ["R"] + ["0"] * 18 + [start]
+    return f"4242 ({comm}) {' '.join(fields)}"
+
+
+def test_parse_start_time_valid():
+    assert _parse_start_time(_stat_line()) == 12345
+
+
+def test_parse_start_time_tricky_comm():
+    """comm with spaces and parens must not shift field parsing."""
+    assert _parse_start_time(_stat_line(comm="my app (worker)")) == 12345
+
+
+def test_parse_start_time_malformed():
+    assert _parse_start_time("no parens here") is None
+    assert _parse_start_time("1 (x) R 0") is None
+    assert _parse_start_time(_stat_line(start="NaN")) is None
+
+
+def test_subject_spec_without_start_time():
+    with patch("netmedic.polkit_auth.process_start_time", return_value=None):
+        spec, start = _process_subject_spec(4242, 1000)
+        assert (spec, start) == ("4242", None)
+
+
+def test_subject_spec_with_start_time_mocked():
+    with patch("netmedic.polkit_auth.process_start_time", return_value=999):
+        spec, start = _process_subject_spec(4242, 1000)
+        assert (spec, start) == ("4242,999,1000", 999)
 
 
 def test_process_start_time_self():
