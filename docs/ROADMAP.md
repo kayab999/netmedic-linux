@@ -82,9 +82,35 @@ NetMedic aims to be a sovereign, open-source network management platform for Lin
 - [ ] Multi-interface candidates (`network.py:155` `details.candidates` + metric)
 - [ ] AppImage helper bundling (1–2d design) — separated from `SKIP-03` (`curl --fail` 0.5d)
 
+## v1.6.2 — Hardening M2–M4 (Released, tag `v1.6.2`, 502 tests)
+
+- [x] M2 process-group deadlines, M3 tamper-resistant audit, M4 validators module
+
+## v1.6.3 — Packaging M7 (Released, tag `v1.6.3`, 512 tests)
+
+- [x] Python 3.13 support, installer fixes, `scripts/uninstall.sh`
+
+## v1.6.4 — Supply chain M6 (Released, tag `v1.6.4`, 523 tests)
+
+- [x] Hash-pinned lockfile, SHA-pinned actions, SLSA provenance
+
+## v1.7.0 — AI pilot M5 (Released, tag `v1.7.0`, 533 tests)
+
+- [x] Prompt sanitization, inference serialization, GGML flags
+
+## v1.8.0 — Architecture M8 + typing M9 (Released, tag `v1.8.0`, 546 tests)
+
+- [x] ActionSpec table, generated policy, dispatcher table, narrowed shim, headless `repair.py`
+- [x] True-strict typing ×13, per-path coverage gates, hermetic gi skips
+
+## v1.8.1 — Governance M10 (Released, tag `v1.8.1`, 546 tests)
+
+- [x] `git gc`, docs drift pass, per-line noqa, settings checklist; dep majors as SHAs
+
 ## v2.0.0 — Framework (Future)
 
 - [ ] Full plugin architecture with discovery
 - [ ] Multi-interface management (bridge/bond)
 - [ ] Remote diagnostics via secure channel
+- [ ] D-Bus privileged service build track (design + prototype on `design/dbus-v2`; requires M8b VPN verb split first — see `docs/DBUS_DESIGN.md`)
 - [ ] Internationalization (i18n)

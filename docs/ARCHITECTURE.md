@@ -40,7 +40,9 @@
 |--------|---------------|
 | `runtime.py` | Bootstrap, signals, IPC server, headless loop |
 | `gui.py` | GTK entry helpers (`run_gui`, dialogs; `MainWindow` lives in `ui.py`) |
-| `ui.py` / `ui_vpn.py` | Main window, Smart Repair sequence, VPN panel |
+| `ui.py` / `ui_vpn.py` | Main window (Smart Repair delegates to `repair.py`), VPN panel |
+| `repair.py` | Headless Smart Repair service (`run_smart_repair`, deps/callbacks) |
+| `validators.py` | Single validators source (ships to helper) |
 | `network.py` | Network diagnostics and repair operations |
 | `probes.py` | Shared DNS/TCP/captive/NM probes (single source) |
 | `sensors.py` | Read-only snapshot for AI/MCP |
@@ -57,7 +59,9 @@
 | `ipc_security.py` | Session tokens and peer identity for privileged IPC |
 | `ipc_peer.py` | SO_PEERCRED UID/PID validation |
 | `ipc_schema.py` | Versioned IPC action contract export |
-| `ipc_actions.py` | Action dispatcher routing |
+| `ipc_actions.py` | Action dispatcher (verb→handler table over `_DispatchCtx`) |
+| `scripts/generate_policy.py` | Policy XML generator from `action_catalog.ACTIONS` |
+| `tools/dbus_prototype/` | v2.0 design-track prototype (not shipped; see `DBUS_DESIGN.md`) |
 | `ipc_client.py` / `ipc_sync_client.py` | Async (GTK) / blocking IPC clients |
 | `gui_actions.py` | GUI→IPC bridge |
 | `operators/` | Pluggable infrastructure operators |
@@ -75,7 +79,7 @@ class BaseOperator(ABC):
 
 VPN operator (`AngristanOperator`) pins script SHA256 before any execution.
 
-## IPC Security Model (v1.6)
+## IPC Security Model (v1.6, reaffirmed v1.8; D-Bus direction in `DBUS_DESIGN.md`)
 
 1. On startup, `IPCSession` issues a random token stored at `~/.local/state/netmedic/ipc.token` (mode 600, atomic create).
 2. **All** actions require peer UID matching the daemon owner (`SO_PEERCRED`).

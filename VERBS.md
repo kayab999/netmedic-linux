@@ -73,7 +73,7 @@ Consumidores in-repo (`tools/netmedic_mcp.py`, `netmedic_ai/toolkit.py: _run_too
 
 | Verbo helper | Comando real | Post-condición | Semántica de éxito |
 |---|---|---|---|
-| `vpn-run-script` (install/create/revoke) (`helper_verbs.py: plan "vpn-run-script"`) | script sellado `/run/netmedic/sealed.sh` via `/bin/bash` con `env -i PATH=fixed` + allowlist env | ✅ SHA256 pinned en root (helper ignora hash del caller, solo pin), doble hash + `check_status` RUNNING + PKI index (`angristan.py`) | OK = servicio/PKI verificado — **modelo a replicar** |
+| `vpn-run-script` (install/create/revoke) (`helper_verbs.py: plan "vpn-run-script"`) | script sellado `/run/netmedic/sealed.sh` via `/bin/bash` con `env -i PATH=fixed` + allowlist env | ✅ SHA256 pinned en root (helper ignora hash del caller, solo pin), doble hash + `check_status` RUNNING + PKI index (`angristan.py`) | OK = servicio/PKI verificado — **modelo a replicar**. Nota v2.0: el verbo es 1:3 (tres operaciones, un verbo) → el prototipo D-Bus lo deniega hasta el split M8b (`docs/DBUS_DESIGN.md`) |
 | `vpn-start-service` / `vpn-restart-service` (`helper_verbs.py: plan "vpn-start-service"`) | `systemctl start/restart openvpn-server@…` | ✅ `is_service_active()` (`angristan.py: start_service/restart_service`) | OK = servicio activo |
 | `vpn-list` (`helper_verbs.py: plan "vpn-list"`) | lectura Python `O_NOFOLLOW` de `/etc/openvpn/server/easy-rsa/pki/index.txt` (sin `cat`, sin path del caller) | ✅ (read-only informativo) | OK = lista parseada |
 
@@ -103,7 +103,7 @@ sleep 2; ip -4 addr show <iface>; ping -c2 <gateway>
 
 **`flush-dns`**: `resolvectl flush-caches && getent hosts google.com`
 
-## 5. Flujo compuesto — Smart Repair (`ui.py:445`)
+## 5. Flujo compuesto — Smart Repair (`repair.py:run_smart_repair`; UI `on_smart_repair` is a thin wrapper)
 
 ```
 pre_diag ──sana──> SKIPPED ⏭️ "network healthy, nothing to repair" (R4)

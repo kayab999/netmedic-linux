@@ -1,5 +1,11 @@
 # Release Notes — NetMedic v1.6.0
 
+> Current releases live on GitHub: v1.6.1 (security F1–F5+M1), v1.6.2
+> (hardening M2–M4), v1.6.3 (packaging M7), v1.6.4 (supply chain M6),
+> v1.7.0 (AI pilot M5), v1.8.0 (architecture M8 + typing M9),
+> v1.8.1 (governance M10 + SHA pins). This file keeps the v1.6.0
+> history below untouched; see `CHANGELOG.md` for the full record.
+
 Enterprise-grade hardening release (B+ → A+ across the engagement).
 
 Security: audit redaction (all sensitive keys + truncation), `openvpn-server@*.service` allowlist, TLS 1.2+ VPN downloads, root-context env guards, no-shell allowlist — all mutation-validated (94% kill rate).
