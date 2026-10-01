@@ -23,7 +23,7 @@ The installer creates `venv/`, installs `netmedic` in **strict** editable mode (
 
 After adding a new `netmedic/*.py` module, re-run the same `pip install -e` command so the snapshot used by `venv/bin/netmedic` (dock / `.desktop` Exec) includes it. Editing an existing file does not need a reinstall (snapshot entries are symlinks).
 
-### Manual setup (Python 3.10–3.12; see `requirements.lock`)
+### Manual setup (Python 3.10–3.13; CI matrix tests 3.10–3.12, see `requirements.lock`)
 
 ```bash
 python3.12 -m venv venv

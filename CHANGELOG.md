@@ -13,6 +13,38 @@ All notable changes to NetMedic Linux are documented here.
 - **M8.2 (policy generator):** `scripts/generate_policy.py` renders `assets/com.kayab.netmedic.policy` from the table (`--write` regenerates, `--check` fails on drift, wired into CI); `ActionSpec.message` holds the 12 auth prompts; `test_generated_policy_matches` pins asset==render; `test_registry_keys_match_action_table` pins VERBS.md identity keys to the table; fixed stale `vpn-list-clients` header in VERBS.md §3.4. (Caught during implementation: `--` is illegal inside XML comments — generator text avoids it.)
 - **M8.1 (ActionSpec table):** `action_catalog.ACTIONS` (21 rows: 12 privileged + 7 safe + 2 internal, with `keep_auth` retention flags) is now the single source; `PRIVILEGED/SAFE/DISRUPTIVE_ACTIONS`, `POLKIT_ACTION_IDS`, `IPC_TO_VERB` and `ALL_VERBS` are derived (legacy names kept as re-exports). The hardcoded 8-ID `no_keep_ids` list in the policy contract test is table-driven. Installer ships `action_catalog.py` root-side (helper runs `-I`). Guardian: new `test_action_table_self_consistent`.
 
+## [1.8.1] — 2026-10-01 (tag `v1.8.1`)
+
+M10 governance + dependency SHA pins + M2 test hardening. Suite 546.
+
+- M10: `git gc`, docs drift (6 files), ruff globals → 56 per-line `noqa`,
+  `docs/SETTINGS_CHECKLIST.md`.
+- Maintenance: 5 Dependabot majors adopted as API-resolved SHAs (bot PRs
+  #9–13 closed under the M6 floating-tag policy); M2 orphan-detection
+  tests hardened from fixed sleeps to polling (flaked under full-suite load).
+
+## [1.8.0] — 2026-09-30 (tag `v1.8.0`)
+
+M8 architecture + M9 typing. Suite 466 → 546.
+
+- M8.1–M8.5: ActionSpec table, generated policy XML, dispatcher table,
+  narrowed success shim, headless `repair.py` service (details under
+  [Unreleased] below, kept as the implementation record).
+- M9: strict typing made real (mypy 2.x glob shadowing fixed),
+  `helper_main`/`system`/`validators` strict, per-path coverage gates,
+  hermetic gi skips, glob-ban guardian.
+
+## [1.7.0] — 2026-09-29 (tag `v1.7.0`)
+
+Audit-remediation milestone: every critical, high and medium finding
+closed. Suite 466 → 533.
+
+- v1.6.1: F1–F5 + M1 (privilege boundary).
+- v1.6.2: M2–M4 (deadlines, audit, validators).
+- v1.6.3: M7 (packaging, Python 3.13, uninstall).
+- v1.6.4: M6 (supply chain, provenance).
+- v1.7.0: M5 (AI pilot).
+
 ## [Unreleased] — M2 and follow-ups (post-v1.6.1)
 
 ### Fixed

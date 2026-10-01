@@ -1,3 +1,9 @@
+netmedic (1.8.1-1) unstable; urgency=medium
+
+  * v1.8.1: M10 governance, dependency majors as SHAs, M2 poll hardening.
+
+ -- Kayab Software <support@kayabsoftware.com>  Thu, 02 Oct 2026 00:00:00 +0000
+
 netmedic (1.8.0-1) unstable; urgency=medium
 
   * v1.8.0: M8 architecture (ActionSpec table, generated policy,

@@ -1,8 +1,8 @@
-# NetMedic Threat Model (v1.6)
+# NetMedic Threat Model (v1.6, reaffirmed v1.8)
 
 ## Scope
 
-NetMedic is a single-user desktop privileged operations platform. This document describes trust boundaries for v1.6.0 (Phase D helper cutover + honest-repair ResultCode).
+NetMedic is a single-user desktop privileged operations platform. This document describes trust boundaries for v1.6.0 (Phase D helper cutover + honest-repair ResultCode), reaffirmed through v1.8.1 (validator unification, generated policy, headless repair — trust boundaries unchanged; v2.0 D-Bus direction in `DBUS_DESIGN.md`).
 
 ## Actors
 
