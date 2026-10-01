@@ -2,6 +2,11 @@
 
 All notable changes to NetMedic Linux are documented here.
 
+## [Unreleased] — design track (not a release)
+
+### Added
+- **D-Bus v2.0 design + prototype (not shipped):** `docs/DBUS_DESIGN.md` (§1–§6) retires F3/F4 as classes via a root-owned Gio system-bus service with bus-attested subjects; single `Execute(verb, args)` method with per-verb `CheckAuthorization` against the M8 table (method policy is one gate, verb enforcement is security-critical code). `tools/dbus_prototype/` proves the flow with a mockable authority (7 tests, no bus needed). Key finding recorded: shared `vpn-run-script` is 1:3 ambiguous and must be denied — v2.0 build requires the deferred M8b verb split first.
+
 ## [Unreleased] — M8 architecture + M9 typing + M10 governance
 
 ### Changed
