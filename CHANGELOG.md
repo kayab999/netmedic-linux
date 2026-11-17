@@ -30,6 +30,23 @@ All notable changes to NetMedic Linux are documented here.
   stays 1.8.1.
 - Added `docs/VM_CHECKLIST.md` with the F1 items that require a real VM.
 
+## [Unreleased] — F0 test/CI hygiene
+
+### Fixed
+- **F0 (repo layout):** `pytest.ini` now sets `pythonpath = netmedic`. With a
+  plain `pip install -e netmedic/`, `python -m pytest tests/` from the repo
+  root imported the root-level `netmedic/` directory as a namespace package
+  and shadowed the real one (`ImportError: cannot import name '__version__'`).
+  Only `editable_mode=strict` or an explicit `PYTHONPATH` worked before.
+  Guarded by `tests/test_pytest_layout.py`; verified green under both normal
+  and strict editable installs.
+
+### Added
+- **F0 (CI):** weekly `schedule` trigger with a dedicated
+  `supply-chain-audit` job that runs `pip-audit` against `requirements.lock`.
+  All push/PR jobs explicitly skip on `schedule`; the new job keeps SHA-pinned
+  actions and `contents: read`.
+
 ## [Unreleased] — N1–N3 follow-ups (post-v1.8.1)
 
 ### Fixed
