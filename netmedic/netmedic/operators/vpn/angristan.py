@@ -2,6 +2,7 @@ import logging
 import os
 import re
 from pathlib import Path
+from typing import Optional
 
 from netmedic.config import Config
 from netmedic.models import NetResult, ResultCode
@@ -148,8 +149,13 @@ class AngristanOperator(VPNOperator):
             return NetResult(self.name, False, "Parse error", details=str(e))
 
     def _validate_client_name(self, name: str) -> bool:
-        # Solo alfanuméricos y guiones
-        return bool(re.match(r'^[a-zA-Z0-9_-]+$', name))
+        from netmedic.validators import validate_client_name as _v
+
+        try:
+            _v(name)
+            return True
+        except Exception:
+            return False
 
     def add_client(self, name: str) -> NetResult:
         if not self._validate_client_name(name):
@@ -170,13 +176,28 @@ class AngristanOperator(VPNOperator):
         if not res.success:
             return NetResult(self.name, False, "Failed to execute add-client script", details=res.stderr)
 
-        # F4: persist the delivered .ovpn under the user data dir (0700/0600).
+        # F4/N2: persist the delivered .ovpn under the user data dir (0700/0600).
+        # Never overwrite an existing profile; on collision use a unique suffix
+        # and warn about the path. A persistence failure is a hard failure
+        # (the client exists on the server but the profile is not saved).
+        persisted_path: Optional[str] = None
+        persist_error: Optional[str] = None
         if res.artifact:
             try:
                 client_dir = Config.get_data_dir() / "vpn-clients"
                 client_dir.mkdir(parents=True, exist_ok=True)
                 client_dir.chmod(0o700)
                 target = client_dir / f"{name}.ovpn"
+                # Collision policy: do not overwrite; use a unique suffix.
+                if target.exists():
+                    import uuid
+
+                    target = client_dir / f"{name}-{uuid.uuid4().hex[:8]}.ovpn"
+                    logger.warning(
+                        "Profile %s.ovpn already exists; saving as %s",
+                        name,
+                        target.name,
+                    )
                 fd = os.open(
                     str(target),
                     os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
@@ -187,15 +208,29 @@ class AngristanOperator(VPNOperator):
                     os.fsync(fd)
                 finally:
                     os.close(fd)
+                persisted_path = str(target)
             except OSError as exc:
+                persist_error = str(exc)
                 logger.warning("Could not persist .ovpn for %s: %s", name, exc)
 
         # Validación post-operación: Verificar que el cliente aparezca en el índice
+        if persist_error is not None:
+            return NetResult(
+                self.name,
+                False,
+                f"Client '{name}' created on server; profile not saved ({persist_error})",
+            )
+
         verify_res = self.list_clients()
         if verify_res.code == ResultCode.OK and verify_res.data:
             for c in verify_res.data:
                 if c.name == name and c.active:
-                    return NetResult(self.name, True, f"Client '{name}' created and verified")
+                    msg = f"Client '{name}' created and verified"
+                    if persisted_path and persisted_path != str(
+                        Config.get_data_dir() / "vpn-clients" / f"{name}.ovpn"
+                    ):
+                        msg += f" (profile saved as {Path(persisted_path).name})"
+                    return NetResult(self.name, True, msg)
 
         return NetResult(self.name, False, f"Script reported success but client '{name}' was not found in PKI index")
 

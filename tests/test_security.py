@@ -41,3 +41,27 @@ def test_vendored_installer_matching_pin_is_accepted(tmp_path, monkeypatch):
     monkeypatch.setitem(hm.VPN_SCRIPT_PATHS, "openvpn-install", str(script))
 
     assert hm._read_vpn_script("openvpn-install") == content
+
+def test_command_result_artifact_not_in_repr() -> None:
+    """N3: the privileged artifact must not leak via repr/str/logging."""
+    import logging
+    from io import StringIO
+
+    from netmedic.models import CommandResult
+
+    secret = "-----BEGIN CERTIFICATE-----\nLEAKED-KEY-MATERIAL\n-----END CERTIFICATE-----"  # noqa: S105
+    res = CommandResult(True, 0, "ok", "", [], artifact=secret)
+    assert secret not in repr(res)
+    assert secret not in str(res)
+
+    buf = StringIO()
+    handler = logging.StreamHandler(buf)
+    log = logging.getLogger("netmedic.test.n3")
+    log.addHandler(handler)
+    log.setLevel(logging.DEBUG)
+    try:
+        log.exception("boom: %r", res)
+    finally:
+        log.removeHandler(handler)
+    assert secret not in buf.getvalue()
+
