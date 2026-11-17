@@ -2,6 +2,18 @@
 
 All notable changes to NetMedic Linux are documented here.
 
+## [Unreleased] — F7 AI supply chain (partial)
+
+### Security
+- Model GGUF hash hardcoded in `netmedic_ai/pilot.py` (`MODEL_SHA256`); verified
+  at load. The `.sum` sidecar is no longer trusted.
+- `build_binary.sh` now requires `pillow>=13.0.0`.
+
+### Changed
+- `netmedic_ai` declared out of the release supply chain until
+  `netmedic_ai/requirements.lock` (with hashes) lands; generation script added.
+- `docs/AI_SUPPLY_CHAIN.md` documents the lock workflow.
+
 ## [Unreleased] — F5 keep_auth for high-risk verbs
 
 ### Security

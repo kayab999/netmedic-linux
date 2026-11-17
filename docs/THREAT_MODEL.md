@@ -54,3 +54,5 @@ NetMedic is a single-user desktop privileged operations platform. This document 
 - Multi-user systems with mutually untrusted local users
 - Remote IPC exposure
 - Kernel-level attack resistance
+
+- **AI supply chain (Fase 7):** `netmedic_ai` is out of the release supply chain until `netmedic_ai/requirements.lock` (with hashes) lands. Model GGUF hash is hardcoded in `netmedic_ai/pilot.py` and verified at load.
