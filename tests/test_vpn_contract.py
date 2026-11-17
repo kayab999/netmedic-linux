@@ -5,10 +5,10 @@ needs no root) and parse the accepted flags from the real vendored bytes.
 """
 
 import re
-import subprocess
-from pathlib import Path
 
 import pytest
+import subprocess
+from pathlib import Path
 
 from netmedic.helper_verbs import plan_verb
 
@@ -49,34 +49,19 @@ def test_required_flags_exist_in_vendored_script(accepted_flags: set[str]) -> No
     assert not missing, f"vendored script lacks required flags: {sorted(missing)}"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Fase 3 not implemented: current plan still emits the legacy env interface",
-)
-def test_current_plan_emits_only_accepted_flags(accepted_flags: set[str]) -> None:
-    """Red today: the current plan emits env assignments (DNS=3, ...), none of
-    which are flags the vendored script accepts. Goes green when Fase 3 builds
-    argv on install/client add/client revoke."""
-    plan = plan_verb(
-        "vpn-run-script",
-        {
-            "script_id": "openvpn-install",
-            "env": {
-                "APPROVE_INSTALL": "y",
-                "APPROVE_IP": "y",
-                "IPV6_SUPPORT": "n",
-                "PORT_CHOICE": "1",
-                "PROTOCOL_CHOICE": "1",
-                "DNS": "3",
-                "COMPRESSION_ENABLED": "n",
-                "CUSTOMIZE_ENC": "n",
-                "MENU_OPTION": "1",
-                "CLIENT": "laptop",
-                "PASS": "1",
-            },
-        },
-    )
-    emitted = plan.commands[0][2:]
-    bad = [token for token in emitted if token not in accepted_flags]
-    assert not bad, f"plan emits tokens the script does not accept: {bad}"
+def test_typed_plans_emit_only_accepted_flags(accepted_flags: set[str]) -> None:
+    """Fase 3: every flag the typed plans emit must be accepted by the script."""
+    cases = [
+        plan_verb("vpn-install", {}),
+        plan_verb("vpn-install", {"client_ipv6": True}),
+        plan_verb("vpn-add-client", {"name": "laptop"}),
+        plan_verb("vpn-revoke-client", {"name": "laptop"}),
+    ]
+    for plan in cases:
+        # First token after __vpn_cli__ is the subcommand (install/client);
+        # flags are the remaining -- tokens.
+        for token in plan.commands[0]:
+            if token.startswith("--"):
+                assert token in accepted_flags, f"unknown flag {token}"
+
 

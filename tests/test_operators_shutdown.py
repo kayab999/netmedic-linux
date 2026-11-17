@@ -9,9 +9,8 @@ from netmedic.operators.vpn.base import VPNClient
 def test_revoke_client_verification():
     op = AngristanOperator()
 
-    with patch.object(
-        op,
-        "_run_vpn_script",
+    with patch(
+        "netmedic.operators.vpn.angristan.CommandRunner.run_elevated",
         return_value=MagicMock(success=True, stdout="", stderr=""),
     ):
         with patch.object(op, "list_clients") as mock_list:

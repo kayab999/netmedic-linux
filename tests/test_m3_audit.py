@@ -99,10 +99,10 @@ def test_helper_journals_every_verb_outcome(monkeypatch):
     seen = []
     monkeypatch.setattr(hm, "_journal_result", lambda v, ok, m: seen.append((v, ok, m)))
     # Pin mismatch aborts before any exec — pure logic path, no root needed.
-    plan = VerbPlan("vpn-run-script", [["__vpn_script__", "openvpn-install"]])
+    plan = VerbPlan("vpn-install", [["__vpn_cli__", "install"]])
     res = hm.execute_plan(plan, timeout=5)
     assert res["ok"] is False
-    assert seen == [("vpn-run-script", False, res["message"])]
+    assert seen == [("vpn-install", False, res["message"])]
 
 
 def test_helper_journal_best_effort_on_syslog_failure(monkeypatch):
@@ -123,6 +123,6 @@ def test_helper_journal_best_effort_on_syslog_failure(monkeypatch):
             raise OSError("no journal here")
 
     monkeypatch.setitem(sys.modules, "syslog", Boom)
-    plan = VerbPlan("vpn-run-script", [["__vpn_script__", "openvpn-install"]])
+    plan = VerbPlan("vpn-install", [["__vpn_cli__", "install"]])
     res = hm.execute_plan(plan, timeout=5)  # must not raise
     assert res["ok"] is False

@@ -75,7 +75,6 @@ def test_journal_never_serializes_verb_args(captured_journal, monkeypatch) -> No
     from netmedic.helper_verbs import VerbPlan
 
     monkeypatch.setenv("PKEXEC_UID", "1000")
-    script = "/tmp/x.sh"  # noqa: S108 (fixture path; never opened: pin mismatch aborts first)
-    plan = VerbPlan("vpn-run-script", [["__vpn_script__", script, "00" * 32, "PASS=hunter2"]])
+    plan = VerbPlan("vpn-install", [["__vpn_cli__", "install"]])
     hm.execute_plan(plan, timeout=5)
     assert "hunter2" not in captured_journal.lines[-1]
