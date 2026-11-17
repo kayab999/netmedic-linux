@@ -27,7 +27,7 @@ class CommandResult:
     command: List[str]
     # F4: privileged helper may return a file payload (e.g. a .ovpn) here.
     # Never logged, journaled or audited; redacted everywhere it could leak.
-    artifact: Optional[str] = None
+    artifact: Optional[str] = field(default=None, repr=False)
 
 @dataclass(frozen=True)
 class NetResult:

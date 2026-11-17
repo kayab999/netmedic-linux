@@ -273,16 +273,11 @@ def _plan_vpn_install(verb: str, args: Dict[str, Any]) -> VerbPlan:
 
 
 def _plan_vpn_add_client(verb: str, args: Dict[str, Any]) -> VerbPlan:
-    for forbidden in ("script", "expected_sha256", "script_id", "env"):
+    for forbidden in ("script", "expected_sha256", "script_id", "env", "password"):
         if forbidden in args:
             raise VerbValidationError(f"vpn-add-client does not accept '{forbidden}'")
     name = validate_client_name(_require_str(args, "name") or "")
-    password = args.get("password")
-    if password is not None and not isinstance(password, str):
-        raise VerbValidationError("Argument 'password' must be a string")
     flags = ["client", "add", name]
-    if password:
-        flags += ["--password", password]
     return VerbPlan(verb, [["__vpn_cli__", *flags]], "add VPN client")
 
 

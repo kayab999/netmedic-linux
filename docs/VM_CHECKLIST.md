@@ -77,3 +77,11 @@ an item without pasting the literal output next to it.
   pkaction --action-id com.kayab.netmedic.restart-adapter --verbose | grep implicit
   ```
   Expected: `auth_admin` (not `auth_admin_keep`).
+
+## Fase 3b — N6: perfil inicial de `install --client`
+
+- [ ] **¿Dónde queda el perfil inicial?** Ejecuta `vpn-install` como root y comprueba
+  si existe `/root/client.ovpn` (o `$HOME/client.ovpn` del usuario root). Si el
+  script lo genera fuera de la gestión de la app, propón en el reporte añadir
+  `--output` a `vpn-install` (Fase 3b.1) y espera aprobación; no implementes
+  aún.

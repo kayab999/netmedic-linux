@@ -201,3 +201,15 @@ def test_exec_add_delivers_artifact(tmp_path, monkeypatch) -> None:
     )
     assert res["ok"] is True
     assert res.get("artifact") == "CERTDATA\n"
+
+
+def test_run_argv_stdin_devnull_terminates(tmp_path) -> None:
+    """N4: a script waiting on stdin must not hang; DEVNULL makes read return EOF."""
+    script = tmp_path / "read.sh"
+    script.write_text("#!/bin/sh\nread line; echo \"got=$line\"\n")
+    script.chmod(0o755)
+    import netmedic.helper_main as hm
+
+    proc = hm._run_argv(["/bin/sh", str(script)], timeout=5)
+    assert proc.returncode == 0
+    assert "got=" in (proc.stdout or "")

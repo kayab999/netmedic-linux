@@ -10,7 +10,7 @@ import pytest
 import subprocess
 from pathlib import Path
 
-from netmedic.helper_verbs import plan_verb
+from netmedic.helper_verbs import plan_verb, VerbValidationError
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SCRIPT = REPO_ROOT / "netmedic" / "netmedic" / "data" / "vpn" / "openvpn-install.sh"
@@ -64,4 +64,8 @@ def test_typed_plans_emit_only_accepted_flags(accepted_flags: set[str]) -> None:
             if token.startswith("--"):
                 assert token in accepted_flags, f"unknown flag {token}"
 
+def test_vpn_add_client_rejects_password() -> None:
+    """N1: password must never travel via argv/cmdline."""
+    with pytest.raises(VerbValidationError):
+        plan_verb("vpn-add-client", {"name": "laptop", "password": "secret"})
 
