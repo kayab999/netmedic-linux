@@ -14,7 +14,7 @@ Professional network diagnostics, repair, and infrastructure management for Linu
 | **Infrastructure** | Firewall toggle (UFW), TCP/IP stack reset, adapter cycling |
 | **VPN Operator** | OpenVPN (Angristan) install with a vendored, root-pinned installer |
 | **AI Pilot** *(optional)* | Natural-language commands via Ctrl+Space palette (Nandi model) |
-| **Security** | Polkit IPC, action catalog, audit log, session tokens, singleton locking |
+| **Security** | Polkit IPC, action catalog, audit log, singleton locking |
 | **Automation** | MCP server and headless IPC daemon for scripting and agents |
 
 ---

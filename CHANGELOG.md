@@ -26,6 +26,20 @@ All notable changes to NetMedic Linux are documented here.
   `netmedic_ai/requirements.lock` (with hashes) lands; generation script added.
 - `docs/AI_SUPPLY_CHAIN.md` documents the lock workflow.
 
+## [Unreleased] — F6 recoverability of change-dns/restart-adapter
+
+### Security
+- `change-dns` now snapshots both `ipv4.dns` and `ipv4.ignore-auto-dns` before
+  modifying; aborts (fail-closed) if the snapshot is invalid. On failure it
+  restores the config first, then `con up` best-effort, with a reserved rollback
+  budget and a veracious result (applied / reverted / rollback FAILED).
+- `restart-adapter` retries `up` and reports final state via IFF_UP (no false
+  "unknown is failure").
+
+### Changed
+- `HELPER_VERSION` 1.8.3 -> 1.8.4.
+- `docs/RECOVERABILITY_DESIGN.md` (approved with corrections).
+
 ## [Unreleased] — F5 keep_auth for high-risk verbs
 
 ### Security

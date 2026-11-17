@@ -85,3 +85,10 @@ an item without pasting the literal output next to it.
   script lo genera fuera de la gestión de la app, propón en el reporte añadir
   `--output` a `vpn-install` (Fase 3b.1) y espera aprobación; no implementes
   aún.
+
+## Fase 6 — Recuperabilidad
+
+- [ ] **Rollback forzado de change-dns.** Forzar un `con up` fallido (interfaz abajo)
+  y verificar que la configuración DNS queda restaurada; salida literal del helper.
+- [ ] **restart-adapter estado final.** Verificar que si `up` falla, el mensaje
+  refleja el estado real (IFF_UP), sin tratar "unknown" como fallo.

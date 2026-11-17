@@ -20,7 +20,7 @@ No afirma conformidad ni certificación. "Implementado" solo si hay test o artef
 | keep_auth=False en verbos de alto riesgo | ISO 27001 A.8.2 | `action_catalog.py` | `tests/test_policy_and_catalog_contract.py` | Implementado | — |
 | Cadena de suministro IA (lock con hashes) | ISO 27001 A.8.28, 18974 | — | — | Brecha | Fase 7 (fuera de la cadena del release) |
 | Hash del modelo GGUF en código | ISO 27001 A.8.25 | `pilot.py:MODEL_SHA256` | `tests/test_ai_model_hash.py` | Implementado | — |
-| Recuperabilidad (change-dns/restart-adapter) | ISO 27001 A.8.9 | — | — | Brecha | Fase 6 (pendiente de aprobación) |
+| Recuperabilidad (change-dns/restart-adapter) | ISO 27001 A.8.9 | `helper_main.py:_execute_change_dns`, `_execute_restart_adapter` | `tests/test_f6_recoverability.py` | Implementado | VM: rollback real pendiente |
 | Mapeo ISO 27001 (matriz real) | ISO 27001 (anexo A) | — | — | Brecha | Esta matriz es el inicio; falta cobertura completa |
 | Proceso de divulgación de vulnerabilidades | ISO 29147 / 30111 | `SECURITY.md` | — | Parcial | Añadir timeline coordinado (hecho en F8) |
 | Cadena de suministro de dependencias | ISO 27001 A.8.28, 18974 | `requirements.lock` | CI `supply-chain-audit` | Parcial | Pillow 12.3.0 vulnerable; regenerar lock |

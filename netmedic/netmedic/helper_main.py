@@ -21,6 +21,7 @@ import re
 import signal
 import stat
 import subprocess
+import time
 import sys
 import tempfile
 from pathlib import Path
@@ -32,6 +33,7 @@ from netmedic.helper_verbs import (
     INDEX_TXT_PATH,
     PINNED_VPN_INSTALL_SHA256,
     VPN_SCRIPT_PATHS,
+    validate_dns,
     VerbPlan,
     VerbValidationError,
     plan_to_dict,
@@ -554,6 +556,143 @@ def _execute_vpn_cli(
     }
 
 
+def _run_nmcli(args: List[str], timeout: int) -> subprocess.CompletedProcess[str]:
+    return _run_argv(["nmcli", *args], timeout)
+
+
+def _execute_change_dns(plan: VerbPlan, timeout: int) -> Dict[str, Any]:
+    # Parse conn/server from the planned argv.
+    try:
+        mod_argv = plan.commands[0]
+        conn = mod_argv[3]
+        server = mod_argv[5]
+    except (IndexError, TypeError):
+        return {"ok": False, "message": "Malformed change-dns plan", "details": None}
+
+    # Reserve a budget for rollback.
+    reserve = min(10.0, timeout / 3.0)
+    apply_budget = int(max(1.0, timeout - reserve))
+
+    # 1. Snapshot BOTH properties (fail-closed).
+    try:
+        dns_proc = _run_nmcli(["-g", "ipv4.dns", "connection", "show", conn], apply_budget)
+        ign_proc = _run_nmcli(["-g", "ipv4.ignore-auto-dns", "connection", "show", conn], apply_budget)
+    except subprocess.TimeoutExpired:
+        return {"ok": False, "message": "Timeout during snapshot", "details": None}
+    if dns_proc.returncode != 0 or ign_proc.returncode != 0:
+        return {"ok": False, "message": "Snapshot failed; no changes made", "details": None}
+
+    prev_dns_raw = (dns_proc.stdout or "").strip()
+    prev_ignore = (ign_proc.stdout or "").strip().lower()
+    # Validate prev DNS (empty is valid).
+    prev_dns_tokens = [t for t in prev_dns_raw.replace(",", " ").split() if t]
+    try:
+        for tok in prev_dns_tokens:
+            validate_dns(tok)
+    except VerbValidationError:
+        return {"ok": False, "message": "Snapshot invalid (prev DNS); no changes made", "details": None}
+    if prev_ignore not in ("yes", "no", ""):
+        return {"ok": False, "message": "Snapshot invalid (ignore-auto-dns); no changes made", "details": None}
+    if prev_ignore == "":
+        prev_ignore = "no"
+
+    prev_dns_str = ",".join(prev_dns_tokens)
+
+    # 2. Apply.
+    try:
+        mod_proc = _run_nmcli(
+            ["con", "mod", conn, "ipv4.dns", server, "ipv4.ignore-auto-dns", "yes"],
+            apply_budget,
+        )
+    except subprocess.TimeoutExpired:
+        mod_proc = None
+    applied = mod_proc is not None and mod_proc.returncode == 0
+    if applied:
+        try:
+            up_proc = _run_nmcli(["con", "up", conn], apply_budget)
+            applied_ok = up_proc.returncode == 0
+        except subprocess.TimeoutExpired:
+            applied_ok = False
+    else:
+        applied_ok = False
+
+    if applied and applied_ok:
+        return {"ok": True, "message": f"DNS set to {server} on {conn}", "details": None}
+
+    # 3. Rollback (config first, then con up best-effort) with reserved budget.
+    rollback_deadline = time.monotonic() + reserve
+    rollback_ok = False
+    try:
+        r_mod = _run_nmcli(
+            ["con", "mod", conn, "ipv4.dns", prev_dns_str, "ipv4.ignore-auto-dns", prev_ignore],
+            int(max(1.0, rollback_deadline - time.monotonic())),
+        )
+        rollback_ok = r_mod.returncode == 0
+    except subprocess.TimeoutExpired:
+        rollback_ok = False
+    # best-effort con up
+    try:
+        _run_nmcli(["con", "up", conn], int(max(1.0, rollback_deadline - time.monotonic())))
+    except subprocess.TimeoutExpired:
+        pass
+
+    if rollback_ok:
+        _journal_result("change-dns-rollback", True, f"reverted to {prev_dns_str or '(empty)'}")
+        return {
+            "ok": False,
+            "message": f"DNS change failed; reverted to {prev_dns_str or '(empty)'}",
+            "details": None,
+        }
+    _journal_result("change-dns-rollback", False, "rollback FAILED")
+    return {
+        "ok": False,
+        "message": (
+            "DNS change failed; rollback FAILED: run manually "
+            f"nmcli con mod {conn} ipv4.dns \"{prev_dns_str}\" ipv4.ignore-auto-dns {prev_ignore}"
+        ),
+        "details": None,
+    }
+
+
+def _execute_restart_adapter(plan: VerbPlan, timeout: Optional[int]) -> Dict[str, Any]:
+    try:
+        iface = plan.commands[0][3]
+    except (IndexError, TypeError, AttributeError):
+        return {"ok": False, "message": "Malformed restart-adapter plan", "details": None}
+
+    def _iff_up(name: str) -> bool:
+        try:
+            flags = Path(f"/sys/class/net/{name}/flags").read_text().strip()
+            # flags like 0x1003; IFF_UP is 0x1
+            return bool(int(flags, 16) & 0x1)
+        except (OSError, ValueError):
+            return False
+
+    budget = timeout or 60
+    # down
+    try:
+        _run_argv(["ip", "link", "set", iface, "down"], budget // 3 or 1)
+    except subprocess.TimeoutExpired:
+        pass
+    # up (with one retry)
+    up_ok = False
+    for _ in range(2):
+        try:
+            proc = _run_argv(["ip", "link", "set", iface, "up"], budget // 3 or 1)
+            if proc.returncode == 0:
+                up_ok = True
+                break
+        except subprocess.TimeoutExpired:
+            break
+    # verify real state
+    if _iff_up(iface):
+        return {"ok": True, "message": f"Adapter {iface} restarted", "details": None}
+    if up_ok:
+        # up reported success but operstate not up; still report truthfully
+        pass
+    return {"ok": False, "message": f"Adapter {iface} not UP after restart", "details": None}
+
+
 def _read_vpn_index() -> Dict[str, Any]:
     """F2: fixed-path PKI read with O_NOFOLLOW, no cat, no caller path."""
     try:
@@ -603,6 +742,10 @@ def _execute_plan_inner(plan: VerbPlan, *, timeout: Optional[int] = None) -> Dic
             return _execute_vpn_cli(argv, timeout)
         if argv and argv[0] == "__vpn_list__":
             return _read_vpn_index()
+        if plan.verb == "change-dns":
+            return _execute_change_dns(plan, timeout or 60)
+        if plan.verb == "restart-adapter":
+            return _execute_restart_adapter(plan, timeout or 60)
         try:
             proc = _run_argv(argv, timeout)
         except subprocess.TimeoutExpired:
