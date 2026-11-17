@@ -25,6 +25,9 @@ class CommandResult:
     stdout: str
     stderr: str
     command: List[str]
+    # F4: privileged helper may return a file payload (e.g. a .ovpn) here.
+    # Never logged, journaled or audited; redacted everywhere it could leak.
+    artifact: Optional[str] = None
 
 @dataclass(frozen=True)
 class NetResult:

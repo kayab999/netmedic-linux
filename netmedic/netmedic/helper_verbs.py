@@ -32,7 +32,6 @@ __all__ = [
     "PINNED_VPN_INSTALL_SHA256",
     "VPN_SCRIPT_IDS",
     "VPN_SCRIPT_PATHS",
-    "VPN_ALLOWED_ENV_KEYS",
     "VerbPlan",
     "VerbValidationError",
     "plan_verb",
@@ -58,21 +57,16 @@ VPN_SCRIPT_PATHS: Dict[str, str] = {
     "openvpn-install": "/usr/lib/netmedic/scripts/openvpn-install.sh",
 }
 VPN_SCRIPT_IDS: frozenset[str] = frozenset(VPN_SCRIPT_PATHS)
-# Angristan installer inputs only. No LD_*, PATH, PYTHON*, BASH_ENV, etc.
-VPN_ALLOWED_ENV_KEYS: frozenset[str] = frozenset({
-    "APPROVE_INSTALL",
-    "APPROVE_IP",
-    "IPV6_SUPPORT",
-    "PORT_CHOICE",
-    "PROTOCOL_CHOICE",
-    "DNS",
-    "COMPRESSION_ENABLED",
-    "CUSTOMIZE_ENC",
-    "MENU_OPTION",
-    "CLIENT",
-    "PASS",
+
+# Closed enum of DNS providers accepted by the vendored installer (see
+# docs/VPN_CONTRACT.md). Validated both in the planner and root-side.
+VPN_DNS_PROVIDERS: frozenset[str] = frozenset({
+    "system", "unbound", "cloudflare", "quad9", "quad9-uncensored",
+    "fdn", "dnswatch", "opendns", "google", "yandex", "adguard",
+    "nextdns", "custom",
 })
-HELPER_VERSION = "1.8.2"
+VPN_PROTOCOLS: frozenset[str] = frozenset({"udp", "tcp"})
+HELPER_VERSION = "1.8.3"
 
 
 @dataclass(frozen=True)
@@ -227,46 +221,80 @@ def _plan_vpn_service(verb: str, args: Dict[str, Any]) -> VerbPlan:
     )
 
 
-def _validate_vpn_script_env(env: object) -> List[str]:
-    if not isinstance(env, dict):
-        raise VerbValidationError("env must be an object of string values")
-    env_pairs: List[str] = []
-    for key, value in env.items():
-        if not isinstance(key, str) or not isinstance(value, str):
-            raise VerbValidationError("env keys and values must be strings")
-        if key not in VPN_ALLOWED_ENV_KEYS:
-            raise VerbValidationError(f"env key not allowlisted for vpn-run-script: {key!r}")
-        if "\n" in value or "\x00" in value or "=" in key:
-            raise VerbValidationError(f"Invalid env value for {key}")
-        # Values are passed as KEY=val to env(1); reject arg-split tricks.
-        if value.startswith("-"):
-            # Angristan values never start with '-'; blocks env flag injection
-            # if a future refactor mishandles the argv split.
-            raise VerbValidationError(f"Invalid env value for {key}")
-        env_pairs.append(f"{key}={value}")
-    return env_pairs
+def _require_int(args: Mapping[str, Any], key: str, *, lo: int, hi: int) -> int:
+    if key not in args or args[key] is None:
+        raise VerbValidationError(f"Missing required argument: {key}")
+    value = args[key]
+    if isinstance(value, bool) or not isinstance(value, int):
+        # Accept a decimal string for JSON callers that stringify numbers.
+        if isinstance(value, str) and value.isdigit():
+            value = int(value)
+        else:
+            raise VerbValidationError(f"Argument '{key}' must be an integer")
+    if not (lo <= value <= hi):
+        raise VerbValidationError(f"Argument '{key}' out of range [{lo}, {hi}]")
+    return int(value)
 
 
-def _plan_vpn_run_script(verb: str, args: Dict[str, Any]) -> VerbPlan:
-    # F2: the daemon names the bundled installer by id. A caller-supplied path
-    # or hash would reintroduce the very surface this phase removes, so both
-    # are rejected instead of silently ignored.
-    for forbidden in ("script", "expected_sha256"):
+def _require_choice(args: Mapping[str, Any], key: str, allowed: frozenset[str]) -> str:
+    value = _require_str(args, key) or ""
+    if value not in allowed:
+        raise VerbValidationError(
+            f"Argument '{key}' must be one of {sorted(allowed)!r}, got {value!r}"
+        )
+    return value
+
+
+def _plan_vpn_install(verb: str, args: Dict[str, Any]) -> VerbPlan:
+    # F3: typed verb. No caller env dict, no script path/hash.
+    for forbidden in ("script", "expected_sha256", "script_id", "env"):
         if forbidden in args:
-            raise VerbValidationError(
-                "vpn-run-script accepts only script_id "
-                f"(no caller {forbidden.replace('_', ' ')}); see docs/VPN_REPIN.md"
-            )
-    script_id = _require_str(args, "script_id") or ""
-    if script_id not in VPN_SCRIPT_IDS:
-        raise VerbValidationError(f"Unknown script_id: {script_id!r}")
-    env_pairs = _validate_vpn_script_env(args.get("env") or {})
-    # Marker command: helper_main resolves the id to the fixed root path,
-    # verifies the pin, stages, and executes. The path never crosses IPC.
+            raise VerbValidationError(f"vpn-install does not accept '{forbidden}'")
+    port = 1194
+    if "port" in args and args.get("port") is not None:
+        port = _require_int(args, "port", lo=1, hi=65535)
+    protocol = "udp"
+    if "protocol" in args and args.get("protocol") is not None:
+        protocol = _require_choice(args, "protocol", VPN_PROTOCOLS)
+    dns = "cloudflare"
+    if "dns" in args and args.get("dns") is not None:
+        dns = _require_choice(args, "dns", VPN_DNS_PROVIDERS)
+    client_ipv6 = args.get("client_ipv6", False)
+    if not isinstance(client_ipv6, bool):
+        raise VerbValidationError("Argument 'client_ipv6' must be a boolean")
+    client = args.get("client", "client")
+    if client is None:
+        client = "client"
+    client = validate_client_name(str(client))
+    flags = ["--port", str(port), "--protocol", protocol, "--dns", dns]
+    flags.append("--client-ipv6" if client_ipv6 else "--no-client-ipv6")
+    flags += ["--client", client]
+    return VerbPlan(verb, [["__vpn_cli__", "install", *flags]], "install OpenVPN server")
+
+
+def _plan_vpn_add_client(verb: str, args: Dict[str, Any]) -> VerbPlan:
+    for forbidden in ("script", "expected_sha256", "script_id", "env"):
+        if forbidden in args:
+            raise VerbValidationError(f"vpn-add-client does not accept '{forbidden}'")
+    name = validate_client_name(_require_str(args, "name") or "")
+    password = args.get("password")
+    if password is not None and not isinstance(password, str):
+        raise VerbValidationError("Argument 'password' must be a string")
+    flags = ["client", "add", name]
+    if password:
+        flags += ["--password", password]
+    return VerbPlan(verb, [["__vpn_cli__", *flags]], "add VPN client")
+
+
+def _plan_vpn_revoke_client(verb: str, args: Dict[str, Any]) -> VerbPlan:
+    for forbidden in ("script", "expected_sha256", "script_id", "env"):
+        if forbidden in args:
+            raise VerbValidationError(f"vpn-revoke-client does not accept '{forbidden}'")
+    name = validate_client_name(_require_str(args, "name") or "")
     return VerbPlan(
         verb,
-        [["__vpn_script__", script_id, *env_pairs]],
-        "run verified VPN installer script",
+        [["__vpn_cli__", "client", "revoke", name, "--force"]],
+        "revoke VPN client",
     )
 
 
@@ -295,9 +323,11 @@ _VERB_PLANNERS: Dict[str, Callable[[str, Dict[str, Any]], VerbPlan]] = {
     "reset-stack": _plan_reset_stack,
     "toggle-firewall": _plan_toggle_firewall,
     "vpn-list": _plan_vpn_list,
+    "vpn-install": _plan_vpn_install,
+    "vpn-add-client": _plan_vpn_add_client,
+    "vpn-revoke-client": _plan_vpn_revoke_client,
     "vpn-start-service": _plan_vpn_service,
     "vpn-restart-service": _plan_vpn_service,
-    "vpn-run-script": _plan_vpn_run_script,
     "iface-del": _plan_iface_del,
     "iface-add-dummy": _plan_iface_add_dummy,
 }
