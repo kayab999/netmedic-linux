@@ -1,5 +1,10 @@
 # Security Advisory: v1.6.1 Privilege Boundary Fixes (F1–F5 + M1)
 
+> **Historical note (F2, post-v1.8.1):** the caller-supplied hash/path
+> controls described for F1 were later removed entirely. The installer is now
+> vendored, the operator sends only `script_id`, and the helper pins the
+> SHA256 of the vendored file. This document is kept as the v1.6.1 record.
+
 ## Summary
 
 NetMedic Linux v1.6.1 fixes five high-impact flaws in the privileged helper
