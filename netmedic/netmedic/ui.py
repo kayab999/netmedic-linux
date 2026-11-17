@@ -523,9 +523,13 @@ class MainWindow(Gtk.Window):
             )
 
     def on_restart_adapter(self, _):
+        from netmedic.network import NetworkMedic
+
+        iface = NetworkMedic().get_default_interface() or "<default>"
         if self.ask_confirmation(
             "Restart Network Adapter?",
-            "The default interface will be brought DOWN and then UP. SSH connections may drop.",
+            f"Interface: {iface}\n\nThe interface will be brought DOWN and then UP. "
+            "SSH connections may drop.",
         ):
             self.run_async_task(
                 lambda: self._ipc_action("restart_adapter"),

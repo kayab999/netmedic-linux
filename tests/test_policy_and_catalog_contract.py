@@ -127,11 +127,11 @@ def test_action_table_self_consistent():
     assert set(DISRUPTIVE_ACTIONS) == {
         s.ipc_action for s in ACTIONS if s.disruptive
     }
-    # keep_auth distribution is intentional: 4 low-impact keep, 8 re-prompt.
+    # keep_auth distribution is intentional: 2 low-impact keep, 10 re-prompt.
     keep = {s.polkit_id for s in ACTIONS if s.polkit_id is not None and s.keep_auth}
     no_keep = {s.polkit_id for s in ACTIONS if s.polkit_id is not None and not s.keep_auth}
-    assert len(keep) == 4
-    assert len(no_keep) == 8
+    assert len(keep) == 2
+    assert len(no_keep) == 10
 
 
 def test_generated_policy_matches_asset():
