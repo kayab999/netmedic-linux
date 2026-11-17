@@ -8,8 +8,10 @@ Verified 2026-11-17 against `netmedic/netmedic/ai_console.py`.
   It is wired to the preview's execute button at line 222:
   `execute_btn.connect("clicked", lambda b: self._confirm_and_execute(action, params))`.
 - For disruptive actions (line 267), the dialog title and message include the
-  validated params via `_format_args(params)` (lines 149-158, 274), so the user
-  sees the exact arguments before `confirmed=True` is sent (line 302).
+  proposed params via `_format_args(params)` (lines 149-158, 274), escaped through
+  `_escape_markup` (line ~158) so they render as inert text. Semantic validation
+  happens at execution in the helper (validators.py), not at display. If no
+  `ask_confirmation` is callable, execution is blocked (fail-closed).
 - The non-disruptive `user_intent` call (line 130) is a safe read-only intent
   parse and never executes a privileged action directly.
 - Conclusion: no disruptive action reaches `client.ask(..., confirmed=True)`
