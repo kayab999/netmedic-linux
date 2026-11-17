@@ -59,12 +59,14 @@ class Config:
 
     SYSTEM_HELPER_PATH = Path("/usr/libexec/netmedic/helper")
     SYSTEM_HELPER_LIB = Path("/usr/lib/netmedic")
-    # Debian alternative location; some distros use /usr/lib instead of /usr/libexec
-    SYSTEM_HELPER_ALT_PATH = Path("/usr/lib/netmedic/helper")
 
     @staticmethod
     def _any_helper_exists() -> bool:
-        return Config.SYSTEM_HELPER_PATH.is_file() or Config.SYSTEM_HELPER_ALT_PATH.is_file()
+        # F1: single trusted path. The old /usr/lib/netmedic/helper fallback
+        # was never written by any in-tree installer (policy script and
+        # Debian rules both use /usr/libexec), so honouring it only widened
+        # the trust surface for a path nothing produced.
+        return Config.SYSTEM_HELPER_PATH.is_file()
 
     @staticmethod
     def use_privileged_helper() -> bool:
@@ -128,8 +130,6 @@ class Config:
             logger.warning("Ignoring NETMEDIC_HELPER_PATH outside test mode / when root")
         if Config.SYSTEM_HELPER_PATH.is_file():
             return Config.SYSTEM_HELPER_PATH
-        if Config.SYSTEM_HELPER_ALT_PATH.is_file():
-            return Config.SYSTEM_HELPER_ALT_PATH
         # M1: no shutil.which PATH lookup in production — system paths only.
         # Dev/test fallback: python -m netmedic.helper_main (requires TEST_MODE).
         if Config._is_test_mode():

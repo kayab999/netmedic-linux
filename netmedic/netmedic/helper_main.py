@@ -17,6 +17,7 @@ import hashlib
 import json
 import logging
 import os
+import re
 import signal
 import stat
 import subprocess
@@ -48,6 +49,33 @@ EXIT_CANCELLED = 126
 logger = logging.getLogger(__name__)
 
 
+_JOURNAL_MESSAGE_MAX = 300
+_JOURNAL_CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f]")
+
+
+def _journal_uid() -> str:
+    """L3: PKEXEC_UID from pkexec as a validated decimal string.
+
+    Anything non-numeric, negative or absent becomes ``unknown`` so a caller
+    cannot forge an arbitrary journal field. pkexec overwrites this variable
+    in the elevated environment.
+    """
+    raw = os.environ.get("PKEXEC_UID", "")
+    try:
+        uid = int(raw)
+    except (TypeError, ValueError):
+        return "unknown"
+    if uid < 0:
+        return "unknown"
+    return str(uid)
+
+
+def _journal_text(message: str) -> str:
+    """Single-line, control-character-free, length-capped journal field."""
+    flat = _JOURNAL_CONTROL_CHARS.sub(" ", message)
+    return " ".join(flat.split())[:_JOURNAL_MESSAGE_MAX]
+
+
 def _journal_result(verb: str, ok: bool, message: str) -> None:
     """M3: root-side record of every verb outcome (tamper-evident).
 
@@ -56,14 +84,22 @@ def _journal_result(verb: str, ok: bool, message: str) -> None:
     to the system journal via stdlib syslog — journald captures it with the
     process credentials. Best-effort: never raises, never touches stdout
     (the JSON protocol lives there).
+
+    L3: the record names the invoking uid (PKEXEC_UID) so root actions are
+    attributable, and the message is flattened so a crafted stderr line
+    cannot inject a second record.
     """
     try:
         import syslog as _syslog
 
+        line = f"verb={verb} ok={int(ok)} pkexec_uid={_journal_uid()}"
+        text = _journal_text(message)
+        if text:
+            line = f"{line} {text}"
         _syslog.openlog("netmedic-helper", _syslog.LOG_PID, _syslog.LOG_AUTH)
         try:
             level = _syslog.LOG_INFO if ok else _syslog.LOG_WARNING
-            _syslog.syslog(level, f"verb={verb} ok={int(ok)} {message[:300]}")
+            _syslog.syslog(level, line)
         finally:
             _syslog.closelog()
     except Exception:

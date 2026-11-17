@@ -3,8 +3,8 @@ import logging
 import os
 import re
 import signal
+import stat
 import subprocess
-import shutil
 from typing import Any, FrozenSet, List, Mapping, Optional
 
 from netmedic.models import CommandResult
@@ -18,9 +18,40 @@ logger = logging.getLogger(__name__)
 # daemon must not fire first.
 _IPC_MARGIN_FALLBACK = 5
 
+# L1: elevation wrapper is a fixed system path. Resolving it through PATH
+# would let a writable directory earlier in PATH capture the admin password.
+PKEXEC_PATH = "/usr/bin/pkexec"
 
-# Basenames allowed under require_root=True. Path is resolved via shutil.which
-# or absolute path; argv shape is still caller-controlled within these tools.
+
+def _check_pkexec_stat(st: os.stat_result, path: str) -> None:
+    """Reject pkexec unless it is a root-owned, executable regular file."""
+    if not stat.S_ISREG(st.st_mode):
+        raise PermissionError(f"Refusing pkexec that is not a regular file: {path}")
+    if st.st_uid != 0:
+        raise PermissionError(
+            f"Refusing pkexec not owned by root: {path} (uid={st.st_uid})"
+        )
+    if not (st.st_mode & 0o111):
+        raise PermissionError(f"Refusing non-executable pkexec: {path}")
+
+
+def _validated_pkexec() -> str:
+    """Return the fixed pkexec path after validating its on-disk identity.
+
+    M1/L1: no shutil.which. The path is a compile-time constant; only its
+    metadata is checked so a swapped binary fails closed.
+    """
+    try:
+        st = os.stat(PKEXEC_PATH)
+    except OSError as exc:
+        raise FileNotFoundError(f"pkexec not found at {PKEXEC_PATH}: {exc}") from exc
+    _check_pkexec_stat(st, PKEXEC_PATH)
+    return PKEXEC_PATH
+
+
+# Basenames allowed under require_root=True. Path is the absolute binary or
+# the fixed pkexec wrapper; argv shape is still caller-controlled within these
+# tools.
 # NOTE: bash/sh removed (P0 hardening) — no legit elevated path needs a shell;
 # VPN scripts run via `env VAR=... /abs/path` + SHA256 sealed copy in helper.
 _ROOT_ALLOWED_BINARIES: FrozenSet[str] = frozenset({
@@ -157,10 +188,7 @@ class CommandRunner:
         if timeout is not None:
             base.extend(["--timeout", str(int(timeout))])
         if os.geteuid() != 0:
-            pkexec = shutil.which("pkexec")
-            if not pkexec:
-                raise FileNotFoundError("pkexec not found")
-            return [pkexec] + base
+            return [_validated_pkexec()] + base
         return base
 
     @staticmethod
@@ -196,7 +224,8 @@ class CommandRunner:
             daemon_timeout = timeout + CommandRunner._IPC_MARGIN
             try:
                 final_cmd = CommandRunner._helper_invocation(verb, args, timeout=timeout)
-            except FileNotFoundError as exc:
+            except OSError as exc:
+                # FileNotFoundError (missing) or PermissionError (unsafe binary).
                 return CommandResult(False, 127, "", str(exc), [verb])
             # Helper elevates via pkexec; do not double-wrap.
             # C-9: run() contains its own timeout, but never let a timeout
@@ -303,10 +332,12 @@ class CommandRunner:
             if allow_err:
                 logger.error(allow_err)
                 return CommandResult(False, 126, "", allow_err, final_cmd)
-            if not shutil.which("pkexec"):
-                logger.error("pkexec not found, cannot elevate privileges")
-                return CommandResult(False, 127, "", "pkexec not found", final_cmd)
-            final_cmd = ["pkexec"] + final_cmd
+            try:
+                pkexec = _validated_pkexec()
+            except OSError as exc:
+                logger.error("pkexec unavailable, cannot elevate privileges: %s", exc)
+                return CommandResult(False, 127, "", str(exc), final_cmd)
+            final_cmd = [pkexec] + final_cmd
 
         cmd_str_redacted = CommandRunner._redact_command(final_cmd)
         logger.debug("Exec: %s", cmd_str_redacted)

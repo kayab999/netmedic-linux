@@ -51,23 +51,23 @@ def test_command_runner_timeout(mock_popen, mock_kill):
 
 
 @patch("os.geteuid", return_value=1000)
-@patch("shutil.which", return_value="/usr/bin/pkexec")
+@patch("netmedic.system._validated_pkexec", return_value="/usr/bin/pkexec")
 @patch("subprocess.Popen")
-def test_command_runner_root_elevation(mock_popen, mock_which, mock_geteuid):
+def test_command_runner_root_elevation(mock_popen, mock_pkexec, mock_geteuid):
     mock_popen.return_value = _mock_popen(stdout="root")
 
     res = CommandRunner.run(["ip", "link", "show"], require_root=True)
 
     assert res.success is True
     called_cmd = mock_popen.call_args[0][0]
-    assert called_cmd[0] == "pkexec"
+    assert called_cmd[0] == "/usr/bin/pkexec"
     assert called_cmd[1] == "ip"
 
 
 @patch("os.geteuid", return_value=1000)
-@patch("shutil.which", return_value="/usr/bin/pkexec")
+@patch("netmedic.system._validated_pkexec", return_value="/usr/bin/pkexec")
 @patch("subprocess.Popen")
-def test_command_runner_root_cancellation(mock_popen, mock_which, mock_geteuid):
+def test_command_runner_root_cancellation(mock_popen, mock_pkexec, mock_geteuid):
     mock_popen.return_value = _mock_popen(
         returncode=126,
         stderr="Error executing command as another user: Request dismissed",
@@ -128,7 +128,7 @@ def test_helper_version_mismatch_refuses_elevation(monkeypatch):
 
     monkeypatch.setenv("NETMEDIC_USE_HELPER", "1")
     monkeypatch.setattr("os.geteuid", lambda: 1000)
-    monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/pkexec")
+    monkeypatch.setattr("netmedic.system._validated_pkexec", lambda: "/usr/bin/pkexec")
     from pathlib import Path
 
     monkeypatch.setattr(
@@ -161,7 +161,7 @@ def test_helper_version_match_proceeds(monkeypatch):
 
     monkeypatch.setenv("NETMEDIC_USE_HELPER", "1")
     monkeypatch.setattr("os.geteuid", lambda: 1000)
-    monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/pkexec")
+    monkeypatch.setattr("netmedic.system._validated_pkexec", lambda: "/usr/bin/pkexec")
     from pathlib import Path
 
     monkeypatch.setattr(
@@ -185,8 +185,8 @@ def test_helper_version_match_proceeds(monkeypatch):
 
 
 @patch("os.geteuid", return_value=1000)
-@patch("shutil.which", return_value=None)
-def test_pkexec_missing_fails_fast(mock_which, mock_geteuid):
+@patch("netmedic.system._validated_pkexec", side_effect=FileNotFoundError("pkexec not found"))
+def test_pkexec_missing_fails_fast(mock_pkexec, mock_geteuid):
     res = CommandRunner.run(["ip", "link", "show"], require_root=True, _legacy_ok=True)
     assert res.success is False
     assert res.returncode == 127

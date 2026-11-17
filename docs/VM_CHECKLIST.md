@@ -31,6 +31,7 @@ an item without pasting the literal output next to it.
   Expected: `regular file uid=0` with an execute bit. A non-root-owned or
   non-regular `/usr/bin/pkexec` must make elevation fail with exit 127.
 
+
 ## F2 — vendored installer
 
 - [ ] **Installed bytes match the pin.**
@@ -57,7 +58,8 @@ an item without pasting the literal output next to it.
   access and confirm the VPN panel never invokes `curl` for the installer
   (`grep -R SCRIPT_URL` returns nothing in the installed helper).
 
-- [ ] **VPN install/add/revoke end-to-end (deferred to F3).** The current
+- [ ] **VPN install/add/revoke end-to-end (deferred to Fase 2b/3).** The current
   `env` channel is transitional and does not drive the pinned commit's
   non-interactive CLI. Do not sign this item off until Phase 3 ships the
   `install`/`client add`/`client revoke` argv verbs.
+

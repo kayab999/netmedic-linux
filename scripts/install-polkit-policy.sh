@@ -37,7 +37,8 @@ if [[ ! -x "$PYTHON3" ]]; then
   exit 1
 fi
 # Keep version in sync with netmedic/netmedic/helper_verbs.py HELPER_VERSION.
-HELPER_VERSION="$(python3 -c 'import re;print(re.search(r"HELPER_VERSION\s*=\s*\"([^\"]+)\"", open("netmedic/netmedic/helper_verbs.py").read()).group(1))')"
+# L4: absolute path + validated interpreter — works from any cwd, no PATH lookup.
+HELPER_VERSION="$("$PYTHON3" -c 'import re,sys;print(re.search(r"HELPER_VERSION\s*=\s*\"([^\"]+)\"", open(sys.argv[1]).read()).group(1))' "$HELPER_SRC/helper_verbs.py")"
 
 echo "Installing system helper package → $PKG_DIR (python $PYTHON3, version $HELPER_VERSION)"
 sudo mkdir -p "$PKG_DIR"
