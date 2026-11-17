@@ -56,3 +56,5 @@ NetMedic is a single-user desktop privileged operations platform. This document 
 - Kernel-level attack resistance
 
 - **AI supply chain (Fase 7):** `netmedic_ai` is out of the release supply chain until `netmedic_ai/requirements.lock` (with hashes) lands. Model GGUF hash is hardcoded in `netmedic_ai/pilot.py` and verified at load.
+
+14. **Recoverability (Fase 6)** — `change-dns` snapshots both `ipv4.dns` and `ipv4.ignore-auto-dns` before applying; on failure restores config first, then `con up` best-effort, with a reserved rollback budget and veracious result. `restart-adapter` retries `up` and reports final state via IFF_UP.
