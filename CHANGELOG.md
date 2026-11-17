@@ -2,6 +2,34 @@
 
 All notable changes to NetMedic Linux are documented here.
 
+## [Unreleased] — F1 helper hardening
+
+### Security
+- **L1 (pkexec resolution):** elevation now uses the fixed
+  `/usr/bin/pkexec` constant and validates it as a root-owned, executable
+  regular file before use, instead of `shutil.which("pkexec")`. A hostile
+  `pkexec` earlier in `PATH` can no longer capture the admin password. Both
+  the helper path and the legacy test path use the validated binary; refusal
+  surfaces as exit 127.
+- **L3 (root journal):** each helper record now carries a validated
+  `pkexec_uid` (decimal, else `unknown`) and a control-character-flattened,
+  length-capped message, so a crafted stderr line cannot inject a second
+  record. Verb arguments (including env secrets) are never serialized.
+- **Dead path removed:** `Config.SYSTEM_HELPER_ALT_PATH`
+  (`/usr/lib/netmedic/helper`) is gone. No in-tree installer ever wrote it
+  (the policy script and the Debian rules both use
+  `/usr/libexec/netmedic/helper`), so the fallback only widened the trusted
+  path surface. `status.py` and `docs/MANUAL.md` describe the single path.
+- **L4 (installer):** `install-polkit-policy.sh` reads `HELPER_VERSION` from an
+  absolute path via the validated `/usr/bin/python3`, so it works from any
+  working directory.
+
+### Changed
+- `HELPER_VERSION` 1.8.1 → 1.8.2: helper code changed, so stale system
+  installs are refused until the installer is re-run. The application version
+  stays 1.8.1.
+- Added `docs/VM_CHECKLIST.md` with the F1 items that require a real VM.
+
 ## [Unreleased] — F0 test/CI hygiene
 
 ### Fixed

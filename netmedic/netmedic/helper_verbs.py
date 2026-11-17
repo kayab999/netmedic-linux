@@ -71,7 +71,7 @@ VPN_ALLOWED_ENV_KEYS: frozenset[str] = frozenset({
     "CLIENT",
     "PASS",
 })
-HELPER_VERSION = "1.8.1"
+HELPER_VERSION = "1.8.2"
 
 
 @dataclass(frozen=True)

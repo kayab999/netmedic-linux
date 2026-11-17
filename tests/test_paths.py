@@ -30,3 +30,10 @@ def test_resolve_manual_path_from_repo_layout():
     assert path is not None
     assert path.name == "MANUAL.md"
     assert path.is_file()
+
+def test_only_libexec_helper_is_trusted() -> None:
+    """F1: no second helper path; /usr/lib/netmedic is library-only."""
+    from netmedic.config import Config
+
+    assert Config.SYSTEM_HELPER_PATH == Path("/usr/libexec/netmedic/helper")
+    assert not hasattr(Config, "SYSTEM_HELPER_ALT_PATH")
