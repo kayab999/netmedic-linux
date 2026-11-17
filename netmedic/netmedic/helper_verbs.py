@@ -5,8 +5,6 @@ shape so callers cannot invent arbitrary elevated argv.
 """
 from __future__ import annotations
 
-import os
-import re
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Mapping, Optional
 
@@ -33,6 +31,7 @@ __all__ = [
     "DEFAULT_VPN_SERVICE",
     "PINNED_VPN_INSTALL_SHA256",
     "VPN_SCRIPT_IDS",
+    "VPN_SCRIPT_PATHS",
     "VPN_ALLOWED_ENV_KEYS",
     "VerbPlan",
     "VerbValidationError",
@@ -48,15 +47,17 @@ __all__ = [
 INDEX_TXT_PATH = "/etc/openvpn/server/easy-rsa/pki/index.txt"
 DEFAULT_VPN_SERVICE = "openvpn-server@server.service"
 
-# F1: root-side trust anchor. Must match AngristanOperator.EXPECTED_SHA256.
-# The helper never trusts caller-supplied hashes; plan_verb requires the
-# caller value to equal this pin (transitional) and helper_main re-verifies
-# staged bytes against it. Full script_id-only model (no path/hash from
-# caller) is the follow-up once /usr/lib/netmedic/scripts ships the bundle.
+# F2: vendored, root-owned installer. The pin is the SHA256 of the exact
+# file shipped in the repository (netmedic/data/vpn/openvpn-install.sh) and
+# installed to the fixed path below. Callers name the script by id only:
+# neither the path nor the hash is accepted from the daemon anymore.
 PINNED_VPN_INSTALL_SHA256 = (
-    "65c3b53f652615598696ec062a4d3106540c43666f2722108ecf62a4b87e2f5b"
+    "e0ac8731423204c671f7699003e9fb6f191be77ae15ca8e5a28031f498947a07"
 )
-VPN_SCRIPT_IDS: frozenset[str] = frozenset({"openvpn-install"})
+VPN_SCRIPT_PATHS: Dict[str, str] = {
+    "openvpn-install": "/usr/lib/netmedic/scripts/openvpn-install.sh",
+}
+VPN_SCRIPT_IDS: frozenset[str] = frozenset(VPN_SCRIPT_PATHS)
 # Angristan installer inputs only. No LD_*, PATH, PYTHON*, BASH_ENV, etc.
 VPN_ALLOWED_ENV_KEYS: frozenset[str] = frozenset({
     "APPROVE_INSTALL",
@@ -71,7 +72,7 @@ VPN_ALLOWED_ENV_KEYS: frozenset[str] = frozenset({
     "CLIENT",
     "PASS",
 })
-HELPER_VERSION = "1.8.1"
+HELPER_VERSION = "1.8.2"
 
 
 @dataclass(frozen=True)
@@ -226,29 +227,6 @@ def _plan_vpn_service(verb: str, args: Dict[str, Any]) -> VerbPlan:
     )
 
 
-def _validate_vpn_script_path(script: str) -> str:
-    if ".." in script.split("/") or not script.startswith("/") or "//" in script:
-        raise VerbValidationError("vpn-run-script requires an absolute script path")
-    if os.path.normpath(script) != script:
-        raise VerbValidationError("vpn-run-script path must be normalized")
-    # NOTE: the normpath check subsumes the ".." check above; both layers
-    # stay on purpose (defense in depth — proven equivalent by mutation testing).
-    # Canonicalization is enforced at exec time via SHA256 sealed-copy re-hash
-    # (helper_main re-hashes FD before exec); planning stage rejects tricks above.
-    return script
-
-
-def _validate_vpn_script_hash(expected_sha: str) -> str:
-    # F1: caller hash is never trusted — must equal the root-side pin.
-    if not re.fullmatch(r"[0-9a-f]{64}", expected_sha):
-        raise VerbValidationError("expected_sha256 must be 64 lowercase hex chars")
-    if expected_sha != PINNED_VPN_INSTALL_SHA256:
-        raise VerbValidationError(
-            "expected_sha256 does not match pinned installer (see docs/VPN_REPIN.md)"
-        )
-    return PINNED_VPN_INSTALL_SHA256
-
-
 def _validate_vpn_script_env(env: object) -> List[str]:
     if not isinstance(env, dict):
         raise VerbValidationError("env must be an object of string values")
@@ -270,20 +248,24 @@ def _validate_vpn_script_env(env: object) -> List[str]:
 
 
 def _plan_vpn_run_script(verb: str, args: Dict[str, Any]) -> VerbPlan:
-    script = _validate_vpn_script_path(_require_str(args, "script") or "")
-    sealed_hash = _validate_vpn_script_hash(_require_str(args, "expected_sha256") or "")
-    # F1: script_id forward-compat. Required going forward; defaults for
-    # old callers during transition, but unknown IDs are rejected.
-    script_id = args.get("script_id", "openvpn-install")
-    if not isinstance(script_id, str) or script_id not in VPN_SCRIPT_IDS:
+    # F2: the daemon names the bundled installer by id. A caller-supplied path
+    # or hash would reintroduce the very surface this phase removes, so both
+    # are rejected instead of silently ignored.
+    for forbidden in ("script", "expected_sha256"):
+        if forbidden in args:
+            raise VerbValidationError(
+                "vpn-run-script accepts only script_id "
+                f"(no caller {forbidden.replace('_', ' ')}); see docs/VPN_REPIN.md"
+            )
+    script_id = _require_str(args, "script_id") or ""
+    if script_id not in VPN_SCRIPT_IDS:
         raise VerbValidationError(f"Unknown script_id: {script_id!r}")
     env_pairs = _validate_vpn_script_env(args.get("env") or {})
-    # Marker command: helper_main executes integrity + env script specially.
-    # Hash emitted is always the pin, never the caller value verbatim
-    # (they are equal by the check above, but pin is canonical).
+    # Marker command: helper_main resolves the id to the fixed root path,
+    # verifies the pin, stages, and executes. The path never crosses IPC.
     return VerbPlan(
         verb,
-        [["__vpn_script__", script, sealed_hash, *env_pairs]],
+        [["__vpn_script__", script_id, *env_pairs]],
         "run verified VPN installer script",
     )
 

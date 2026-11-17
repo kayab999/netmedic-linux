@@ -1,50 +1,43 @@
-from netmedic.models import ResultCode
+import hashlib
+
+import pytest
+
+import netmedic.helper_main as hm
 from netmedic.system import CommandRunner
-from netmedic.operators.vpn.angristan import AngristanOperator
-from unittest.mock import patch
+
 
 def test_command_redaction():
     """Verifica que los secretos no se logueen en texto plano."""
     cmd = ["mytool", "--password", "secret123", "--token=xyz789", "normal_arg"]
     redacted = CommandRunner._redact_command(cmd)
-    
+
     assert "secret123" not in redacted
     assert "xyz789" not in redacted
     assert "--password <REDACTED>" in redacted
     assert "--token=<REDACTED>" in redacted
     assert "normal_arg" in redacted
 
-@patch("netmedic.operators.vpn.angristan.Config.get_operators_dir")
-def test_operator_integrity_failure(mock_dir, tmp_path):
-    """Verifica que el operador aborte si el hash no coincide."""
-    mock_dir.return_value = tmp_path
-    op = AngristanOperator()
-    
-    # Crear un script falso
-    script_file = tmp_path / "openvpn-install.sh"
-    script_file.write_text("#!/bin/bash\necho 'I am malicious'")
-    
-    # El hash real de este texto no coincidirá con EXPECTED_SHA256
-    assert op._verify_integrity() is False
-    
-    # Intentar listar clientes debería fallar por integridad
-    res = op.check_status()
-    assert res.code not in (ResultCode.OK, ResultCode.EXECUTED)
-    assert "integrity" in res.details.lower()
 
-def test_operator_integrity_success(tmp_path, monkeypatch):
-    """Verifica que el operador acepte el hash correcto."""
-    from netmedic.config import Config
-    monkeypatch.setattr(Config, "get_operators_dir", lambda: tmp_path)
-    
-    op = AngristanOperator()
-    script_file = tmp_path / "openvpn-install.sh"
-    
-    # Mockear el hash esperado para que coincida con un contenido conocido
-    content = b"correct content"
-    expected_hash = "55d731f2fe4bc2dc72f0288f5bc9a594dc3069d1949735fa3f50fde6580012f9" # sha256 of 'correct content'
-    monkeypatch.setattr(op, "EXPECTED_SHA256", expected_hash)
-    
-    script_file.write_bytes(content)
-    
-    assert op._verify_integrity() is True
+def test_vendored_installer_tamper_is_refused(tmp_path, monkeypatch):
+    """F2: the root helper aborts when the vendored bytes differ from the pin."""
+    script = tmp_path / "openvpn-install.sh"
+    script.write_text("#!/bin/bash\necho 'I am malicious'")
+    script.chmod(0o644)
+    monkeypatch.setitem(hm.VPN_SCRIPT_PATHS, "openvpn-install", str(script))
+
+    # Do not patch the pin: these bytes cannot match the vendored installer.
+    with pytest.raises(hm.StagingError, match="integrity"):
+        hm._read_vpn_script("openvpn-install")
+
+
+def test_vendored_installer_matching_pin_is_accepted(tmp_path, monkeypatch):
+    """F2: bytes matching the pin are the only ones the helper will read."""
+    content = b"#!/bin/bash\necho ok\n"
+    script = tmp_path / "openvpn-install.sh"
+    script.write_bytes(content)
+    script.chmod(0o644)
+    digest = hashlib.sha256(content).hexdigest()
+    monkeypatch.setattr(hm, "PINNED_VPN_INSTALL_SHA256", digest)
+    monkeypatch.setitem(hm.VPN_SCRIPT_PATHS, "openvpn-install", str(script))
+
+    assert hm._read_vpn_script("openvpn-install") == content

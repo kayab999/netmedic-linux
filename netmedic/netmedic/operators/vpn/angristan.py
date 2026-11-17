@@ -1,45 +1,45 @@
 import logging
-import os
 import re
-import hashlib
-import secrets
 from pathlib import Path
 
 from netmedic.models import CommandResult, NetResult, ResultCode
 from netmedic.operators.vpn.base import VPNOperator, VPNClient
 from netmedic.operators.base import OperatorStatus
-from netmedic.config import Config
 from netmedic.system import CommandRunner
 
 logger = logging.getLogger(__name__)
+
 
 class AngristanOperator(VPNOperator):
     """
     Implementación del operador VPN usando el script de Angristan.
     Commit Pinneado: 9c966d4 (para estabilidad garantizada).
     Referencia: https://github.com/angristan/openvpn-install
-    """
-    
-    # URL apuntando a commit específico para evitar roturas por cambios upstream
-    SCRIPT_URL = "https://raw.githubusercontent.com/angristan/openvpn-install/9c966d4/openvpn-install.sh"
 
-    # Pinned upstream commit + hash (the trust anchor). Upstream moves: see
-    # docs/VPN_REPIN.md for the re-pin procedure. Never "fix" a mismatch by
-    # editing the hash to match a downloaded file — verify provenance first.
+    F2: el instalador está vendorizado en el repositorio y lo instala el
+    paquete como /usr/lib/netmedic/scripts/openvpn-install.sh (root:root).
+    El daemon ya no descarga, hashea ni sella el script: sólo nombra el
+    ``script_id`` y el helper root verifica el pin antes de ejecutarlo.
+    """
+
+    # Pinned upstream commit (provenance only; see docs/VPN_REPIN.md).
     PIN_COMMIT = "9c966d4"
 
-    # Hash SHA256 del script oficial en el commit 9c966d4
-    # Este valor es la 'Ancla de Confianza' del operador.
-    EXPECTED_SHA256 = "65c3b53f652615598696ec062a4d3106540c43666f2722108ecf62a4b87e2f5b"
-
-    # Shown to operators on every integrity failure (B-9: name the resolution).
+    # Shown to operators on every pin failure (B-9: name the resolution).
     REPIN_HINT = (
-        "See docs/VPN_REPIN.md (pinned commit + hash must be updated together; "
-        "verify upstream provenance before changing EXPECTED_SHA256)."
+        "See docs/VPN_REPIN.md (vendored bytes + SHA256 must be updated "
+        "together; verify upstream provenance before re-pinning)."
     )
 
-    # Ruta a la base de datos de certificados (Source of Truth)
+    # Source of truth for client certificates.
     INDEX_TXT_PATH = "/etc/openvpn/server/easy-rsa/pki/index.txt"
+
+    # Completion marker for the server install. Replaces the old check for a
+    # user-writable copy of the installer, which no longer exists.
+    INSTALL_MARKER_PATH = "/etc/openvpn/server/server.conf"
+
+    # Fixed helper allowlist id; the path never crosses IPC.
+    SCRIPT_ID = "openvpn-install"
 
     @property
     def name(self) -> str:
@@ -54,140 +54,39 @@ class AngristanOperator(VPNOperator):
         return "Instalador y gestor de OpenVPN automatizado y seguro."
 
     def get_service_name(self) -> str:
-        return "openvpn-server@server.service" 
+        return "openvpn-server@server.service"
 
-    @property
-    def script_path(self):
-        return Config.get_operators_dir() / "openvpn-install.sh"
+    def _installed(self) -> bool:
+        return Path(self.INSTALL_MARKER_PATH).is_file()
 
-    def _hash_file_fd(self, fd: int) -> str:
-        sha256_hash = hashlib.sha256()
-        os.lseek(fd, 0, os.SEEK_SET)
-        while True:
-            block = os.read(fd, 65536)
-            if not block:
-                break
-            sha256_hash.update(block)
-        os.lseek(fd, 0, os.SEEK_SET)
-        return sha256_hash.hexdigest()
+    def _run_vpn_script(self, env_vars: list, timeout: int) -> CommandResult:
+        """Ask the helper to run the vendored installer by fixed script id.
 
-    def _verify_integrity(self) -> bool:
-        """SHA256 of the local installer must match the pinned expected digest."""
-        if not self.script_path.exists():
-            return False
-        try:
-            fd = os.open(str(self.script_path), os.O_RDONLY)
-        except OSError as exc:
-            logger.error("Cannot open VPN script for integrity check: %s", exc)
-            return False
-        try:
-            actual_hash = self._hash_file_fd(fd)
-            if actual_hash != self.EXPECTED_SHA256:
-                logger.error(
-                    "SHA256 mismatch for %s. Expected %s, got %s",
-                    self.slug,
-                    self.EXPECTED_SHA256,
-                    actual_hash,
-                )
-                return False
-            return True
-        except Exception as e:
-            logger.error("Error calculating hash for %s: %s", self.slug, e)
-            return False
-        finally:
-            try:
-                os.close(fd)
-            except OSError:
-                pass
-
-    def _execute_verified_script(self, env_vars: list, timeout: int) -> CommandResult:
-        """Re-hash via open FD, stage a sealed copy, re-hash, then elevate.
-
-        Narrows path-based TOCTOU on the user-writable operators directory by:
-        1) hashing the open FD, 2) writing exclusively to XDG_RUNTIME_DIR,
-        3) re-hashing the sealed path immediately before pkexec.
-        Same-UID residual risk remains (documented in threat model).
+        The helper resolves the id, verifies the pin, stages the bytes in a
+        root-owned directory and executes only that copy. No path or hash is
+        sent from here.
         """
-        try:
-            fd = os.open(str(self.script_path), os.O_RDONLY)
-        except OSError as exc:
-            return CommandResult(False, -1, "", f"Cannot open script: {exc}", [])
-
-        sealed_path = None
-        try:
-            if self._hash_file_fd(fd) != self.EXPECTED_SHA256:
-                return CommandResult(False, 126, "", "Security abort: Script integrity failure.", [])
-
-            runtime = os.environ.get("XDG_RUNTIME_DIR")
-            if not runtime:
-                return CommandResult(False, 2, "", "Refusing VPN sealed staging without XDG_RUNTIME_DIR (no /tmp fallback).", [])
-            sealed_dir = Path(runtime) / "netmedic"
-            sealed_dir.mkdir(mode=0o700, exist_ok=True)
-            try:
-                os.chmod(sealed_dir, 0o700)
-            except OSError:
-                pass
-
-            sealed_path = sealed_dir / f"openvpn-install.{os.getpid()}.{os.getuid()}.{secrets.token_hex(4)}.sh"
-            out_fd = os.open(
-                str(sealed_path),
-                os.O_WRONLY | os.O_CREAT | os.O_EXCL,
-                0o700,
-            )
-            try:
-                while True:
-                    block = os.read(fd, 65536)
-                    if not block:
-                        break
-                    os.write(out_fd, block)
-                os.fsync(out_fd)
-            finally:
-                os.close(out_fd)
-
-            sealed_fd = os.open(str(sealed_path), os.O_RDONLY)
-            try:
-                if self._hash_file_fd(sealed_fd) != self.EXPECTED_SHA256:
-                    return CommandResult(
-                        False, 126, "", "Security abort: Sealed script integrity failure.", []
-                    )
-            finally:
-                os.close(sealed_fd)
-
-            env_map = {}
-            for item in env_vars:
-                if not isinstance(item, str) or "=" not in item:
-                    return CommandResult(False, 2, "", f"Invalid env entry: {item!r}", [])
-                key, value = item.split("=", 1)
-                env_map[key] = value
-            return CommandRunner.run_elevated(
-                "vpn-run-script",
-                {
-                    "script_id": "openvpn-install",
-                    "script": str(sealed_path),
-                    "expected_sha256": self.EXPECTED_SHA256,
-                    "env": env_map,
-                },
-                timeout=timeout,
-            )
-        finally:
-            try:
-                os.close(fd)
-            except OSError:
-                pass
-            if sealed_path is not None:
-                try:
-                    sealed_path.unlink(missing_ok=True)
-                except OSError:
-                    pass
+        env_map = {}
+        for item in env_vars:
+            if not isinstance(item, str) or "=" not in item:
+                return CommandResult(False, 2, "", f"Invalid env entry: {item!r}", [])
+            key, value = item.split("=", 1)
+            env_map[key] = value
+        return CommandRunner.run_elevated(
+            "vpn-run-script",
+            {"script_id": self.SCRIPT_ID, "env": env_map},
+            timeout=timeout,
+        )
 
     def check_status(self) -> NetResult:
         try:
-            if not self.script_path.exists():
-                return NetResult(self.name, True, OperatorStatus.NOT_INSTALLED.value, details="Script not found.")
-
-            # Verificación de integridad en cada chequeo de estado
-            if not self._verify_integrity():
-                 return NetResult(self.name, False, OperatorStatus.ERROR.value, details=f"Script integrity check failed (SHA256 mismatch vs pin {self.PIN_COMMIT}). {self.REPIN_HINT}")
+            if not self._installed():
+                return NetResult(
+                    self.name,
+                    True,
+                    OperatorStatus.NOT_INSTALLED.value,
+                    details="OpenVPN server config not found.",
+                )
 
             is_active = CommandRunner.is_service_active(self.get_service_name())
             status = OperatorStatus.RUNNING.value if is_active else OperatorStatus.STOPPED.value
@@ -197,37 +96,7 @@ class AngristanOperator(VPNOperator):
             logger.exception(f"Error checking status for {self.slug}")
             return NetResult(self.name, False, OperatorStatus.ERROR.value, details=str(e))
 
-    def _download_script(self) -> NetResult:
-        logger.info(f"Downloading installer from {self.SCRIPT_URL}")
-        cmd = ["curl", "--proto=https", "--tlsv1.2", "--retry", "3", "-sS", "-L", "-o", str(self.script_path), self.SCRIPT_URL]
-        res = CommandRunner.run(cmd, timeout=60)
-        
-        if not res.success:
-            return NetResult("Download Script", False, "Download failed", details=res.stderr)
-
-        if not self.script_path.exists() or self.script_path.stat().st_size == 0:
-            return NetResult("Download Script", False, "Empty or missing file")
-        
-        # Validar integridad inmediatamente tras descarga
-        if not self._verify_integrity():
-             return NetResult("Download Script", False, f"Integrity check failed after download (pin {self.PIN_COMMIT}). The source might be compromised or the download corrupted. {self.REPIN_HINT}")
-
-        try:
-            with open(self.script_path, 'r', encoding='utf-8') as f:
-                first_line = f.readline().strip()
-                if not first_line.startswith("#!") or "bash" not in first_line:
-                     return NetResult("Download Script", False, "Invalid script header")
-            # Owner-only execute/read — reduces casual overwrite without chmod.
-            self.script_path.chmod(0o500)
-        except Exception as e:
-             return NetResult("Download Script", False, "Validation failed", details=str(e))
-
-        return NetResult("Download Script", True, "Download verified")
-
     def install(self) -> NetResult:
-        dl_res = self._download_script()
-        if dl_res.code != ResultCode.OK: return dl_res
-
         env_vars = [
             "APPROVE_INSTALL=y",
             "APPROVE_IP=y",
@@ -240,8 +109,8 @@ class AngristanOperator(VPNOperator):
         ]
 
         logger.info("Starting installation of %s", self.slug)
-        res = self._execute_verified_script(env_vars, timeout=300)
-        
+        res = self._run_vpn_script(env_vars, timeout=300)
+
         if not res.success:
             return NetResult(self.name, False, "Installation failed", details=res.stderr)
 
@@ -272,16 +141,16 @@ class AngristanOperator(VPNOperator):
             for line in res.stdout.splitlines():
                 parts = line.split('\t')
                 if len(parts) < 6: continue
-                
+
                 status_flag = parts[0] # V=Valid, R=Revoked
                 dn_field = parts[5]    # /CN=client_name
-                
+
                 # Extraer nombre
                 cn_match = re.search(r'/CN=([^/]+)', dn_field)
                 if not cn_match: continue
-                
+
                 client_name = cn_match.group(1)
-                
+
                 # Ignorar entradas de servidor u otros artefactos si los hay
                 if client_name == "server": continue
 
@@ -289,9 +158,9 @@ class AngristanOperator(VPNOperator):
                     name=client_name,
                     active=(status_flag == 'V')
                 ))
-            
+
             return NetResult(self.name, True, "Client list retrieved", data=clients)
-            
+
         except Exception as e:
             logger.exception("Error parsing client list")
             return NetResult(self.name, False, "Parse error", details=str(e))
@@ -303,7 +172,7 @@ class AngristanOperator(VPNOperator):
     def add_client(self, name: str) -> NetResult:
         if not self._validate_client_name(name):
             return NetResult(self.name, False, "Invalid client name (use a-z, 0-9, -, _)")
-        
+
         # Verificar duplicados
         current_clients = self.list_clients()
         if current_clients.code == ResultCode.OK and current_clients.data:
@@ -317,8 +186,8 @@ class AngristanOperator(VPNOperator):
             "PASS=1",
         ]
         logger.info("Adding VPN client: %s", name)
-        res = self._execute_verified_script(env_vars, timeout=60)
-        
+        res = self._run_vpn_script(env_vars, timeout=60)
+
         if not res.success:
             return NetResult(self.name, False, "Failed to execute add-client script", details=res.stderr)
 
@@ -328,7 +197,7 @@ class AngristanOperator(VPNOperator):
             for c in verify_res.data:
                 if c.name == name and c.active:
                     return NetResult(self.name, True, f"Client '{name}' created and verified")
-        
+
         return NetResult(self.name, False, f"Script reported success but client '{name}' was not found in PKI index")
 
     def revoke_client(self, name: str) -> NetResult:
@@ -340,7 +209,7 @@ class AngristanOperator(VPNOperator):
             f"CLIENT={name}",
         ]
         logger.info("Revoking VPN client: %s", name)
-        res = self._execute_verified_script(env_vars, timeout=60)
+        res = self._run_vpn_script(env_vars, timeout=60)
 
         if not res.success:
             return NetResult(self.name, False, "Failed to revoke client", details=res.stderr)
@@ -359,10 +228,13 @@ class AngristanOperator(VPNOperator):
 
     def start_service(self) -> NetResult:
         """Starts the OpenVPN systemd unit when installed."""
-        if not self.script_path.exists():
-            return NetResult(self.name, False, OperatorStatus.NOT_INSTALLED.value, details="Script not found.")
-        if not self._verify_integrity():
-            return NetResult(self.name, False, OperatorStatus.ERROR.value, details=f"Script integrity check failed (pin {self.PIN_COMMIT}). {self.REPIN_HINT}")
+        if not self._installed():
+            return NetResult(
+                self.name,
+                False,
+                OperatorStatus.NOT_INSTALLED.value,
+                details="OpenVPN server config not found.",
+            )
 
         service = self.get_service_name()
         res = CommandRunner.run_elevated(
@@ -376,10 +248,13 @@ class AngristanOperator(VPNOperator):
 
     def restart_service(self) -> NetResult:
         """Restarts the OpenVPN systemd unit without touching NetworkManager."""
-        if not self.script_path.exists():
-            return NetResult(self.name, False, OperatorStatus.NOT_INSTALLED.value, details="VPN not installed.")
-        if not self._verify_integrity():
-            return NetResult(self.name, False, OperatorStatus.ERROR.value, details=f"Script integrity check failed (pin {self.PIN_COMMIT}). {self.REPIN_HINT}")
+        if not self._installed():
+            return NetResult(
+                self.name,
+                False,
+                OperatorStatus.NOT_INSTALLED.value,
+                details="VPN not installed.",
+            )
 
         service = self.get_service_name()
         res = CommandRunner.run_elevated(

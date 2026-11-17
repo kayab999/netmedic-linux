@@ -153,13 +153,12 @@ def test_partial_output_captured_on_timeout(tmp_path):
 
 def test_kill_process_group_stat_modes_untouched(tmp_path):
     # Sanity: helper staging perms unaffected by M2 (regression guard).
-    from netmedic.helper_main import _stage_verified_copy
+    from netmedic.helper_main import _stage_verified_bytes
     import hashlib
 
-    src = tmp_path / "s.sh"
-    src.write_bytes(b"#!/bin/sh\necho hi\n")
-    digest = hashlib.sha256(b"#!/bin/sh\necho hi\n").hexdigest()
-    staged = _stage_verified_copy(str(src), digest, str(tmp_path / "st"))
+    content = b"#!/bin/sh\necho hi\n"
+    digest = hashlib.sha256(content).hexdigest()
+    staged = _stage_verified_bytes(content, digest, str(tmp_path / "st"))
     assert oct(os.stat(staged).st_mode & 0o777) == oct(0o700)
     assert oct(os.stat(tmp_path / "st").st_mode & 0o777) == oct(0o700)
     os.unlink(staged)

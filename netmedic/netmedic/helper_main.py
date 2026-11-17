@@ -30,6 +30,8 @@ from netmedic.helper_verbs import (
     HELPER_VERSION,
     INDEX_TXT_PATH,
     PINNED_VPN_INSTALL_SHA256,
+    VPN_ALLOWED_ENV_KEYS,
+    VPN_SCRIPT_PATHS,
     VerbPlan,
     VerbValidationError,
     plan_to_dict,
@@ -161,18 +163,12 @@ def _ensure_root_stage_dir(staging_dir: str = ROOT_STAGE_DIR) -> Path:
     return Path(staging_dir)
 
 
-def _stage_verified_copy(script: str, expected: str, staging_dir: str = ROOT_STAGE_DIR) -> str:
-    """Copy hash-verified script bytes into the trusted staging dir.
+def _stage_verified_bytes(data: bytes, expected: str, staging_dir: str = ROOT_STAGE_DIR) -> str:
+    """Write verified installer bytes into the trusted staging dir.
 
-    Returns the staged path. Verifies source bytes, then re-verifies the
-    staged bytes at the execution location — execution never reads the
-    user-supplied path. Raises StagingError / returns integrity dict via caller.
+    Returns the staged path. Re-verifies the staged bytes at the execution
+    location -- execution never reads the system path. Raises StagingError.
     """
-    try:
-        with open(script, "rb") as handle:
-            data = handle.read()
-    except OSError as exc:
-        raise StagingError(f"Cannot read script: {exc}") from exc
     if _hash_bytes(data) != expected:
         raise StagingError("Security abort: Script integrity failure.")
     staged_dir = _ensure_root_stage_dir(staging_dir)
@@ -191,6 +187,62 @@ def _stage_verified_copy(script: str, expected: str, staging_dir: str = ROOT_STA
             pass
         raise StagingError("Security abort: Sealed script integrity failure.")
     return staged
+
+
+# F2: generous cap for the vendored installer (147 KiB at pin time).
+VPN_SCRIPT_MAX_BYTES = 1 << 20
+
+
+def _read_vpn_script(script_id: str) -> bytes:
+    """Read the fixed root-owned installer named by *script_id*.
+
+    The id resolves against a constant map -- the caller never supplies a
+    path. Symlinks, non-regular files, foreign owners, writable modes and
+    oversized files fail closed. The SHA256 of the bytes actually read must
+    equal the root-side pin.
+    """
+    path = VPN_SCRIPT_PATHS.get(script_id)
+    if path is None:
+        raise StagingError(f"Unknown script_id: {script_id!r}")
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    except OSError as exc:
+        raise StagingError(f"Cannot read installer {path}: {exc}") from exc
+    try:
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode):
+            raise StagingError(f"Refusing installer that is not a regular file: {path}")
+        if st.st_uid != os.geteuid():
+            raise StagingError(f"Refusing installer not owned by euid {os.geteuid()}: {path}")
+        if st.st_mode & 0o022:
+            raise StagingError(f"Refusing writable installer: {path}")
+        if st.st_size == 0:
+            raise StagingError(f"Refusing empty installer: {path}")
+        if st.st_size > VPN_SCRIPT_MAX_BYTES:
+            raise StagingError(
+                f"Refusing installer that is too large ({VPN_SCRIPT_MAX_BYTES} bytes max): {path}"
+            )
+        chunks: List[bytes] = []
+        remaining = VPN_SCRIPT_MAX_BYTES + 1
+        while remaining > 0:
+            block = os.read(fd, min(65536, remaining))
+            if not block:
+                break
+            chunks.append(block)
+            remaining -= len(block)
+        data = b"".join(chunks)
+    finally:
+        try:
+            os.close(fd)
+        except OSError:
+            pass
+    if len(data) > VPN_SCRIPT_MAX_BYTES:
+        raise StagingError(
+            f"Refusing installer that is too large ({VPN_SCRIPT_MAX_BYTES} bytes max): {path}"
+        )
+    if _hash_bytes(data) != PINNED_VPN_INSTALL_SHA256:
+        raise StagingError("Security abort: Script integrity failure.")
+    return data
 
 
 def _kill_process_group(proc: subprocess.Popen[str]) -> None:
@@ -338,27 +390,36 @@ FIXED_BASH = "/bin/bash"
 def _execute_vpn_script(
     marker_cmd: List[str], timeout: Optional[int], staging_dir: str = ROOT_STAGE_DIR
 ) -> Dict[str, Any]:
-    # ["__vpn_script__", script, expected_sha, KEY=val, ...]
-    if len(marker_cmd) < 3:
+    # ["__vpn_script__", script_id, KEY=val, ...]
+    if len(marker_cmd) < 2:
         return {
             "ok": False,
             "message": "Malformed vpn-run-script plan",
             "details": None,
         }
-    script = marker_cmd[1]
-    expected = marker_cmd[2]
-    env_pairs = marker_cmd[3:]
-    # F1 defense-in-depth: even if plan_verb is bypassed (in-process call),
-    # the root side only honors the pin, never a caller-invented hash.
-    if expected != PINNED_VPN_INSTALL_SHA256:
-        return {
-            "ok": False,
-            "message": "Security abort: unexpected installer hash (pin mismatch).",
-            "details": None,
-        }
+    script_id = marker_cmd[1]
+    env_pairs = marker_cmd[2:]
+    # F2 defense-in-depth: even if plan_verb is bypassed (in-process call),
+    # the root side re-validates every env pair before handing it to env(1).
+    for pair in env_pairs:
+        key, sep, value = pair.partition("=")
+        if not sep or not key or key not in VPN_ALLOWED_ENV_KEYS:
+            return {
+                "ok": False,
+                "message": f"Rejected env pair from plan: {key or pair!r}",
+                "details": None,
+            }
+        if "\n" in value or "\x00" in value or value.startswith("-"):
+            return {
+                "ok": False,
+                "message": f"Rejected env value for {key}",
+                "details": None,
+            }
     staged: Optional[str] = None
     try:
-        staged = _stage_verified_copy(script, expected, staging_dir)
+        expected = PINNED_VPN_INSTALL_SHA256
+        data = _read_vpn_script(script_id)
+        staged = _stage_verified_bytes(data, expected, staging_dir)
     except StagingError as exc:
         return {"ok": False, "message": str(exc), "details": None}
     # F1: fixed minimal env, fixed PATH, explicit bash (also survives /run noexec

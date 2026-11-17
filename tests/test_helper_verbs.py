@@ -74,47 +74,38 @@ def test_unknown_verb():
         plan_verb("rm-rf")
 
 
-def test_vpn_run_script_validates_sha_and_path():
+def test_vpn_run_script_accepts_only_script_id():
     from netmedic.helper_verbs import PINNED_VPN_INSTALL_SHA256
 
     pin = PINNED_VPN_INSTALL_SHA256
-    with pytest.raises(VerbValidationError):
+    # F2: a caller-supplied path is rejected, whatever its shape.
+    for caller_path in ("relative.sh", "/tmp/x.sh", "/tmp//x.sh", "/tmp/a/../x.sh"):  # noqa: S108 (attacker-path fixture strings; never created/executed)
+        with pytest.raises(VerbValidationError, match="script_id"):
+            plan_verb(
+                "vpn-run-script",
+                {
+                    "script_id": "openvpn-install",
+                    "script": caller_path,
+                    "env": {},
+                },
+            )
+    # F2: the caller hash channel is gone too.
+    with pytest.raises(VerbValidationError, match="script_id"):
         plan_verb(
             "vpn-run-script",
             {
-                "script": "relative.sh",
+                "script_id": "openvpn-install",
                 "expected_sha256": pin,
                 "env": {},
             },
         )
-    with pytest.raises(VerbValidationError):
-        plan_verb(
-            "vpn-run-script",
-            {
-                "script": "/tmp/x.sh",  # noqa: S108 (attacker-path fixture string; never created/executed)
-                "expected_sha256": "deadbeef",
-                "env": {},
-            },
-        )
-    # F1: caller-invented hash rejected even with valid shape.
-    with pytest.raises(VerbValidationError, match="pinned"):
-        plan_verb(
-            "vpn-run-script",
-            {
-                "script": "/tmp/openvpn-install.sh",  # noqa: S108 (attacker-path fixture string; never created/executed)
-                "expected_sha256": "ab" * 32,
-                "env": {},
-            },
-        )
-    # F1: dangerous env rejected (allowlist only).
+    # F2: dangerous env rejected (allowlist only).
     for bad_env in ({"LD_PRELOAD": "/tmp/x.so"}, {"PATH": "/tmp"}, {"BASH_ENV": "/tmp/x"}):  # noqa: S108 (attacker-path fixture string; never created/executed)
         with pytest.raises(VerbValidationError, match="allowlisted"):
             plan_verb(
                 "vpn-run-script",
                 {
                     "script_id": "openvpn-install",
-                    "script": "/tmp/openvpn-install.sh",  # noqa: S108 (attacker-path fixture string; never created/executed)
-                    "expected_sha256": pin,
                     "env": bad_env,
                 },
             )
@@ -123,8 +114,6 @@ def test_vpn_run_script_validates_sha_and_path():
             "vpn-run-script",
             {
                 "script_id": "evil",
-                "script": "/tmp/openvpn-install.sh",  # noqa: S108 (attacker-path fixture string; never created/executed)
-                "expected_sha256": pin,
                 "env": {},
             },
         )
@@ -132,13 +121,11 @@ def test_vpn_run_script_validates_sha_and_path():
         "vpn-run-script",
         {
             "script_id": "openvpn-install",
-            "script": "/tmp/openvpn-install.sh",  # noqa: S108 (attacker-path fixture string; never created/executed)
-            "expected_sha256": pin,
             "env": {"MENU_OPTION": "1", "CLIENT": "laptop"},
         },
     )
     assert plan.commands[0][0] == "__vpn_script__"
-    assert plan.commands[0][2] == pin
+    assert plan.commands[0][1] == "openvpn-install"
     assert "CLIENT=laptop" in plan.commands[0]
 
 
@@ -149,11 +136,14 @@ def test_vpn_list_rejects_path_arg():
     assert plan.commands == [["__vpn_list__"]]
 
 
-def test_helper_pin_matches_operator():
-    from netmedic.helper_verbs import PINNED_VPN_INSTALL_SHA256
+def test_operator_uses_single_pin_source():
+    """F2: only helper_verbs owns the hash; the operator names the id."""
+    from netmedic.helper_verbs import PINNED_VPN_INSTALL_SHA256, VPN_SCRIPT_IDS
     from netmedic.operators.vpn.angristan import AngristanOperator
 
-    assert PINNED_VPN_INSTALL_SHA256 == AngristanOperator.EXPECTED_SHA256
+    assert len(PINNED_VPN_INSTALL_SHA256) == 64
+    assert AngristanOperator.SCRIPT_ID in VPN_SCRIPT_IDS
+    assert not hasattr(AngristanOperator, "EXPECTED_SHA256")
 
 
 def test_cli_dry_run_flush_dns(capsys):
@@ -324,12 +314,13 @@ def test_vpn_run_script_rejects_non_normalized():
     from netmedic.helper_verbs import PINNED_VPN_INSTALL_SHA256
 
     pin = PINNED_VPN_INSTALL_SHA256
-    with pytest.raises(VerbValidationError):
+    # F2: normalization is moot, but these classic bypass shapes stay rejected.
+    with pytest.raises(VerbValidationError, match="script_id"):
         plan_verb(
             "vpn-run-script",
             {"script": "/tmp//x.sh", "expected_sha256": pin, "env": {}},  # noqa: S108 (attacker-path fixture string; never created/executed)
         )
-    with pytest.raises(VerbValidationError):
+    with pytest.raises(VerbValidationError, match="script_id"):
         plan_verb(
             "vpn-run-script",
             {"script": "/tmp/a/../x.sh", "expected_sha256": pin, "env": {}},  # noqa: S108 (attacker-path fixture string; never created/executed)
@@ -338,15 +329,11 @@ def test_vpn_run_script_rejects_non_normalized():
 
 def test_vpn_run_script_rejects_bad_env_key():
     """Mutation-hardening: env key allowlist must reject shell-ish names."""
-    from netmedic.helper_verbs import PINNED_VPN_INSTALL_SHA256
-
-    pin = PINNED_VPN_INSTALL_SHA256
     with pytest.raises(VerbValidationError):
         plan_verb(
             "vpn-run-script",
             {
-                "script": "/tmp/openvpn-install.sh",  # noqa: S108 (attacker-path fixture string; never created/executed)
-                "expected_sha256": pin,
+                "script_id": "openvpn-install",
                 "env": {"BAD-KEY!": "1"},
             },
         )
@@ -354,18 +341,16 @@ def test_vpn_run_script_rejects_bad_env_key():
         plan_verb(
             "vpn-run-script",
             {
-                "script": "/tmp/openvpn-install.sh",  # noqa: S108 (attacker-path fixture string; never created/executed)
-                "expected_sha256": pin,
+                "script_id": "openvpn-install",
                 "env": {"MENU_OPTION": "a\nb"},
             },
         )
-    # Non-allowlisted but well-formed key also rejected (F1).
+    # Non-allowlisted but well-formed key also rejected (F1/F2).
     with pytest.raises(VerbValidationError, match="allowlisted"):
         plan_verb(
             "vpn-run-script",
             {
-                "script": "/tmp/openvpn-install.sh",  # noqa: S108 (attacker-path fixture string; never created/executed)
-                "expected_sha256": pin,
+                "script_id": "openvpn-install",
                 "env": {"ok_key": "1"},
             },
         )
@@ -391,57 +376,56 @@ def test_helper_execute_backdoor_requires_test_mode(monkeypatch):
 
 def _write_source(path, content: bytes):
     path.write_bytes(content)
+    path.chmod(0o644)
     return hashlib.sha256(content).hexdigest()
 
 
-def test_stage_verified_copy_ok(tmp_path):
-    from netmedic.helper_main import _stage_verified_copy
+def test_stage_verified_bytes_ok(tmp_path):
+    from netmedic.helper_main import _stage_verified_bytes
 
-    src = tmp_path / "src.sh"
-    digest = _write_source(src, b"#!/bin/sh\necho hi\n")
+    content = b"#!/bin/sh\necho hi\n"
+    digest = hashlib.sha256(content).hexdigest()
     stage = tmp_path / "stage"
-    staged = _stage_verified_copy(str(src), digest, str(stage))
+    staged = _stage_verified_bytes(content, digest, str(stage))
     assert staged.startswith(str(stage) + "/")
-    assert staged != str(src)
-    assert Path(staged).read_bytes() == b"#!/bin/sh\necho hi\n"
+    assert Path(staged).read_bytes() == content
     assert oct(os.stat(staged).st_mode & 0o777) == oct(0o700)
     assert oct(os.stat(stage).st_mode & 0o777) == oct(0o700)
     os.unlink(staged)
 
 
-def test_stage_rejects_tampered_source(tmp_path):
-    from netmedic.helper_main import StagingError, _stage_verified_copy
+def test_stage_rejects_tampered_bytes(tmp_path):
+    from netmedic.helper_main import StagingError, _stage_verified_bytes
 
-    src = tmp_path / "src.sh"
-    _write_source(src, b"#!/bin/sh\necho hi\n")
     with pytest.raises(StagingError, match="integrity"):
-        _stage_verified_copy(str(src), "0" * 64, str(tmp_path / "stage"))
+        _stage_verified_bytes(b"#!/bin/sh\necho hi\n", "0" * 64, str(tmp_path / "stage"))
 
 
 def test_stage_refuses_symlink_and_file(tmp_path):
-    from netmedic.helper_main import StagingError, _stage_verified_copy
+    from netmedic.helper_main import StagingError, _stage_verified_bytes
 
     real = tmp_path / "real"
     real.mkdir()
     link = tmp_path / "link"
     link.symlink_to(real, target_is_directory=True)
-    src = tmp_path / "src.sh"
-    digest = _write_source(src, b"#!/bin/sh\necho hi\n")
+    content = b"#!/bin/sh\necho hi\n"
+    digest = hashlib.sha256(content).hexdigest()
     with pytest.raises(StagingError):
-        _stage_verified_copy(str(src), digest, str(link))
+        _stage_verified_bytes(content, digest, str(link))
     afile = tmp_path / "afile"
     afile.write_text("x")
     with pytest.raises(StagingError):
-        _stage_verified_copy(str(src), digest, str(afile))
+        _stage_verified_bytes(content, digest, str(afile))
 
 
 def test_exec_uses_staged_copy_not_source(tmp_path, monkeypatch):
-    from netmedic.helper_main import _execute_vpn_script
+    import netmedic.helper_main as hm
 
     src = tmp_path / "openvpn-install.sh"
     digest = _write_source(src, b"#!/bin/sh\necho staged\n")
-    # Unit scope: pin the root trust anchor to this temp file.
-    monkeypatch.setattr("netmedic.helper_main.PINNED_VPN_INSTALL_SHA256", digest)
+    # Unit scope: pin the root trust anchor and path to this temp file.
+    monkeypatch.setattr(hm, "PINNED_VPN_INSTALL_SHA256", digest)
+    monkeypatch.setitem(hm.VPN_SCRIPT_PATHS, "openvpn-install", str(src))
     stage = tmp_path / "stage"
     captured = {}
 
@@ -456,9 +440,9 @@ def test_exec_uses_staged_copy_not_source(tmp_path, monkeypatch):
         m.stderr = ""
         return m
 
-    monkeypatch.setattr("netmedic.helper_main._run_argv", fake_run)
-    res = _execute_vpn_script(
-        ["__vpn_script__", str(src), digest, "MENU_OPTION=1"],
+    monkeypatch.setattr(hm, "_run_argv", fake_run)
+    res = hm._execute_vpn_script(
+        ["__vpn_script__", "openvpn-install", "MENU_OPTION=1"],
         timeout=10,
         staging_dir=str(stage),
     )
@@ -473,27 +457,30 @@ def test_exec_uses_staged_copy_not_source(tmp_path, monkeypatch):
     assert list(stage.glob("sealed-*.sh")) == []
 
 
-def test_exec_rejects_non_pinned_hash(tmp_path):
-    from netmedic.helper_main import _execute_vpn_script
+def test_exec_rejects_non_pinned_hash(tmp_path, monkeypatch):
+    import netmedic.helper_main as hm
 
     src = tmp_path / "openvpn-install.sh"
     digest = _write_source(src, b"#!/bin/sh\necho staged\n")
+    monkeypatch.setitem(hm.VPN_SCRIPT_PATHS, "openvpn-install", str(src))
     # Do NOT patch pin: temp digest != real pin → integrity abort.
-    res = _execute_vpn_script(
-        ["__vpn_script__", str(src), digest], timeout=10, staging_dir=str(tmp_path / "stageX")
+    res = hm._execute_vpn_script(
+        ["__vpn_script__", "openvpn-install"], timeout=10, staging_dir=str(tmp_path / "stageX")
     )
     assert res["ok"] is False
     assert "pin mismatch" in res["message"].lower() or "security abort" in res["message"].lower()
+    assert digest  # source bytes are valid; only the pin differs
 
 
 def test_exec_real_harmless_script(tmp_path, monkeypatch):
-    from netmedic.helper_main import _execute_vpn_script
+    import netmedic.helper_main as hm
 
     src = tmp_path / "openvpn-install.sh"
     digest = _write_source(src, b"#!/bin/sh\necho hello-from-staged\n")
-    monkeypatch.setattr("netmedic.helper_main.PINNED_VPN_INSTALL_SHA256", digest)
-    res = _execute_vpn_script(
-        ["__vpn_script__", str(src), digest], timeout=10, staging_dir=str(tmp_path / "stage2")
+    monkeypatch.setattr(hm, "PINNED_VPN_INSTALL_SHA256", digest)
+    monkeypatch.setitem(hm.VPN_SCRIPT_PATHS, "openvpn-install", str(src))
+    res = hm._execute_vpn_script(
+        ["__vpn_script__", "openvpn-install"], timeout=10, staging_dir=str(tmp_path / "stage2")
     )
     assert res["ok"] is True
     assert "hello-from-staged" in (res["details"] or "")

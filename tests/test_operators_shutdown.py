@@ -11,7 +11,7 @@ def test_revoke_client_verification():
 
     with patch.object(
         op,
-        "_execute_verified_script",
+        "_run_vpn_script",
         return_value=MagicMock(success=True, stdout="", stderr=""),
     ):
         with patch.object(op, "list_clients") as mock_list:
