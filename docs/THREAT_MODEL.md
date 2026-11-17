@@ -2,7 +2,7 @@
 
 ## Scope
 
-NetMedic is a single-user desktop privileged operations platform. This document describes trust boundaries for v1.6.0 (Phase D helper cutover + honest-repair ResultCode), reaffirmed through v1.8.1 (validator unification, generated policy, headless repair — trust boundaries unchanged; v2.0 D-Bus direction in `DBUS_DESIGN.md`).
+NetMedic is a single-user desktop privileged operations platform. This document describes trust boundaries for v1.6.0 (Phase D helper cutover + honest-repair ResultCode), reaffirmed through v1.8.3 (validator unification, generated policy, headless repair, vendored VPN installer, typed VPN verbs, artifact delivery, keep_auth split — trust boundaries unchanged; v2.0 D-Bus direction in `DBUS_DESIGN.md`).
 
 ## Actors
 
