@@ -30,6 +30,13 @@ All notable changes to NetMedic Linux are documented here.
 
 ### Changed
 - `HELPER_VERSION` 1.8.1 → 1.8.2 (helper code and its trust anchor changed).
+
+### Known limitations
+- **VPN no funcional hasta Fase 2b/3.** La supply chain está cerrada (instalador
+  vendorizado y pinneado), pero la interfaz env/menú que NetMedic envía al script no coincide
+  con el CLI no interactivo del commit pineado (`DNS=3` exige nombre de proveedor; el menú de
+  revocación es 3, no 2). Las operaciones install/add/revoke fallan hasta que la Fase 3
+  construya argv sobre `install`/`client add`/`client revoke`. No etiquetar como "VPN arreglado".
 - `install-polkit-policy.sh` and the Debian rules install the vendored
   script; `pyproject.toml` ships it as package data. Re-run the policy
   installer so the system copy matches the new pin.
