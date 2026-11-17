@@ -2,6 +2,17 @@
 
 All notable changes to NetMedic Linux are documented here.
 
+## [Unreleased] — F5 keep_auth for high-risk verbs
+
+### Security
+- `change-dns` and `restart-adapter` now use `auth_admin` (no keep window):
+  polkit re-prompts on every invocation. `flush-dns` and `renew-ip` keep
+  `auth_admin_keep`.
+- GUI `on_restart_adapter` confirmation now names the detected interface.
+
+### Changed
+- Policy XML regenerated (allow_active auth_admin for the two high-risk verbs).
+
 ## [Unreleased] — F3 typed VPN verbs on the vendored CLI
 
 ### Security

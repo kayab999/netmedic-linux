@@ -65,3 +65,15 @@ an item without pasting the literal output next to it.
   ```
   Expected: install completes (service RUNNING); add creates PKI entry and delivers `.ovpn`; revoke marks client revoked. Verify the `.ovpn` lands in `~/.local/share/netmedic/vpn-clients/` mode 0600 and `artifact` is absent from journal/audit log.
 
+
+## F5 — keep_auth=False for high-risk verbs
+
+- [ ] **Re-prompt on every invocation.** Run `change-dns` and `restart-adapter`
+  twice in a row within 5 minutes. Expected: polkit asks for the password
+  both times (no `auth_admin_keep` window). `flush-dns` and `renew-ip` keep
+  the 5-minute window (single prompt).
+  ```
+  pkaction --action-id com.kayab.netmedic.change-dns --verbose | grep implicit
+  pkaction --action-id com.kayab.netmedic.restart-adapter --verbose | grep implicit
+  ```
+  Expected: `auth_admin` (not `auth_admin_keep`).
