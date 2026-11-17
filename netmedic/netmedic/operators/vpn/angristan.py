@@ -1,8 +1,10 @@
 import logging
+import os
 import re
 from pathlib import Path
 
-from netmedic.models import CommandResult, NetResult, ResultCode
+from netmedic.config import Config
+from netmedic.models import NetResult, ResultCode
 from netmedic.operators.vpn.base import VPNOperator, VPNClient
 from netmedic.operators.base import OperatorStatus
 from netmedic.system import CommandRunner
@@ -59,25 +61,6 @@ class AngristanOperator(VPNOperator):
     def _installed(self) -> bool:
         return Path(self.INSTALL_MARKER_PATH).is_file()
 
-    def _run_vpn_script(self, env_vars: list, timeout: int) -> CommandResult:
-        """Ask the helper to run the vendored installer by fixed script id.
-
-        The helper resolves the id, verifies the pin, stages the bytes in a
-        root-owned directory and executes only that copy. No path or hash is
-        sent from here.
-        """
-        env_map = {}
-        for item in env_vars:
-            if not isinstance(item, str) or "=" not in item:
-                return CommandResult(False, 2, "", f"Invalid env entry: {item!r}", [])
-            key, value = item.split("=", 1)
-            env_map[key] = value
-        return CommandRunner.run_elevated(
-            "vpn-run-script",
-            {"script_id": self.SCRIPT_ID, "env": env_map},
-            timeout=timeout,
-        )
-
     def check_status(self) -> NetResult:
         try:
             if not self._installed():
@@ -97,19 +80,18 @@ class AngristanOperator(VPNOperator):
             return NetResult(self.name, False, OperatorStatus.ERROR.value, details=str(e))
 
     def install(self) -> NetResult:
-        env_vars = [
-            "APPROVE_INSTALL=y",
-            "APPROVE_IP=y",
-            "IPV6_SUPPORT=n",
-            "PORT_CHOICE=1",     # UDP 1194
-            "PROTOCOL_CHOICE=1", # UDP
-            "DNS=3",             # Cloudflare (1.1.1.1)
-            "COMPRESSION_ENABLED=n",
-            "CUSTOMIZE_ENC=n"
-        ]
-
         logger.info("Starting installation of %s", self.slug)
-        res = self._run_vpn_script(env_vars, timeout=300)
+        res = CommandRunner.run_elevated(
+            "vpn-install",
+            {
+                "port": 1194,
+                "protocol": "udp",
+                "dns": "cloudflare",
+                "client_ipv6": False,
+                "client": "client",
+            },
+            timeout=300,
+        )
 
         if not res.success:
             return NetResult(self.name, False, "Installation failed", details=res.stderr)
@@ -180,16 +162,33 @@ class AngristanOperator(VPNOperator):
                 if c.name == name and c.active:
                     return NetResult(self.name, False, f"Client '{name}' already exists")
 
-        env_vars = [
-            "MENU_OPTION=1",
-            f"CLIENT={name}",
-            "PASS=1",
-        ]
         logger.info("Adding VPN client: %s", name)
-        res = self._run_vpn_script(env_vars, timeout=60)
+        res = CommandRunner.run_elevated(
+            "vpn-add-client", {"name": name}, timeout=60
+        )
 
         if not res.success:
             return NetResult(self.name, False, "Failed to execute add-client script", details=res.stderr)
+
+        # F4: persist the delivered .ovpn under the user data dir (0700/0600).
+        if res.artifact:
+            try:
+                client_dir = Config.get_data_dir() / "vpn-clients"
+                client_dir.mkdir(parents=True, exist_ok=True)
+                client_dir.chmod(0o700)
+                target = client_dir / f"{name}.ovpn"
+                fd = os.open(
+                    str(target),
+                    os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                    0o600,
+                )
+                try:
+                    os.write(fd, res.artifact.encode("utf-8"))
+                    os.fsync(fd)
+                finally:
+                    os.close(fd)
+            except OSError as exc:
+                logger.warning("Could not persist .ovpn for %s: %s", name, exc)
 
         # Validación post-operación: Verificar que el cliente aparezca en el índice
         verify_res = self.list_clients()
@@ -204,12 +203,10 @@ class AngristanOperator(VPNOperator):
         if not self._validate_client_name(name):
             return NetResult(self.name, False, "Invalid client name (use a-z, 0-9, -, _)")
 
-        env_vars = [
-            "MENU_OPTION=2",
-            f"CLIENT={name}",
-        ]
         logger.info("Revoking VPN client: %s", name)
-        res = self._run_vpn_script(env_vars, timeout=60)
+        res = CommandRunner.run_elevated(
+            "vpn-revoke-client", {"name": name}, timeout=60
+        )
 
         if not res.success:
             return NetResult(self.name, False, "Failed to revoke client", details=res.stderr)
