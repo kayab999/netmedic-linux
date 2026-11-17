@@ -226,6 +226,8 @@ def _stage_verified_bytes(data: bytes, expected: str, staging_dir: str = ROOT_ST
 
 # F2: generous cap for the vendored installer (147 KiB at pin time).
 VPN_SCRIPT_MAX_BYTES = 1 << 20
+# Separate (smaller) cap for a delivered .ovpn artifact.
+VPN_ARTIFACT_MAX_BYTES = 256 * 1024
 
 
 def _read_vpn_script(script_id: str) -> bytes:
@@ -323,6 +325,7 @@ def _run_argv(argv: List[str], timeout: Optional[int]) -> subprocess.CompletedPr
     limit = timeout or 60
     proc = subprocess.Popen(  # noqa: S603 (fixed argv from VerbPlan allowlist; no shell)
         argv,
+        stdin=subprocess.DEVNULL,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
@@ -473,8 +476,6 @@ def _execute_vpn_cli(
         return {"ok": False, "message": str(exc), "details": None}
 
     # F3: fixed minimal env, fixed PATH, explicit bash (survives noexec mounts).
-    cmd = ["env", "-i", f"PATH={FIXED_PATH}", *extra_flags[:0], FIXED_BASH, staged, *script_args, *extra_flags]
-    # Reorder: flags must follow the subcommand, and --output belongs to `client add`.
     cmd = ["env", "-i", f"PATH={FIXED_PATH}", FIXED_BASH, staged, *script_args, *extra_flags]
     try:
         proc = _run_argv(cmd, timeout)
@@ -503,9 +504,9 @@ def _execute_vpn_cli(
             fd = os.open(out_path, os.O_RDONLY | os.O_NOFOLLOW)
             try:
                 st = os.fstat(fd)
-                if stat.S_ISREG(st.st_mode) and 0 < st.st_size <= VPN_SCRIPT_MAX_BYTES:
+                if stat.S_ISREG(st.st_mode) and 0 < st.st_size <= VPN_ARTIFACT_MAX_BYTES:
                     chunks: List[bytes] = []
-                    remaining = VPN_SCRIPT_MAX_BYTES + 1
+                    remaining = VPN_ARTIFACT_MAX_BYTES + 1
                     while remaining > 0:
                         block = os.read(fd, min(65536, remaining))
                         if not block:
@@ -513,7 +514,7 @@ def _execute_vpn_cli(
                         chunks.append(block)
                         remaining -= len(block)
                     raw = b"".join(chunks)
-                    if len(raw) <= VPN_SCRIPT_MAX_BYTES:
+                    if len(raw) <= VPN_ARTIFACT_MAX_BYTES:
                         artifact = raw.decode("utf-8", errors="replace")
             finally:
                 try:
