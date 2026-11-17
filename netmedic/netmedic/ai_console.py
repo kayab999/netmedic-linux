@@ -187,7 +187,15 @@ class AIConsoleController:
 
         action = result.get("action")
         params = result.get("params", {})
-        
+        if not isinstance(params, dict):
+            self._show_error_card("Invalid params from AI (not an object).")
+            return
+
+        ok, err = self._validate_proposed_params(action, params)
+        if not ok:
+            self._show_error_card(err)
+            return
+
         human_explanation = self._translate_to_human(action, params)
 
         preview = Gtk.Frame()
@@ -253,6 +261,54 @@ class AIConsoleController:
         self.preview_box.pack_start(preview, False, False, 0)
         self.preview_box.show_all()
 
+    def _validate_proposed_params(self, action, params):
+        """Validate AI-proposed params before showing them (H6).
+
+        Returns (ok, error_message). Uses the same validators as the helper
+        so the dialog never displays raw, unvalidated model output.
+        """
+        from netmedic.validators import (
+            validate_client_name,
+            validate_conn_name,
+            validate_iface,
+            validate_service,
+        )
+        from netmedic.helper_verbs import validate_dns
+
+        if action in ("change_dns",):
+            server = params.get("server")
+            if server is not None:
+                try:
+                    validate_dns(server)
+                except Exception as exc:  # noqa: BLE001
+                    return False, f"Invalid DNS server proposed: {exc}"
+        if action in ("restart_adapter",):
+            iface = params.get("iface")
+            if iface is not None:
+                try:
+                    validate_iface(iface)
+                except Exception as exc:  # noqa: BLE001
+                    return False, f"Invalid interface proposed: {exc}"
+        if action in ("vpn_create_client", "vpn_add_client"):
+            name = params.get("name") or params.get("client")
+            if name is not None:
+                try:
+                    validate_client_name(name)
+                except Exception as exc:  # noqa: BLE001
+                    return False, f"Invalid client name proposed: {exc}"
+        if action in ("change_connection", "connect"):
+            conn = params.get("connection") or params.get("conn")
+            if conn is not None:
+                try:
+                    validate_conn_name(conn)
+                except Exception as exc:  # noqa: BLE001
+                    return False, f"Invalid connection name proposed: {exc}"
+        # Generic: reject leading-dash values (option injection).
+        for key, value in params.items():
+            if isinstance(value, str) and value.startswith("-"):
+                return False, f"Invalid value for {key}: leading dash"
+        return True, ""
+
     def _confirm_and_execute(self, action, params):
         if self._execute_in_flight:
             return
@@ -264,17 +320,24 @@ class AIConsoleController:
             return
 
         # Second chance for high blast-radius actions (matches Infrastructure tab UX).
+        # Fail-closed: if no confirmation dialog is available, never execute.
         if is_disruptive(action):
             ask = getattr(self.main_window, "ask_confirmation", None)
-            if callable(ask):
-                title = f"Authorize AI action: {action}?"
-                message = (
-                    "This operation can disrupt network connectivity or security settings. "
-                    "Continue only if you trust this proposal. "
-                    f"Arguments: {self._format_args(params)}"
-                )
-                if not ask(title, message):
-                    return
+            if not callable(ask):
+                if hasattr(self.main_window, "append_log"):
+                    self.main_window.append_log(
+                        f"❌ AI [{action}]: blocked (no confirmation dialog available)"
+                    )
+                logging.warning("AI action %s blocked: no ask_confirmation callable", action)
+                return
+            title = f"Authorize AI action: {action}?"
+            message = (
+                "This operation can disrupt network connectivity or security settings. "
+                "Continue only if you trust this proposal. "
+                f"Arguments: {self._format_args(params)}"
+            )
+            if not ask(title, message):
+                return
 
         self._execute_in_flight = True
         self.main_window.set_busy(True, f"AI: {action}...")

@@ -133,7 +133,7 @@ See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for details.
 
 ## Security
 
-- Privileged IPC actions require PolicyKit authorization, session token, and `confirmed=true`
+- Root access is gated by the polkit helper (`auth_admin`/`auth_admin_keep`); the session token, `confirmed=true` and the MCP mutating gate protect the user-facing API only and are not an authentication boundary against same-UID processes
 - Single action catalog maps GUI, MCP, and AI to the same policy surface
 - Structured audit log at `~/.local/state/netmedic/audit.log` (mode 600)
 - Commands requiring root use `pkexec` (no setuid)

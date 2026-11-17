@@ -2,6 +2,18 @@
 
 All notable changes to NetMedic Linux are documented here.
 
+## [Unreleased] — F3c cierres (hotfix)
+
+### Security
+- AI pilot confirmation is now fail-closed: disruptive actions without an
+  invocable dialog are not executed (A).
+- README no longer claims IPC token/`confirmed` as root protection (B).
+- `SECURITY.md`: only 1.8.x supported; <=1.6.0 affected (C).
+- `COMPLIANCE_MATRIX.md`: ISO control column + honest status; model hash test
+  and MCP gate test cited (D).
+- mypy CI command verified clean (13 modules); pip-audit against lock still
+  fails on Pillow 12.3.0 (H4 open).
+
 ## [Unreleased] — F7 AI supply chain (partial)
 
 ### Security
