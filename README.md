@@ -12,7 +12,7 @@ Professional network diagnostics, repair, and infrastructure management for Linu
 |------|-------------|
 | **Smart Repair** | Automated diagnostics, DNS flush, DHCP renewal |
 | **Infrastructure** | Firewall toggle (UFW), TCP/IP stack reset, adapter cycling |
-| **VPN Operator** | OpenVPN (Angristan) install with SHA256 integrity verification |
+| **VPN Operator** | OpenVPN (Angristan) install with a vendored, root-pinned installer |
 | **AI Pilot** *(optional)* | Natural-language commands via Ctrl+Space palette (Nandi model) |
 | **Security** | Polkit IPC, action catalog, audit log, session tokens, singleton locking |
 | **Automation** | MCP server and headless IPC daemon for scripting and agents |

@@ -36,7 +36,7 @@ NetMedic is a single-user desktop privileged operations platform. This document 
 9. **Structured audit log** — Privileged IPC attempts append JSON lines; session tokens redacted. The helper also emits one root-side journal record per verb (`journalctl -t netmedic-helper`) with `verb`, `ok`, a validated `pkexec_uid` and a control-character-flattened message, giving an independent root-owned record that same-UID tampering of `audit.log` cannot rewrite.
 10. **Production fail-closed** — `NETMEDIC_SKIP_POLKIT` ignored unless `NETMEDIC_TEST_MODE=1`.
 11. **medic* interface allowlist** — Cleanup only deletes `medic[0-9a-f]{6}` via helper verb `iface-del`.
-12. **VPN script integrity** — Sealed copy + SHA256 re-check inside helper before script exec.
+12. **VPN script integrity (F2)** — The Angristan installer is vendored in the repository and installed root-owned at `/usr/lib/netmedic/scripts/openvpn-install.sh`. The daemon sends only `script_id`; the helper resolves that to the fixed path, reads it with `O_NOFOLLOW`, rejects non-regular/foreign-owned/writable/oversized files, verifies the pinned SHA256, stages a root-owned copy under `/run/netmedic` (0700) and executes only that copy. No runtime download exists.
 13. **System-owned helper** — `/usr/lib/netmedic` + `/usr/libexec/netmedic/helper` installed by policy script (no user venv/PYTHONPATH).
 
 ## Residual risks

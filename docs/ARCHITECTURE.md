@@ -77,7 +77,7 @@ class BaseOperator(ABC):
     def stop(self) -> None: ...  # App-local cleanup only
 ```
 
-VPN operator (`AngristanOperator`) pins script SHA256 before any execution.
+VPN operator (`AngristanOperator`) names a fixed `script_id`; the root helper verifies the SHA256 of the vendored installer before any execution.
 
 ## IPC Security Model (v1.6, reaffirmed v1.8; D-Bus direction in `DBUS_DESIGN.md`)
 

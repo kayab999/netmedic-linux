@@ -78,7 +78,7 @@ Examples:
 | `reset-stack` | `reset_tcp_ip_stack` | `systemctl restart NetworkManager` |
 | `toggle-firewall` | `toggle_firewall` | `ufw --force enable` / `disable` |
 | `vpn-list` | `vpn_list_clients` | read EasyRSA index only |
-| `vpn-run-script` | install/add/revoke | re-hash sealed script then exec |
+| `vpn-run-script` | install/add/revoke | resolve `script_id` to the fixed vendored path, verify pin, stage under `/run/netmedic`, exec |
 | `iface-del` | cleanup | only `medic[0-9a-f]{6}` |
 
 Output: single JSON line on stdout:
@@ -149,7 +149,7 @@ pkexec --disable-internal-agent /usr/libexec/netmedic/helper flush-dns
 1. ✅ Production elevation only via helper; `require_root=True` blocked without `NETMEDIC_ALLOW_LEGACY_ELEVATION`
 2. ✅ Single interactive polkit: IPC skips polkit when helper active; `pkexec helper` is the prompt
 3. ✅ System install copies helper modules to `/usr/lib/netmedic` (no venv/repo path)
-4. ✅ VPN `vpn-run-script` re-hashes under helper before exec
+4. ✅ VPN `vpn-run-script` resolves the fixed `script_id`, verifies the vendored installer pin and stages a root-owned copy before exec
 5. ⏳ deb/rpm packaging still open (Phase packaging track)
 
 ## Threat model impact

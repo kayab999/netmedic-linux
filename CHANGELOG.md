@@ -2,6 +2,47 @@
 
 All notable changes to NetMedic Linux are documented here.
 
+## [Unreleased] — F2 vendored VPN installer
+
+### Security
+- **Supply chain (F2):** the Angristan installer is vendored at
+  `netmedic/netmedic/data/vpn/openvpn-install.sh` (commit
+  `9c966d4d043a0340503d6df577aa174a68468aed`, SHA256
+  `e0ac8731…`) and installed root-owned as
+  `/usr/lib/netmedic/scripts/openvpn-install.sh`. The previous runtime
+  `curl` download and the user-writable `~/.local/share/netmedic/operators`
+  copy are gone.
+- **Single trust anchor:** `helper_verbs.PINNED_VPN_INSTALL_SHA256` is now
+  the SHA256 of the vendored bytes. The old value (`65c3b53f…`) did not
+  match the pinned commit, so installs could never pass integrity; a
+  guardian test recomputes the repo file hash to keep all three values
+  (file, pin, provenance) in sync.
+- **Caller path/hash removed:** `plan_verb("vpn-run-script")` accepts only
+  `script_id`; `script` and `expected_sha256` are rejected. The helper
+  resolves the id to a fixed path, reads it with `O_NOFOLLOW`, rejects
+  non-regular/foreign-owned/writable/oversized files, verifies the pin over
+  the bytes actually read, stages a root-owned copy in `/run/netmedic`
+  (0700) and executes only that copy. Env pairs are re-validated at the root
+  side even if the planner is bypassed in-process.
+- The daemon no longer hashes, seals or downloads anything; `check_status`,
+  `start_service` and `restart_service` use `/etc/openvpn/server/server.conf`
+  as the installed marker instead of the user-space script copy.
+
+### Changed
+- `HELPER_VERSION` 1.8.1 → 1.8.2 (helper code and its trust anchor changed).
+
+### Known limitations
+- **VPN no funcional hasta Fase 2b/3.** La supply chain está cerrada (instalador
+  vendorizado y pinneado), pero la interfaz env/menú que NetMedic envía al script no coincide
+  con el CLI no interactivo del commit pineado (`DNS=3` exige nombre de proveedor; el menú de
+  revocación es 3, no 2). Las operaciones install/add/revoke fallan hasta que la Fase 3
+  construya argv sobre `install`/`client add`/`client revoke`. No etiquetar como "VPN arreglado".
+- `install-polkit-policy.sh` and the Debian rules install the vendored
+  script; `pyproject.toml` ships it as package data. Re-run the policy
+  installer so the system copy matches the new pin.
+- The `env` channel is still transitional: the pinned commit's non-interactive
+  CLI (`install`, `client add`, `client revoke`) replaces it in F3.
+
 ## [Unreleased] — F1 helper hardening
 
 ### Security

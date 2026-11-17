@@ -8,8 +8,10 @@ SRC_POLICY="$ROOT/assets/com.kayab.netmedic.policy"
 DEST_POLICY="/usr/share/polkit-1/actions/com.kayab.netmedic.policy"
 LIB_DIR="/usr/lib/netmedic"
 PKG_DIR="$LIB_DIR/netmedic"
+SCRIPTS_DIR="$LIB_DIR/scripts"
 LIBEXEC_DIR="/usr/libexec/netmedic"
 HELPER_WRAPPER="$LIBEXEC_DIR/helper"
+VPN_INSTALLER_SRC="$ROOT/netmedic/netmedic/data/vpn/openvpn-install.sh"
 
 if [[ ! -f "$SRC_POLICY" ]]; then
   echo "Missing policy source: $SRC_POLICY" >&2
@@ -19,6 +21,11 @@ fi
 HELPER_SRC="$ROOT/netmedic/netmedic"
 if [[ ! -f "$HELPER_SRC/helper_main.py" || ! -f "$HELPER_SRC/helper_verbs.py" || ! -f "$HELPER_SRC/validators.py" || ! -f "$HELPER_SRC/action_catalog.py" ]]; then
   echo "Missing helper sources under $HELPER_SRC" >&2
+  exit 1
+fi
+# F2: the installer is vendored; never download it at install or run time.
+if [[ ! -f "$VPN_INSTALLER_SRC" ]]; then
+  echo "Missing vendored VPN installer: $VPN_INSTALLER_SRC" >&2
   exit 1
 fi
 
@@ -44,6 +51,10 @@ sudo install -o root -g root -m 0644 "$HELPER_SRC/helper_verbs.py" "$PKG_DIR/hel
 sudo install -o root -g root -m 0644 "$HELPER_SRC/helper_main.py" "$PKG_DIR/helper_main.py"
 sudo install -o root -g root -m 0644 "$HELPER_SRC/validators.py" "$PKG_DIR/validators.py"
 sudo install -o root -g root -m 0644 "$HELPER_SRC/action_catalog.py" "$PKG_DIR/action_catalog.py"
+# F2: vendored installer at the fixed path the helper resolves by script_id.
+echo "Installing vendored VPN installer → $SCRIPTS_DIR/openvpn-install.sh"
+sudo install -d -o root -g root -m 0755 "$SCRIPTS_DIR"
+sudo install -o root -g root -m 0644 "$VPN_INSTALLER_SRC" "$SCRIPTS_DIR/openvpn-install.sh"
 # Launcher for -I mode (-I ignores PYTHONPATH, so sys.path is set explicitly).
 sudo tee "$LIB_DIR/_run_helper.py" >/dev/null <<EOF
 """Root-owned launcher: fixed sys.path, isolated mode safe."""
@@ -95,6 +106,7 @@ echo
 echo "Install complete."
 echo "  Helper:  $HELPER_WRAPPER"
 echo "  Library: $PKG_DIR"
+echo "  Scripts: $SCRIPTS_DIR"
 echo "  Policy:  $DEST_POLICY"
 echo "Elevation auto-uses helper when present. Force legacy (tests only):"
 echo "  NETMEDIC_USE_HELPER=0 NETMEDIC_ALLOW_LEGACY_ELEVATION=1"

@@ -37,7 +37,7 @@ These require administrator authentication via `pkexec` and may cause brief disc
 
 ### VPN Management
 
-1. **Install OpenVPN** — Downloads and verifies the Angristan installer (SHA256 pinned).
+1. **Install OpenVPN** — Runs the vendored Angristan installer shipped with NetMedic (no runtime download; SHA256 pinned at the helper).
 2. **Add Client** — Creates a new VPN client certificate.
 3. **Revoke Client** — Revokes access; verified against the PKI index.
 

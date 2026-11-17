@@ -12,6 +12,10 @@ override_dh_auto_install:
 	install -m 644 netmedic/netmedic/helper_main.py debian/netmedic/usr/lib/netmedic/netmedic/
 	install -m 644 netmedic/netmedic/helper_verbs.py debian/netmedic/usr/lib/netmedic/netmedic/
 	printf '%s\n' '"""NetMedic helper package."""' > debian/netmedic/usr/lib/netmedic/netmedic/__init__.py
+	# F2: vendored VPN installer at the fixed path resolved by script_id.
+	install -d debian/netmedic/usr/lib/netmedic/scripts
+	install -m 644 netmedic/netmedic/data/vpn/openvpn-install.sh \
+	  debian/netmedic/usr/lib/netmedic/scripts/openvpn-install.sh
 	install -d debian/netmedic/usr/libexec/netmedic
 	printf '%s\n' \
 	  '#!/bin/sh' \
