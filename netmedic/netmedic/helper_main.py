@@ -31,7 +31,6 @@ from netmedic.helper_verbs import (
     HELPER_VERSION,
     INDEX_TXT_PATH,
     PINNED_VPN_INSTALL_SHA256,
-    VPN_ALLOWED_ENV_KEYS,
     VPN_SCRIPT_PATHS,
     VerbPlan,
     VerbValidationError,
@@ -423,65 +422,133 @@ FIXED_PATH = "/usr/sbin:/usr/bin:/sbin:/bin"
 FIXED_BASH = "/bin/bash"
 
 
-def _execute_vpn_script(
+def _execute_vpn_cli(
     marker_cmd: List[str], timeout: Optional[int], staging_dir: str = ROOT_STAGE_DIR
 ) -> Dict[str, Any]:
-    # ["__vpn_script__", script_id, KEY=val, ...]
+    # ["__vpn_cli__", <subcommand + flags...>]
     if len(marker_cmd) < 2:
         return {
             "ok": False,
-            "message": "Malformed vpn-run-script plan",
+            "message": "Malformed vpn verb plan",
             "details": None,
         }
-    script_id = marker_cmd[1]
-    env_pairs = marker_cmd[2:]
-    # F2 defense-in-depth: even if plan_verb is bypassed (in-process call),
-    # the root side re-validates every env pair before handing it to env(1).
-    for pair in env_pairs:
-        key, sep, value = pair.partition("=")
-        if not sep or not key or key not in VPN_ALLOWED_ENV_KEYS:
-            return {
-                "ok": False,
-                "message": f"Rejected env pair from plan: {key or pair!r}",
-                "details": None,
-            }
-        if "\n" in value or "\x00" in value or value.startswith("-"):
-            return {
-                "ok": False,
-                "message": f"Rejected env value for {key}",
-                "details": None,
-            }
+    script_args = list(marker_cmd[1:])
+
+    # For `client add`, stage a sealed output path so the root helper (not the
+    # daemon) owns the .ovpn landing spot; the helper reads it back and deletes
+    # it. Root never writes into $HOME.
+    is_add = (
+        len(script_args) >= 2
+        and script_args[0] == "client"
+        and script_args[1] == "add"
+    )
+    out_path: Optional[str] = None
+    extra_flags: List[str] = []
+    if is_add:
+        client_name = script_args[2] if len(script_args) > 2 else "client"
+        try:
+            stage_dir = _ensure_root_stage_dir(staging_dir)
+        except StagingError as exc:
+            return {"ok": False, "message": str(exc), "details": None}
+        fd, out_path = tempfile.mkstemp(
+            prefix=f"{client_name}-", suffix=".ovpn", dir=str(stage_dir)
+        )
+        os.close(fd)
+        try:
+            os.unlink(out_path)
+        except OSError:
+            pass
+        extra_flags = ["--output", out_path]
+
     staged: Optional[str] = None
     try:
-        expected = PINNED_VPN_INSTALL_SHA256
-        data = _read_vpn_script(script_id)
-        staged = _stage_verified_bytes(data, expected, staging_dir)
+        data = _read_vpn_script("openvpn-install")
+        staged = _stage_verified_bytes(data, PINNED_VPN_INSTALL_SHA256, staging_dir)
     except StagingError as exc:
+        if out_path is not None:
+            try:
+                os.unlink(out_path)
+            except OSError:
+                pass
         return {"ok": False, "message": str(exc), "details": None}
-    # F1: fixed minimal env, fixed PATH, explicit bash (also survives /run noexec
-    # since bash reads the file instead of execve on a noexec mount).
-    cmd = ["env", "-i", f"PATH={FIXED_PATH}", *env_pairs, FIXED_BASH, staged]
+
+    # F3: fixed minimal env, fixed PATH, explicit bash (survives noexec mounts).
+    cmd = ["env", "-i", f"PATH={FIXED_PATH}", *extra_flags[:0], FIXED_BASH, staged, *script_args, *extra_flags]
+    # Reorder: flags must follow the subcommand, and --output belongs to `client add`.
+    cmd = ["env", "-i", f"PATH={FIXED_PATH}", FIXED_BASH, staged, *script_args, *extra_flags]
     try:
         proc = _run_argv(cmd, timeout)
     except subprocess.TimeoutExpired:
+        if staged is not None:
+            try:
+                os.unlink(staged)
+            except OSError:
+                pass
+        if out_path is not None:
+            try:
+                os.unlink(out_path)
+            except OSError:
+                pass
         return {"ok": False, "message": f"Timeout ({timeout}s) exceeded", "details": None}
     finally:
+        if staged is not None:
+            try:
+                os.unlink(staged)
+            except OSError:
+                pass
+
+    artifact: Optional[str] = None
+    if proc.returncode == 0 and is_add and out_path is not None and os.path.exists(out_path):
         try:
-            os.unlink(staged)
+            fd = os.open(out_path, os.O_RDONLY | os.O_NOFOLLOW)
+            try:
+                st = os.fstat(fd)
+                if stat.S_ISREG(st.st_mode) and 0 < st.st_size <= VPN_SCRIPT_MAX_BYTES:
+                    chunks: List[bytes] = []
+                    remaining = VPN_SCRIPT_MAX_BYTES + 1
+                    while remaining > 0:
+                        block = os.read(fd, min(65536, remaining))
+                        if not block:
+                            break
+                        chunks.append(block)
+                        remaining -= len(block)
+                    raw = b"".join(chunks)
+                    if len(raw) <= VPN_SCRIPT_MAX_BYTES:
+                        artifact = raw.decode("utf-8", errors="replace")
+            finally:
+                try:
+                    os.close(fd)
+                except OSError:
+                    pass
+        except OSError:
+            artifact = None
+        try:
+            os.unlink(out_path)
         except OSError:
             pass
+        out_path = None
+
+    if out_path is not None:
+        try:
+            os.unlink(out_path)
+        except OSError:
+            pass
+
     if proc.returncode == 0:
-        return {
+        result: Dict[str, Any] = {
             "ok": True,
-            "message": "VPN script completed",
-            "details": (proc.stdout or "").strip()[:500] or None,
+            "message": "VPN command completed",
+            "details": (proc.stdout or "").strip() or None,
         }
+        if artifact is not None:
+            result["artifact"] = artifact
+        return result
     err = (proc.stderr or proc.stdout or "").strip()
     if "dismissed" in err.lower():
         return {"ok": False, "message": "Authentication cancelled by user", "details": err, "code": "cancelled"}
     return {
         "ok": False,
-        "message": err or f"VPN script failed (exit {proc.returncode})",
+        "message": err or f"VPN command failed (exit {proc.returncode})",
         "details": None,
     }
 
@@ -531,8 +598,8 @@ def _execute_plan_inner(plan: VerbPlan, *, timeout: Optional[int] = None) -> Dic
     """Run planned commands; return helper JSON payload."""
     outputs: List[str] = []
     for argv in plan.commands:
-        if argv and argv[0] == "__vpn_script__":
-            return _execute_vpn_script(argv, timeout)
+        if argv and argv[0] == "__vpn_cli__":
+            return _execute_vpn_cli(argv, timeout)
         if argv and argv[0] == "__vpn_list__":
             return _read_vpn_index()
         try:
