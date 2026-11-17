@@ -155,3 +155,22 @@ def test_is_privileged_matches_set():
         assert is_privileged(action)
     for action in SAFE_ACTIONS:
         assert not is_privileged(action)
+
+
+def test_exec_path_argv1_pairs_are_unique():
+    """F3: each (exec.path, argv1) pair must be unique so pkexec disambiguates."""
+    tree = ET.parse(POLICY)
+    root = tree.getroot()
+    pairs = []
+    for action_el in root.iter():
+        if not (action_el.tag.endswith("action") or action_el.tag == "action"):
+            continue
+        annot = {}
+        for child in action_el:
+            if child.tag.endswith("annotate") or child.tag == "annotate":
+                annot[child.get("key") or ""] = (child.text or "").strip()
+        path = annot.get("org.freedesktop.policykit.exec.path")
+        argv1 = annot.get("org.freedesktop.policykit.exec.argv1")
+        if path and argv1:
+            pairs.append((path, argv1))
+    assert len(pairs) == len(set(pairs)), f"duplicate (exec.path, argv1): {pairs}"
