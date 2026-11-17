@@ -154,12 +154,19 @@ def test_schema_matches_catalog(action):
 def test_iface_names_decisive(name):
     # M4 contract: charset match is necessary but not sufficient — a leading
     # dash (option injection) and len > 15 (IFNAMSIZ-1) also reject.
+    # N3 additionally rejects the path components "." and "..".
     from netmedic.helper_verbs import validate_iface
 
     charset_ok = bool(__import__("re").fullmatch(r"[A-Za-z0-9._@+-]+", name))
+    allowed = (
+        charset_ok
+        and not name.startswith("-")
+        and name not in (".", "..")
+        and len(name) <= 15
+    )
     try:
         validate_iface(name)
     except VerbValidationError:
-        assert not (charset_ok and not name.startswith("-") and len(name) <= 15)
+        assert not allowed
     else:
-        assert charset_ok and not name.startswith("-") and len(name) <= 15
+        assert allowed
