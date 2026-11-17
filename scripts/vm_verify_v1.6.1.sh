@@ -43,9 +43,9 @@ echo "== Security regression (dry-run level) =="
 PYTHONPATH="$PWD/netmedic" python3 - <<'PY'
 from netmedic.helper_verbs import plan_verb, VerbValidationError, PINNED_VPN_INSTALL_SHA256
 for desc, fn in [
-    ("caller path", lambda: plan_verb('vpn-run-script', {'script_id': 'openvpn-install', 'script': '/tmp/x.sh', 'env': {}})),
-    ("caller hash", lambda: plan_verb('vpn-run-script', {'script_id': 'openvpn-install', 'expected_sha256': PINNED_VPN_INSTALL_SHA256, 'env': {}})),
-    ("LD_PRELOAD", lambda: plan_verb('vpn-run-script', {'script_id': 'openvpn-install', 'env': {'LD_PRELOAD': '/tmp/x'}})),
+    ("caller path", lambda: plan_verb('vpn-install', {'script': '/tmp/x.sh'})),
+    ("caller hash", lambda: plan_verb('vpn-install', {'expected_sha256': PINNED_VPN_INSTALL_SHA256})),
+    ("LD_PRELOAD", lambda: plan_verb('vpn-install', {'env': {'LD_PRELOAD': '/tmp/x'}})),
     ("traversal", lambda: plan_verb('vpn-list', {'index_path': '/etc/openvpn/../shadow'})),
 ]:
     try:

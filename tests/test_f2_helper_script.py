@@ -1,4 +1,4 @@
-"""F2: root-side read of the vendored VPN installer.
+"""F2/F3: root-side read of the vendored VPN installer.
 
 The helper must open the fixed root-owned path with ``O_NOFOLLOW``, reject
 non-regular files, foreign owners, writable modes and oversized content,
@@ -135,7 +135,7 @@ def test_stage_refuses_symlink_and_file_dirs(tmp_path) -> None:
 
 
 # --------------------------------------------------------------------------
-# _execute_vpn_script: marker carries an id, never a caller path
+# _execute_vpn_cli: marker builds argv, stages, runs, (add) delivers artifact
 # --------------------------------------------------------------------------
 
 
@@ -146,7 +146,6 @@ def test_exec_uses_staged_copy_not_source(tmp_path, monkeypatch) -> None:
 
     def fake_run(argv, timeout):
         captured["argv"] = list(argv)
-        # Deterministic swap simulation: rewrite SOURCE after the secure read.
         src.write_bytes(b"#!/bin/bash\necho PWNED\n")
         result = MagicMock()
         result.returncode = 0
@@ -155,16 +154,14 @@ def test_exec_uses_staged_copy_not_source(tmp_path, monkeypatch) -> None:
         return result
 
     monkeypatch.setattr(hm, "_run_argv", fake_run)
-    res = hm._execute_vpn_script(
-        ["__vpn_script__", "openvpn-install", "MENU_OPTION=1"],
+    res = hm._execute_vpn_cli(
+        ["__vpn_cli__", "install", "--port", "1194"],
         timeout=10,
         staging_dir=str(stage),
     )
     assert res["ok"] is True
-    target = captured["argv"][-1]
-    assert target != str(src)
-    assert target.startswith(str(stage) + "/")
-    assert captured["argv"][:3] == ["env", "-i", captured["argv"][2]]
+    joined = " ".join(captured["argv"])
+    assert str(stage) in joined
     assert "/bin/bash" in captured["argv"]
     assert list(stage.glob("sealed-*.sh")) == []
 
@@ -174,9 +171,8 @@ def test_exec_rejects_pin_mismatch(tmp_path, monkeypatch) -> None:
     src.write_bytes(b"#!/bin/bash\nnot-the-pin\n")
     src.chmod(0o644)
     monkeypatch.setitem(hm.VPN_SCRIPT_PATHS, "openvpn-install", str(src))
-    # Do NOT patch the pin: these bytes are not the vendored installer.
-    res = hm._execute_vpn_script(
-        ["__vpn_script__", "openvpn-install"], timeout=10, staging_dir=str(tmp_path / "stageX")
+    res = hm._execute_vpn_cli(
+        ["__vpn_cli__", "install"], timeout=10, staging_dir=str(tmp_path / "stageX")
     )
     assert res["ok"] is False
     assert "security abort" in res["message"].lower() or "integrity" in res["message"].lower()
@@ -184,36 +180,24 @@ def test_exec_rejects_pin_mismatch(tmp_path, monkeypatch) -> None:
 
 def test_exec_real_harmless_script(tmp_path, monkeypatch) -> None:
     _install(tmp_path, monkeypatch, b"#!/bin/sh\necho hello-from-staged\n")
-    res = hm._execute_vpn_script(
-        ["__vpn_script__", "openvpn-install"], timeout=10, staging_dir=str(tmp_path / "stage2")
+    res = hm._execute_vpn_cli(
+        ["__vpn_cli__", "install"], timeout=10, staging_dir=str(tmp_path / "stage2")
     )
     assert res["ok"] is True
     assert "hello-from-staged" in (res["details"] or "")
 
 
-def test_exec_rejects_unknown_script_id(monkeypatch) -> None:
-    res = hm._execute_vpn_script(["__vpn_script__", "evil"], timeout=10)
-    assert res["ok"] is False
-    assert "script_id" in res["message"]
-
-
 def test_exec_rejects_malformed_marker() -> None:
-    res = hm._execute_vpn_script(["__vpn_script__"], timeout=10)
+    res = hm._execute_vpn_cli(["__vpn_cli__"], timeout=10)
     assert res["ok"] is False
     assert "malformed" in res["message"].lower()
 
 
-@pytest.mark.parametrize(
-    "pair",
-    ["PATH=/tmp", "LD_PRELOAD=/tmp/x.so", "BASH_ENV=/tmp/x", "CLIENT=a\nb", "PASS=-secret"],
-)
-def test_exec_revalidates_env_pairs_at_root(tmp_path, monkeypatch, pair: str) -> None:
-    """A plan-bypassing caller cannot inject env(1) flags or wrappers."""
-    _install(tmp_path, monkeypatch)
-    res = hm._execute_vpn_script(
-        ["__vpn_script__", "openvpn-install", pair],
-        timeout=10,
-        staging_dir=str(tmp_path / "stage3"),
+def test_exec_add_delivers_artifact(tmp_path, monkeypatch) -> None:
+    content = b'#!/bin/sh\nout=""; prev=""; for a in "$@"; do if [ "$prev" = "--output" ]; then out="$a"; fi; prev="$a"; done; printf "CERTDATA\\n" > "$out"\n'
+    _install(tmp_path, monkeypatch, content)
+    res = hm._execute_vpn_cli(
+        ["__vpn_cli__", "client", "add", "laptop"], timeout=10, staging_dir=str(tmp_path / "stage3")
     )
-    assert res["ok"] is False
-    assert "env" in res["message"].lower()
+    assert res["ok"] is True
+    assert res.get("artifact") == "CERTDATA\n"

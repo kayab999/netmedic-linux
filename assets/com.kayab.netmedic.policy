@@ -100,7 +100,7 @@
       <allow_active>auth_admin</allow_active>
     </defaults>
     <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/netmedic/helper</annotate>
-    <annotate key="org.freedesktop.policykit.exec.argv1">vpn-run-script</annotate>
+    <annotate key="org.freedesktop.policykit.exec.argv1">vpn-add-client</annotate>
     <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
   </action>
 
@@ -113,7 +113,7 @@
       <allow_active>auth_admin</allow_active>
     </defaults>
     <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/netmedic/helper</annotate>
-    <annotate key="org.freedesktop.policykit.exec.argv1">vpn-run-script</annotate>
+    <annotate key="org.freedesktop.policykit.exec.argv1">vpn-revoke-client</annotate>
     <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
   </action>
 
@@ -152,7 +152,7 @@
       <allow_active>auth_admin</allow_active>
     </defaults>
     <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/netmedic/helper</annotate>
-    <annotate key="org.freedesktop.policykit.exec.argv1">vpn-run-script</annotate>
+    <annotate key="org.freedesktop.policykit.exec.argv1">vpn-install</annotate>
     <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
   </action>
 

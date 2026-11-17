@@ -30,7 +30,7 @@ def get_audit_log_path():
     return Config.get_state_dir() / "audit.log"
 
 
-_SENSITIVE_SUBSTR = ("password", "pass", "token", "key", "secret", "auth")
+_SENSITIVE_SUBSTR = ("password", "pass", "token", "key", "secret", "auth", "artifact")
 _MAX_PARAM_STR = 500
 
 

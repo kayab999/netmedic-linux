@@ -243,6 +243,7 @@ class CommandRunner:
                         msg = str(payload.get("message") or "")
                         details = payload.get("details")
                         code = payload.get("code")
+                        artifact = payload.get("artifact")
                         out = "" if details is None else str(details)
                         # PR2: propagate cancelled via code, not locale string
                         if not ok and code == "cancelled":
@@ -256,6 +257,7 @@ class CommandRunner:
                             out if ok else result.stdout,
                             "" if ok else msg,
                             result.command,
+                            artifact if (isinstance(artifact, str) or artifact is None) else None,
                         )
                 except json.JSONDecodeError:
                     pass

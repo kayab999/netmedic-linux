@@ -47,8 +47,7 @@ an item without pasting the literal output next to it.
   ```
   sudo cp /usr/lib/netmedic/scripts/openvpn-install.sh /tmp/vpn.bak
   echo '# tampered' | sudo tee -a /usr/lib/netmedic/scripts/openvpn-install.sh
-  pkexec /usr/libexec/netmedic/helper vpn-run-script --execute \
-    --json '{"script_id":"openvpn-install","env":{}}'
+  pkexec /usr/libexec/netmedic/helper vpn-install --execute --json '{"port":1194,"protocol":"udp","dns":"cloudflare"}'
   sudo cp /tmp/vpn.bak /usr/lib/netmedic/scripts/openvpn-install.sh
   ```
   Expected: helper exits non-zero with an `integrity` message; no script
@@ -58,8 +57,11 @@ an item without pasting the literal output next to it.
   access and confirm the VPN panel never invokes `curl` for the installer
   (`grep -R SCRIPT_URL` returns nothing in the installed helper).
 
-- [ ] **VPN install/add/revoke end-to-end (deferred to Fase 2b/3).** The current
-  `env` channel is transitional and does not drive the pinned commit's
-  non-interactive CLI. Do not sign this item off until Phase 3 ships the
-  `install`/`client add`/`client revoke` argv verbs.
+- [ ] **VPN install/add/revoke end-to-end (Fase 3).**
+  ```
+  pkexec /usr/libexec/netmedic/helper vpn-install --execute --json '{"port":1194,"protocol":"udp","dns":"cloudflare","client_ipv6":false,"client":"client"}'
+  pkexec /usr/libexec/netmedic/helper vpn-add-client --execute --json '{"name":"laptop"}'
+  pkexec /usr/libexec/netmedic/helper vpn-revoke-client --execute --json '{"name":"laptop"}'
+  ```
+  Expected: install completes (service RUNNING); add creates PKI entry and delivers `.ovpn`; revoke marks client revoked. Verify the `.ovpn` lands in `~/.local/share/netmedic/vpn-clients/` mode 0600 and `artifact` is absent from journal/audit log.
 

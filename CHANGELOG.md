@@ -2,6 +2,30 @@
 
 All notable changes to NetMedic Linux are documented here.
 
+## [Unreleased] — F3 typed VPN verbs on the vendored CLI
+
+### Security
+- **No caller env dict (H3):** `VPN_ALLOWED_ENV_KEYS` and `_validate_vpn_script_env` are
+  gone. `vpn-run-script` is removed; replaced by `vpn-install`, `vpn-add-client`,
+  `vpn-revoke-client`, each with its own `exec.argv1`. The helper builds
+  `/bin/bash <staged> <subcommand> <flags>` from validated parameters only; the
+  caller sends no path, hash, or env.
+- **Typed argv:** client name via `validate_client_name`; port 1-65535; protocol
+  `udp`/`tcp`; dns in the closed provider enum. `vpn-revoke-client` always passes
+  `--force`; `uninstall` and `renew` are not exposed.
+- **Artifact delivery (F4):** `vpn-add-client` passes `--output <sealed path>` in
+  `/run/netmedic`; the helper reads the `.ovpn` with `O_NOFOLLOW` + `S_ISREG` +
+  size cap, returns it as the `artifact` JSON field, and deletes the temp file.
+  The daemon writes it with `0600 O_EXCL|O_NOFOLLOW` under
+  `~/.local/share/netmedic/vpn-clients/` (0700). Root never writes `$HOME`.
+  `artifact` is redacted in `audit_log`.
+
+### Changed
+- `HELPER_VERSION` 1.8.2 → 1.8.3.
+- Policy XML regenerated (`vpn-install`, `vpn-add-client`, `vpn-revoke-client`
+  distinct `exec.argv1`); uniqueness test added.
+- `docs/VPN_CONTRACT.md` is the source of truth for the mapping.
+
 ## [Unreleased] — F2 vendored VPN installer
 
 ### Security

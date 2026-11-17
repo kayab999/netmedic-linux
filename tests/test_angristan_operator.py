@@ -9,7 +9,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from netmedic.helper_verbs import plan_verb, validate_service
+from netmedic.helper_verbs import validate_service
 from netmedic.models import CommandResult, NetResult, ResultCode
 from netmedic.operators.base import OperatorStatus
 from netmedic.operators.vpn.angristan import AngristanOperator
@@ -61,7 +61,6 @@ def test_legacy_download_and_hash_surface_is_gone():
     for attr in ("_download_script", "_execute_verified_script", "_verify_integrity"):
         assert not hasattr(AngristanOperator, attr), attr
     assert AngristanOperator.SCRIPT_ID == "openvpn-install"
-    assert plan_verb("vpn-run-script", {"script_id": AngristanOperator.SCRIPT_ID})
 
 
 # --- Install marker ---
@@ -81,7 +80,7 @@ def test_installed_marker_present(installed):
 # --- Helper invocation ---
 
 
-def test_run_vpn_script_sends_only_id_and_env(monkeypatch):
+def test_install_sends_typed_verb(monkeypatch):
     seen = {}
 
     def fake_elevated(verb, args=None, timeout=None, **kwargs):
@@ -93,31 +92,59 @@ def test_run_vpn_script_sends_only_id_and_env(monkeypatch):
         "netmedic.operators.vpn.angristan.CommandRunner.run_elevated",
         staticmethod(fake_elevated),
     )
-    res = AngristanOperator()._run_vpn_script(
-        ["MENU_OPTION=1", "CLIENT=laptop"], timeout=5
-    )
+    op = AngristanOperator()
+    monkeypatch.setattr(op, "check_status", lambda: NetResult(op.name, True, OperatorStatus.RUNNING.value))
+    res = op.install()
 
-    assert res.success is True
-    assert seen["verb"] == "vpn-run-script"
+    assert res.code in (ResultCode.OK, ResultCode.EXECUTED)
+    assert seen["verb"] == "vpn-install"
     assert seen["args"] == {
-        "script_id": "openvpn-install",
-        "env": {"MENU_OPTION": "1", "CLIENT": "laptop"},
+        "port": 1194,
+        "protocol": "udp",
+        "dns": "cloudflare",
+        "client_ipv6": False,
+        "client": "client",
     }
-    # The plan must accept exactly what the operator sends (no path/hash).
-    plan = plan_verb(seen["verb"], seen["args"])
-    assert plan.commands[0][:2] == ["__vpn_script__", "openvpn-install"]
 
 
-def test_run_vpn_script_rejects_bad_env_before_elevation(monkeypatch):
-    elevated = MagicMock()
+def test_add_client_sends_typed_verb(monkeypatch):
+    seen = {}
+
+    def fake_elevated(verb, args=None, timeout=None, **kwargs):
+        seen["verb"] = verb
+        seen["args"] = dict(args or {})
+        return CommandResult(True, 0, "ok", "", [verb])
+
     monkeypatch.setattr(
-        "netmedic.operators.vpn.angristan.CommandRunner.run_elevated", elevated
+        "netmedic.operators.vpn.angristan.CommandRunner.run_elevated",
+        staticmethod(fake_elevated),
     )
-    res = AngristanOperator()._run_vpn_script(["NOEQUALS"], timeout=5)
-    assert res.success is False
-    assert res.returncode == 2
-    assert "env" in res.stderr.lower()
-    elevated.assert_not_called()
+    op = AngristanOperator()
+    monkeypatch.setattr(op, "list_clients", lambda: NetResult(op.name, True, "ok", data=[]))
+    op.add_client("laptop")
+
+    assert seen["verb"] == "vpn-add-client"
+    assert seen["args"] == {"name": "laptop"}
+
+
+def test_revoke_client_sends_typed_verb(monkeypatch):
+    seen = {}
+
+    def fake_elevated(verb, args=None, timeout=None, **kwargs):
+        seen["verb"] = verb
+        seen["args"] = dict(args or {})
+        return CommandResult(True, 0, "ok", "", [verb])
+
+    monkeypatch.setattr(
+        "netmedic.operators.vpn.angristan.CommandRunner.run_elevated",
+        staticmethod(fake_elevated),
+    )
+    op = AngristanOperator()
+    monkeypatch.setattr(op, "list_clients", lambda: NetResult(op.name, True, "ok", data=[VPNClient(name="laptop", active=False)]))
+    op.revoke_client("laptop")
+
+    assert seen["verb"] == "vpn-revoke-client"
+    assert seen["args"] == {"name": "laptop"}
 
 
 # --- Status ---
@@ -165,9 +192,8 @@ def test_install_never_downloads(installed, monkeypatch):
     run = MagicMock()
     monkeypatch.setattr("netmedic.operators.vpn.angristan.CommandRunner.run", run)
     monkeypatch.setattr(
-        installed,
-        "_run_vpn_script",
-        lambda env, timeout: CommandResult(True, 0, "", "", []),
+        "netmedic.operators.vpn.angristan.CommandRunner.run_elevated",
+        staticmethod(lambda verb, args=None, timeout=None, **k: CommandResult(True, 0, "", "", [])),
     )
     monkeypatch.setattr(
         installed,
@@ -180,9 +206,8 @@ def test_install_never_downloads(installed, monkeypatch):
 
 def test_install_failure(installed, monkeypatch):
     monkeypatch.setattr(
-        installed,
-        "_run_vpn_script",
-        lambda env, timeout: CommandResult(False, 1, "", "elev fail", []),
+        "netmedic.operators.vpn.angristan.CommandRunner.run_elevated",
+        staticmethod(lambda verb, args=None, timeout=None, **k: CommandResult(False, 1, "", "elev fail", [])),
     )
     res = installed.install()
     assert res.code not in (ResultCode.OK, ResultCode.EXECUTED)
@@ -191,9 +216,8 @@ def test_install_failure(installed, monkeypatch):
 
 def test_install_service_down(installed, monkeypatch):
     monkeypatch.setattr(
-        installed,
-        "_run_vpn_script",
-        lambda env, timeout: CommandResult(True, 0, "", "", []),
+        "netmedic.operators.vpn.angristan.CommandRunner.run_elevated",
+        staticmethod(lambda verb, args=None, timeout=None, **k: CommandResult(True, 0, "", "", [])),
     )
     monkeypatch.setattr(
         installed,
@@ -207,9 +231,8 @@ def test_install_service_down(installed, monkeypatch):
 
 def test_install_success(installed, monkeypatch):
     monkeypatch.setattr(
-        installed,
-        "_run_vpn_script",
-        lambda env, timeout: CommandResult(True, 0, "", "", []),
+        "netmedic.operators.vpn.angristan.CommandRunner.run_elevated",
+        staticmethod(lambda verb, args=None, timeout=None, **k: CommandResult(True, 0, "", "", [])),
     )
     monkeypatch.setattr(
         installed,
@@ -311,9 +334,8 @@ def test_add_client_execute_fail(installed, monkeypatch):
         installed, "list_clients", lambda: NetResult(installed.name, True, "ok", data=[])
     )
     monkeypatch.setattr(
-        installed,
-        "_run_vpn_script",
-        lambda env, timeout: CommandResult(False, 1, "", "elev fail", []),
+        "netmedic.operators.vpn.angristan.CommandRunner.run_elevated",
+        staticmethod(lambda verb, args=None, timeout=None, **k: CommandResult(False, 1, "", "elev fail", [])),
     )
     res = installed.add_client("laptop")
     assert res.code not in (ResultCode.OK, ResultCode.EXECUTED)
@@ -331,9 +353,8 @@ def test_add_client_success_verified(installed, monkeypatch):
 
     monkeypatch.setattr(installed, "list_clients", fake_list)
     monkeypatch.setattr(
-        installed,
-        "_run_vpn_script",
-        lambda env, timeout: CommandResult(True, 0, "", "", []),
+        "netmedic.operators.vpn.angristan.CommandRunner.run_elevated",
+        staticmethod(lambda verb, args=None, timeout=None, **k: CommandResult(True, 0, "", "", [])),
     )
     res = installed.add_client("laptop")
     assert res.code in (ResultCode.OK, ResultCode.EXECUTED)
@@ -345,9 +366,8 @@ def test_add_client_not_found_after_exec(installed, monkeypatch):
         installed, "list_clients", lambda: NetResult(installed.name, True, "ok", data=[])
     )
     monkeypatch.setattr(
-        installed,
-        "_run_vpn_script",
-        lambda env, timeout: CommandResult(True, 0, "", "", []),
+        "netmedic.operators.vpn.angristan.CommandRunner.run_elevated",
+        staticmethod(lambda verb, args=None, timeout=None, **k: CommandResult(True, 0, "", "", [])),
     )
     res = installed.add_client("ghost")
     assert res.code not in (ResultCode.OK, ResultCode.EXECUTED)
@@ -357,9 +377,8 @@ def test_add_client_not_found_after_exec(installed, monkeypatch):
 def test_revoke_invalid_and_fail(installed, monkeypatch):
     assert installed.revoke_client("bad!").code not in (ResultCode.OK, ResultCode.EXECUTED)
     monkeypatch.setattr(
-        installed,
-        "_run_vpn_script",
-        lambda env, timeout: CommandResult(False, 1, "", "elev fail", []),
+        "netmedic.operators.vpn.angristan.CommandRunner.run_elevated",
+        staticmethod(lambda verb, args=None, timeout=None, **k: CommandResult(False, 1, "", "elev fail", [])),
     )
     res = installed.revoke_client("laptop")
     assert res.code not in (ResultCode.OK, ResultCode.EXECUTED)
@@ -368,9 +387,8 @@ def test_revoke_invalid_and_fail(installed, monkeypatch):
 
 def test_revoke_success_verified(installed, monkeypatch):
     monkeypatch.setattr(
-        installed,
-        "_run_vpn_script",
-        lambda env, timeout: CommandResult(True, 0, "", "", []),
+        "netmedic.operators.vpn.angristan.CommandRunner.run_elevated",
+        staticmethod(lambda verb, args=None, timeout=None, **k: CommandResult(True, 0, "", "", [])),
     )
     monkeypatch.setattr(
         installed,
@@ -384,9 +402,8 @@ def test_revoke_success_verified(installed, monkeypatch):
 
 def test_revoke_not_marked(installed, monkeypatch):
     monkeypatch.setattr(
-        installed,
-        "_run_vpn_script",
-        lambda env, timeout: CommandResult(True, 0, "", "", []),
+        "netmedic.operators.vpn.angristan.CommandRunner.run_elevated",
+        staticmethod(lambda verb, args=None, timeout=None, **k: CommandResult(True, 0, "", "", [])),
     )
     monkeypatch.setattr(
         installed,

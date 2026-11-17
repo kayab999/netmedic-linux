@@ -57,7 +57,7 @@ Overrides are ignored when running as root (fail-closed, warning logged).
 ## 6. Security ops
 
 * Elevation: single path `pkexec /usr/libexec/netmedic/helper <verb> --execute --json`. No `shell=True`. Verbs fixed in `helper_verbs.py`, contract in `VERBS.md`.
-* Services allowlisted to `openvpn-server@*.service` + `NetworkManager`. `vpn-run-script` accepts only `script_id`; the helper resolves it to `/usr/lib/netmedic/scripts/openvpn-install.sh`, verifies the vendored pin, stages a root-owned copy in `/run/netmedic` (0700, unique per invocation), re-hashes there and execs — no downloads, no execution from user-writable paths.
+* Services allowlisted to `openvpn-server@*.service` + `NetworkManager`. `vpn-install`/`vpn-add-client`/`vpn-revoke-client` accept only typed, validated params; the helper resolves it to `/usr/lib/netmedic/scripts/openvpn-install.sh`, verifies the vendored pin, stages a root-owned copy in `/run/netmedic` (0700, unique per invocation), re-hashes there and execs — no downloads, no execution from user-writable paths.
 * Permissions: state/data `0700` owner-checked, secrets `0600`, helper `root:root 644/755`, vendored VPN script `root:root 0644` under `/usr/lib/netmedic/scripts`.
 * Alert: rapid distinct-PID privileged bursts in `audit.log` → investigate same-UID abuse (`auth_admin_keep` reduces friction — prefer `auth_admin` for `vpn-install/run-script`).
 

@@ -70,54 +70,69 @@ def test_script_ids_resolve_to_fixed_root_paths() -> None:
 
 
 # --------------------------------------------------------------------------
-# Plan accepts script_id only (no caller path/hash)
+# Typed VPN verbs (Fase 3) — no caller path/hash/env
 # --------------------------------------------------------------------------
 
 
-def test_plan_accepts_script_id_only() -> None:
-    plan = plan_verb("vpn-run-script", {"script_id": "openvpn-install"})
-    assert plan.commands == [["__vpn_script__", "openvpn-install"]]
+def test_vpn_run_script_removed() -> None:
+    with pytest.raises(VerbValidationError, match="Unknown"):
+        plan_verb("vpn-run-script", {"script_id": "openvpn-install"})
 
 
-def test_plan_keeps_transitional_env_allowlist() -> None:
-    plan = plan_verb(
-        "vpn-run-script",
-        {"script_id": "openvpn-install", "env": {"CLIENT": "laptop", "PASS": "1"}},
-    )
-    assert plan.commands[0][:2] == ["__vpn_script__", "openvpn-install"]
-    assert "CLIENT=laptop" in plan.commands[0]
-    assert "PASS=1" in plan.commands[0]
+def test_plan_vpn_install_defaults() -> None:
+    plan = plan_verb("vpn-install", {})
+    assert plan.commands == [
+        ["__vpn_cli__", "install", "--port", "1194", "--protocol", "udp",
+         "--dns", "cloudflare", "--no-client-ipv6", "--client", "client"]
+    ]
 
 
-def test_plan_requires_script_id() -> None:
-    with pytest.raises(VerbValidationError, match="script_id"):
-        plan_verb("vpn-run-script", {})
+def test_plan_vpn_install_validates_port() -> None:
+    with pytest.raises(VerbValidationError):
+        plan_verb("vpn-install", {"port": 0})
+    with pytest.raises(VerbValidationError):
+        plan_verb("vpn-install", {"port": 70000})
 
 
-def test_plan_rejects_unknown_script_id() -> None:
-    with pytest.raises(VerbValidationError, match="script_id"):
-        plan_verb("vpn-run-script", {"script_id": "evil"})
+def test_plan_vpn_install_validates_protocol_and_dns() -> None:
+    with pytest.raises(VerbValidationError):
+        plan_verb("vpn-install", {"protocol": "icmp"})
+    with pytest.raises(VerbValidationError):
+        plan_verb("vpn-install", {"dns": "nope"})
 
 
-@pytest.mark.parametrize("caller_path", ["/tmp/x.sh", "relative.sh", "/tmp//x.sh"])  # noqa: S108 (attacker-path fixture strings; never created)
-def test_plan_rejects_caller_supplied_script_path(caller_path: str) -> None:
-    """F2: callers cannot choose the root-executed file, normalized or not."""
-    with pytest.raises(VerbValidationError, match="script_id"):
-        plan_verb(
-            "vpn-run-script",
-            {"script_id": "openvpn-install", "script": caller_path},
-        )
+def test_plan_vpn_install_ipv6_flag() -> None:
+    plan = plan_verb("vpn-install", {"client_ipv6": True})
+    assert "--client-ipv6" in plan.commands[0]
+    assert "--no-client-ipv6" not in plan.commands[0]
 
 
-def test_plan_rejects_caller_supplied_hash() -> None:
-    with pytest.raises(VerbValidationError, match="script_id"):
-        plan_verb(
-            "vpn-run-script",
-            {
-                "script_id": "openvpn-install",
-                "expected_sha256": PINNED_VPN_INSTALL_SHA256,
-            },
-        )
+def test_plan_vpn_add_client() -> None:
+    plan = plan_verb("vpn-add-client", {"name": "laptop"})
+    assert plan.commands == [["__vpn_cli__", "client", "add", "laptop"]]
+
+
+def test_plan_vpn_add_client_invalid_name() -> None:
+    with pytest.raises(VerbValidationError):
+        plan_verb("vpn-add-client", {"name": "bad name!"})
+
+
+def test_plan_vpn_revoke_client() -> None:
+    plan = plan_verb("vpn-revoke-client", {"name": "laptop"})
+    assert plan.commands == [["__vpn_cli__", "client", "revoke", "laptop", "--force"]]
+
+
+def test_plan_vpn_revoke_client_invalid_name() -> None:
+    with pytest.raises(VerbValidationError):
+        plan_verb("vpn-revoke-client", {"name": "../x"})
+
+
+def test_plan_rejects_caller_supplied_script_path() -> None:
+    """F3: no verb accepts a caller script path."""
+    for verb in ("vpn-install", "vpn-add-client", "vpn-revoke-client"):
+        args = {"name": "laptop"} if "client" in verb else {}
+        with pytest.raises(VerbValidationError):
+            plan_verb(verb, {**args, "script": "/tmp/x.sh"})  # noqa: S108
 
 
 # --------------------------------------------------------------------------
