@@ -65,7 +65,7 @@ The AI can only propose actions registered in its security whitelist.
 | Symptom | Solution |
 |---------|----------|
 | **pkexec error 126 (cancelled)** | Authentication cancelled (Escape / dismiss). Retry and enter password. Distinct from helper-missing. |
-| **Helper not installed (127, helper-missing)** | Privileged helper not installed. Run `sudo ./scripts/install-polkit-policy.sh` then `netmedic --status`. Check `/usr/libexec/netmedic/helper` **and** `/usr/lib/netmedic/helper` (Debian alt). |
+| **Helper not installed (127, helper-missing)** | Privileged helper not installed. Run `sudo ./scripts/install-polkit-policy.sh` then `netmedic --status`. Check `/usr/libexec/netmedic/helper` **and** the library at `/usr/lib/netmedic/netmedic/helper_main.py`. |
 | **Smart Repair: short-circuit ⏭️ SKIPPED** | Network already healthy (gateway/DNS/WAN OK). No privileged actions executed — nothing to repair. |
 | **Smart Repair: PARTIAL (TCP blocked, ICMP ok)** | Firewall or captive portal suspected. `details.per_probe` shows `8.8.8.8:icmp OK` but `1.1.1.1:80 FAIL`. Check `MANUAL §Diagnostics`. |
 | **Smart Repair: PARTIAL (portal detected)** | TCP reachable but a captive portal is answering (log in via browser). Override the 204 endpoint with `NETMEDIC_PORTAL_URL` if needed (see `docs/OPS.md`). |
@@ -79,7 +79,7 @@ The AI can only propose actions registered in its security whitelist.
 
 | Component | Expected | Alternative | If missing |
 |---|---|---|---|
-| Helper | `/usr/libexec/netmedic/helper` | `/usr/lib/netmedic/helper` (Debian) | `helper-missing` ERROR — install script |
+| Helper | `/usr/libexec/netmedic/helper` | — (single trusted path) | `helper-missing` ERROR — install script |
 | Resolver | `systemd-resolved` + `resolvectl` | `dnsmasq`, `unbound` | `Missing resolvectl` ERROR |
 | NetworkManager | `nmcli` | `systemd-networkd`/`networkctl renew` | `nmcli not found` ERROR |
 | DHCP | `dhclient` fallback | `dhcpcd` | `dhclient not available` |
