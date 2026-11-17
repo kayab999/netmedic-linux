@@ -5,8 +5,8 @@
 | Version | Supported |
 |---------|-----------|
 | 1.8.x   | Yes |
-| 1.6.x   | Security fixes only |
-| 1.5.x   | Security fixes only (upgrade recommended) |
+| 1.6.x   | No — affected by SECURITY_ADVISORY_v1.6.1.md (upgrade to 1.8.x) |
+| 1.5.x   | No (upgrade to 1.8.x) |
 | < 1.5   | No |
 
 ## Threat model
