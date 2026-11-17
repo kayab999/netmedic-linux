@@ -51,6 +51,8 @@ def _resolve_asset_dir() -> Path:
 BASE_DIR = _resolve_asset_dir()
 MODEL_PATH = BASE_DIR / MODEL_FILENAME
 SUM_PATH = BASE_DIR / SUM_FILENAME
+# SHA256 of the model GGUF (verified at load; .sum sidecar is no longer trusted).
+MODEL_SHA256 = "21fe3956fd26b8c67765f97459a2d17cd12694aec78d06f162e9d3a1d5e8ffa2"
 
 SYSTEM_PROMPT = (
     "You are the NetMedic Autopilot.\n"
@@ -90,18 +92,15 @@ class NandiPilot:
         # live side by side and are only as trustworthy as their directory.
         # Strict setups should point NETMEDIC_AI_MODEL_DIR at read-only,
         # admin-owned media and verify provenance out of band.
-        if not MODEL_PATH.exists() or not SUM_PATH.exists():
-            raise FileNotFoundError(f"Missing Model/Sum at {MODEL_PATH}")
-
-        with open(SUM_PATH, "r", encoding="utf-8") as f:
-            expected_hash = f.read().strip()
+        if not MODEL_PATH.exists():
+            raise FileNotFoundError(f"Missing Model at {MODEL_PATH}")
 
         sha256_hash = hashlib.sha256()
         with open(MODEL_PATH, "rb") as f:
             for byte_block in iter(lambda: f.read(4096), b""):
                 sha256_hash.update(byte_block)
 
-        if sha256_hash.hexdigest() != expected_hash:
+        if sha256_hash.hexdigest() != MODEL_SHA256:
             raise ValueError("INTEGRITY_VIOLATION: The GGUF file has been altered.")
 
     @staticmethod

@@ -22,7 +22,7 @@ source "$VENV_DIR/bin/activate"
 rm -rf build dist netmedic_run
 
 # Pinned for reproducible builds (see requirements.lock + Dockerfile.build).
-pip install -q wheel "pyinstaller==6.19.0" "pillow>=10.0"
+pip install -q wheel "pyinstaller==6.19.0" "pillow>=13.0.0"
 pyinstaller netmedic.spec --clean
 
 if [ -f dist/netmedic ]; then
