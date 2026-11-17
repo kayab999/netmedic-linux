@@ -4,7 +4,8 @@
 
 | Version | Supported |
 |---------|-----------|
-| 1.6.x   | Yes |
+| 1.8.x   | Yes |
+| 1.6.x   | Security fixes only |
 | 1.5.x   | Security fixes only (upgrade recommended) |
 | < 1.5   | No |
 
@@ -39,6 +40,8 @@ Please include:
 - Impact assessment (privilege, data exposure, DoS)
 
 We aim to acknowledge within 7 days and ship fixes for supported versions as soon as practical.
+
+Coordinated disclosure timeline: 90 days from acknowledgement, or earlier by mutual agreement. We credit reporters in release notes unless they prefer anonymity.
 
 ## Disclosure
 
