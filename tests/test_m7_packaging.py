@@ -113,7 +113,17 @@ def test_pillow_not_runtime_dep():
 
 
 def test_version_strings_consistent():
-    """Package version must track the release line (was stale 1.6.0)."""
-    assert '__version__ = "1.8.1"' in _read("netmedic/netmedic/__init__.py")
-    assert 'version = "1.8.1"' in _read("netmedic/pyproject.toml")
-    assert 'HELPER_VERSION = "1.8.5"' in _read("netmedic/netmedic/helper_verbs.py")
+    """Release, package and helper versions must be one value (1.9.0)."""
+    app_version = re.search(
+        r'^__version__ = "([^"]+)"', _read("netmedic/netmedic/__init__.py"), re.M
+    ).group(1)
+    package_version = re.search(
+        r'^version = "([^"]+)"', _read("netmedic/pyproject.toml"), re.M
+    ).group(1)
+    helper_version = re.search(
+        r'^HELPER_VERSION = "([^"]+)"',
+        _read("netmedic/netmedic/helper_verbs.py"),
+        re.M,
+    ).group(1)
+
+    assert app_version == package_version == helper_version == "1.9.0"

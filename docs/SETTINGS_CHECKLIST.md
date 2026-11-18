@@ -1,47 +1,65 @@
-# Repository Settings Checklist (M10)
+# Repository Settings Checklist (owner)
 
-Guards code cannot express. Verify by hand after releases that touch
-process or supply chain. Items marked [x] are confirmed active.
+Settings the code cannot enforce. The owner must configure and verify them in
+GitHub; do not mark an item complete without evidence from the repository
+settings page (screenshot, API output or audit-log entry). No PGP key or
+fingerprint is invented here: the owner must publish the real one.
 
-## Branch protection
+## Branch protection — `main`
 
-- [x] `main` merges via PR only (`--no-ff`, feature branches preserved).
-- [x] CI must pass (12 checks: sast, test x6, netns-golden, smoke,
-  build-smoke, container-build).
-- [ ] Required reviews before merge (single-maintainer self-merge today).
-  Settings → Branches → Require a pull request before merging.
+- [ ] **PR-only merges.** Require a pull request before merging; block direct
+  pushes and force-pushes to `main`.
+- [ ] **Required CI.** Require the repository's required status checks (CI and
+  CodeQL) to pass before merge. Confirm the exact check names in
+  `.github/workflows/ci.yml` and the branch-protection page.
+- [ ] **Required review.** Require at least one approving review before merge.
+  A single-maintainer repository cannot satisfy this with self-approval; the
+  owner must decide whether to add a reviewer or document the exception.
 
-## Tag protection
+## Tag ruleset — `v*`
 
-- [x] Ruleset "Protect version tags" — `v*` deletion and
-  non-fast-forward updates blocked (created for v1.6.1).
-- [x] Release workflow publishes from tags only (`on.push.tags: v*`).
+- [ ] **Protect version tags.** Create/verify a ruleset targeting `v*` that
+  blocks tag deletion and non-fast-forward updates.
+- [ ] **Restrict tag creation.** Limit who can create matching tags to the
+  release owner.
+- [ ] **Tag-driven release only.** Confirm the release workflow still triggers
+  only from `v*` tag pushes.
 
-## Supply chain (M6)
+## Release signing (PGP)
 
-- [x] All workflow actions pinned by SHA (`test_no_floating_action_refs`).
-- [x] `requirements.lock` hash-pinned; binary builds use `--require-hashes`.
-- [x] Release `build` job is read-only; `publish` holds the write token
-  behind the `release` environment.
-- [x] SLSA provenance attestation on shipped artifacts.
-- [x] `pip-audit` blocking against the lock in CI.
-- [x] Dependabot pip entries point at `/netmedic`, `/netmedic_ai`.
-- [ ] GPG long-lived key: migrate verifiers to provenance, then remove key.
-- [ ] Commit/tag signing: enable vigilant mode + required signatures.
+- [ ] **Long-lived release key.** Keep the private key offline/off-repo; publish
+  the public key and its **full 40-hex fingerprint** in `SECURITY.md` next to
+  the release verification instructions. A short key id is not sufficient.
+- [ ] **Signed release assets.** Publish `SHA256SUMS` plus its detached
+  signature (`SHA256SUMS.asc`); verify the signature in the release workflow
+  with the published fingerprint.
+- [ ] **Signed tags/commits (decision).** If required, enable GitHub vigilant
+  mode and required commit/tag signatures; otherwise document that provenance
+  attestations are the verification path.
 
-## Hygiene
+## Supply chain (verify, code-enforced)
 
-- [x] No vendored binaries in git (`dist/`, `build/`, `*.so` ignored).
-- [x] `git gc` discipline: run after merges/tags; alert above 50 MB loose.
-- [x] Strict-typing map (`mypy.ini`) has no glob sections
-  (`test_m9_typing.py` bans the pattern that once voided all checks).
+- [ ] Workflow actions pinned by full SHA
+  (`test_no_floating_action_refs`).
+- [ ] `requirements.lock` hash-pinned; binary builds use `--require-hashes`.
+- [ ] Release `build` job read-only; `publish` uses the protected `release`
+  environment.
+- [ ] `pip-audit` blocking against the lock in CI.
+- [ ] Dependabot pip entries point at `/netmedic` and `/netmedic_ai`.
+- [ ] No vendored binaries in git (`dist/`, `build/`, `*.so` ignored).
 
 ## Verification commands
 
 ```bash
-git push origin :refs/tags/v1.8.0        # expect: rejected (protected)
+# Tag protection: expect "rejected" (run only after the tag exists)
+git push origin :refs/tags/v1.9.0
+
+# All actions pinned: expect no output
 grep -rhoE "uses: [^ ]+" .github/workflows/ | grep -v "@[0-9a-f]\{40\}"
-# expect: no output (all pinned)
-grep -c "^ *--hash=sha256:" requirements.lock  # expect: 6
-git count-objects -v                         # size-pack vs size
+
+# Lock hashes: expect 6
+grep -c "^ *--hash=sha256:" requirements.lock
+
+# Repository size
+git count-objects -v
 ```

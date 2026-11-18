@@ -4,10 +4,16 @@
 
 | Version | Supported |
 |---------|-----------|
-| 1.8.x   | Yes |
-| 1.6.x   | No — affected by SECURITY_ADVISORY_v1.6.1.md (upgrade to 1.8.x) |
-| 1.5.x   | No (upgrade to 1.8.x) |
+| 1.9.x   | Yes |
+| 1.8.x   | No — superseded by 1.9.x (upgrade to 1.9.x) |
+| 1.6.x   | No — affected by SECURITY_ADVISORY_v1.6.1.md (upgrade to 1.9.x) |
+| 1.5.x   | No (upgrade to 1.9.x) |
 | < 1.5   | No |
+
+**Support policy:** only the latest minor line receives security fixes. 1.8.x is
+retired as of 1.9.0; the upgrade requires reinstalling the helper and polkit
+policy because `HELPER_VERSION` changed. This is a deliberate single-maintainer
+decision, not an accidental omission.
 
 ## Threat model
 

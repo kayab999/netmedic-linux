@@ -2,7 +2,7 @@
 
 Professional network diagnostics, repair, and infrastructure management for Linux. NetMedic combines a GTK3 interface with a hardened privileged IPC core, optional AI orchestration, and VPN lifecycle management.
 
-**Version:** 1.8.1 · **License:** [MIT](LICENSE)
+**Version:** 1.9.0 · **License:** [MIT](LICENSE)
 
 ---
 
@@ -30,6 +30,12 @@ chmod +x netmedic
 ```
 
 Download from the [Releases](https://github.com/kayab999/netmedic-linux/releases) page.
+
+> **Privileged actions need the system helper.** The pre-built binary does not
+> bundle the helper or the polkit policy. Install them from a source checkout
+> with `sudo ./scripts/install-polkit-policy.sh`; without them privileged
+> actions fail with `helper-missing`. There are no `.deb`/`.rpm` packages that
+> include the helper yet.
 
 ### Option B — Install from source
 
@@ -67,6 +73,30 @@ System-wide policy and helper wrapper are required for least-privilege elevation
 #   /usr/libexec/netmedic/helper  → netmedic-helper console script
 pkaction --action-id com.kayab.netmedic.flush-dns
 # helper is auto-used when the libexec path exists; force off with NETMEDIC_USE_HELPER=0
+```
+
+### Updating to 1.9.0
+
+The daemon refuses a privileged helper whose `HELPER_VERSION` does not match
+its own (1.9.0). After updating the application, reinstall the helper/policy
+and restart the daemon:
+
+```bash
+sudo ./scripts/install-polkit-policy.sh
+/usr/libexec/netmedic/helper --version   # expect {"ok":true,"version":"1.9.0"}
+# GUI: close and reopen `netmedic`
+```
+
+If you use headless/MCP, the user unit is installed by `install.sh` (not by
+`install-polkit-policy.sh`). If it is missing (`Unit
+netmedic-headless.service not found`), create/refresh it first:
+
+```bash
+./install.sh --keep-venv --skip-tests
+systemctl --user daemon-reload
+systemctl --user enable --now netmedic-headless.service
+# If it was already installed:
+systemctl --user restart netmedic-headless.service
 ```
 
 ---
@@ -133,7 +163,7 @@ See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for details.
 
 ## Security
 
-- Root access is gated by the polkit helper (`auth_admin`/`auth_admin_keep`); the session token, `confirmed=true` and the MCP mutating gate protect the user-facing API only and are not an authentication boundary against same-UID processes
+- Root access is gated by the polkit helper (`auth_admin`/`auth_admin_keep`). The IPC same-UID peer check, `confirmed=true` and the MCP mutating gate are UX/defense-in-depth controls for the user-facing API; they are **not** an authentication boundary against same-UID processes
 - Single action catalog maps GUI, MCP, and AI to the same policy surface
 - Structured audit log at `~/.local/state/netmedic/audit.log` (mode 600)
 - Commands requiring root use `pkexec` (no setuid)

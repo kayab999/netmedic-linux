@@ -37,6 +37,6 @@ snapshot rc/timeout/invalid, con mod failure+timeout, con up failure+timeout,
 restore failure, budget exhausted in rollback, empty previous DNS,
 ignore-auto-dns "no", dry-run argv == executed argv, restart retry/lo/down.
 
-HELPER_VERSION 1.8.5. `--timeout` is the total verb deadline; the daemon waits
+HELPER_VERSION 1.9.0. `--timeout` is the total verb deadline; the daemon waits
 `timeout + IPC margin` (`system.py`). NO VERIFIED: real nmcli/ip as root ->
 `docs/VM_CHECKLIST.md`.

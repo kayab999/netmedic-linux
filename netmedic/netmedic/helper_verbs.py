@@ -70,7 +70,7 @@ VPN_DNS_PROVIDERS: frozenset[str] = frozenset({
     "nextdns", "custom",
 })
 VPN_PROTOCOLS: frozenset[str] = frozenset({"udp", "tcp"})
-HELPER_VERSION = "1.8.5"
+HELPER_VERSION = "1.9.0"
 
 
 @dataclass(frozen=True)
