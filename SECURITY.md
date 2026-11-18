@@ -10,6 +10,11 @@
 | 1.5.x   | No (upgrade to 1.9.x) |
 | < 1.5   | No |
 
+**Support policy:** only the latest minor line receives security fixes. 1.8.x is
+retired as of 1.9.0; the upgrade requires reinstalling the helper and polkit
+policy because `HELPER_VERSION` changed. This is a deliberate single-maintainer
+decision, not an accidental omission.
+
 ## Threat model
 
 NetMedic is a **single-user desktop** privileged network tool. See [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md).
