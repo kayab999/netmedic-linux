@@ -2,7 +2,79 @@
 
 All notable changes to NetMedic Linux are documented here.
 
-## [Unreleased] — F6.2 restart-adapter truth end-to-end
+## [1.9.0] — 2026-11-18
+
+Release lines up the application, package and privileged helper at **1.9.0**.
+The daemon refuses a helper whose `HELPER_VERSION` differs, so the helper and
+policy must be reinstalled (see Breaking changes).
+
+### Security
+
+- **F1 — helper hardening (L1/L3/L4):** elevation uses the fixed, validated
+  `/usr/bin/pkexec` (root-owned, regular, executable) instead of `PATH`
+  resolution. Root journal records carry a validated `pkexec_uid` and a
+  control-character-flattened message; the unused alternate helper path is
+  removed. The installer reads `HELPER_VERSION` from an absolute path with the
+  validated `/usr/bin/python3`.
+- **F2 — vendored VPN installer:** the Angristan installer is vendored and
+  pinned by SHA256 at the helper (`PINNED_VPN_INSTALL_SHA256`); no runtime
+  download, no caller-supplied path/hash, root reads `O_NOFOLLOW`, verifies the
+  bytes actually read and executes a root-owned staged copy in `/run/netmedic`.
+- **F3/F3b/F3c — typed VPN verbs and artifact delivery:** `vpn-run-script` and
+  the caller env dictionary are gone. `vpn-install`, `vpn-add-client` and
+  `vpn-revoke-client` accept only validated parameters and fixed subcommands.
+  The `.ovpn` artifact is sealed in `/run/netmedic`, returned to the daemon and
+  written `0600 O_EXCL|O_NOFOLLOW` under `~/.local/share/netmedic/vpn-clients/`
+  (0700); `artifact` is redacted from logs/audit. AI confirmation is
+  fail-closed when no invocable dialog exists.
+- **F5 — no keep window for high-risk verbs:** `change-dns` and
+  `restart-adapter` use `auth_admin`, so polkit re-prompts on every invocation.
+  `flush-dns` and `renew-ip` keep `auth_admin_keep`.
+- **F6/F6.1 — recoverability:** `change-dns` snapshots both `ipv4.dns` and
+  `ipv4.ignore-auto-dns` (fail-closed), applies the exact dry-run argv under one
+  monotonic deadline with a reserved rollback budget, restores the config first
+  on failure and reports `config=unchanged|reverted|not-restored` without
+  claiming unconfirmed reactivation. `restart-adapter` retries `up` once and
+  reports IFF_UP plus carrier from sysfs.
+- **F6.2 — truthful restart-adapter:** the daemon no longer polls
+  `ip link`/operstate nor accepts the `"UP"` substring inside
+  `<NO-CARRIER,...,UP> state DOWN`; it propagates the helper's `ok`, message and
+  details verbatim.
+- **Supply chain:** Pillow 13.0.0 and setuptools 84.2.1 in the hash-pinned
+  `requirements.lock`; `pip-audit` is blocking in CI. The GGUF model SHA256 is
+  hardcoded for the optional AI pilot (`netmedic_ai` remains outside the release
+  supply chain until its own hash-pinned lock lands).
+
+### Breaking changes
+
+- **`vpn-run-script` is removed.** Automation must use `vpn-install`,
+  `vpn-add-client` or `vpn-revoke-client`; the helper rejects caller-supplied
+  script paths, hashes and environment dictionaries.
+- **Polkit policy changed.** The three VPN verbs have distinct `exec.argv1`
+  values and the two high-risk verbs no longer use `auth_admin_keep`. The
+  installed XML must be regenerated from this release.
+- **The daemon requires a helper with the same version (1.9.0).** A stale
+  helper fails with `helper-missing`/version mismatch instead of running.
+  After updating, reinstall the helper and policy and restart the daemon:
+
+  ```bash
+  sudo ./scripts/install-polkit-policy.sh
+  systemctl --user restart netmedic-headless.service   # headless/MCP
+  # GUI: close and reopen `netmedic`
+  ```
+
+### Behavior changes
+
+- `restart-adapter` details no longer include the interface IP or a fabricated
+  operstate. They are the helper's sysfs facts
+  (`iff_up=...; carrier=...`), and `ok` equals the helper's verdict.
+- `change-dns` restores `ipv4.dns` and `ipv4.ignore-auto-dns` when the apply or
+  `con up` fails, and says whether reactivation was confirmed.
+- `change-dns` and `restart-adapter` prompt for authorization every time.
+- `CommandResult` exposes the helper's `message`/`details`; the legacy `stdout`
+  details payload is preserved for existing callers.
+
+## 1.9.0 implementation record — F6.2 restart-adapter truth end-to-end
 
 ### Fixed
 - `restart_adapter` no longer polls `ip link`/operstate for up to 5 s nor
@@ -13,9 +85,10 @@ All notable changes to NetMedic Linux are documented here.
   show the real verdict.
 - `CommandResult` now carries the helper's `message` and `details`; the legacy
   `stdout` details payload remains for existing callers.
-- No `HELPER_VERSION` change: the helper contract is unchanged (1.8.5).
+- F6.2 itself did not change the helper contract (it was 1.8.5 at the time);
+  the 1.9.0 release aligns `HELPER_VERSION` with the application version.
 
-## [Unreleased] — H4 supply-chain lock refresh
+## 1.9.0 implementation record — H4 supply-chain lock refresh
 
 ### Security
 - `requirements.lock`: Pillow 12.3.0 -> 13.0.0 (CVE-2026-128066) and
@@ -27,7 +100,7 @@ All notable changes to NetMedic Linux are documented here.
 - Static guard `test_lock_build_tools_above_cve_floor` keeps both build
   tools above the known-vulnerable floor.
 
-## [Unreleased] — F6.1 shared deadline and veracious rollback
+## 1.9.0 implementation record — F6.1 shared deadline and veracious rollback
 
 ### Security
 - `change-dns` uses one monotonic deadline for the whole verb: every command
@@ -45,7 +118,7 @@ All notable changes to NetMedic Linux are documented here.
 - `HELPER_VERSION` 1.8.4 -> 1.8.5.
 - `--timeout` help now documents it as the total verb deadline (not per command).
 
-## [Unreleased] — F3c cierres (hotfix)
+## 1.9.0 implementation record — F3c cierres (hotfix)
 
 ### Security
 - AI pilot confirmation is now fail-closed: disruptive actions without an
@@ -57,7 +130,7 @@ All notable changes to NetMedic Linux are documented here.
 - mypy CI command verified clean (13 modules). H4 (`pip-audit` against the
   lock) was open at the time and is closed by the H4 lock refresh entry above.
 
-## [Unreleased] — F7 AI supply chain (partial)
+## 1.9.0 implementation record — F7 AI supply chain (partial)
 
 ### Security
 - Model GGUF hash hardcoded in `netmedic_ai/pilot.py` (`MODEL_SHA256`); verified
@@ -69,7 +142,7 @@ All notable changes to NetMedic Linux are documented here.
   `netmedic_ai/requirements.lock` (with hashes) lands; generation script added.
 - `docs/AI_SUPPLY_CHAIN.md` documents the lock workflow.
 
-## [Unreleased] — F6 recoverability of change-dns/restart-adapter
+## 1.9.0 implementation record — F6 recoverability of change-dns/restart-adapter
 
 ### Security
 - `change-dns` now snapshots both `ipv4.dns` and `ipv4.ignore-auto-dns` before
@@ -83,7 +156,7 @@ All notable changes to NetMedic Linux are documented here.
 - `HELPER_VERSION` 1.8.3 -> 1.8.4.
 - `docs/RECOVERABILITY_DESIGN.md` (approved with corrections).
 
-## [Unreleased] — F5 keep_auth for high-risk verbs
+## 1.9.0 implementation record — F5 keep_auth for high-risk verbs
 
 ### Security
 - `change-dns` and `restart-adapter` now use `auth_admin` (no keep window):
@@ -94,7 +167,7 @@ All notable changes to NetMedic Linux are documented here.
 ### Changed
 - Policy XML regenerated (allow_active auth_admin for the two high-risk verbs).
 
-## [Unreleased] — F3 typed VPN verbs on the vendored CLI
+## 1.9.0 implementation record — F3 typed VPN verbs on the vendored CLI
 
 ### Security
 - **No caller env dict (H3):** `VPN_ALLOWED_ENV_KEYS` and `_validate_vpn_script_env` are
@@ -118,7 +191,7 @@ All notable changes to NetMedic Linux are documented here.
   distinct `exec.argv1`); uniqueness test added.
 - `docs/VPN_CONTRACT.md` is the source of truth for the mapping.
 
-## [Unreleased] — F2 vendored VPN installer
+## 1.9.0 implementation record — F2 vendored VPN installer
 
 ### Security
 - **Supply chain (F2):** the Angristan installer is vendored at
@@ -159,7 +232,7 @@ All notable changes to NetMedic Linux are documented here.
 - The `env` channel is still transitional: the pinned commit's non-interactive
   CLI (`install`, `client add`, `client revoke`) replaces it in F3.
 
-## [Unreleased] — F1 helper hardening
+## 1.9.0 implementation record — F1 helper hardening
 
 ### Security
 - **L1 (pkexec resolution):** elevation now uses the fixed
@@ -184,10 +257,10 @@ All notable changes to NetMedic Linux are documented here.
 ### Changed
 - `HELPER_VERSION` 1.8.1 → 1.8.2: helper code changed, so stale system
   installs are refused until the installer is re-run. The application version
-  stays 1.8.1.
+  stayed 1.8.1 until the 1.9.0 release.
 - Added `docs/VM_CHECKLIST.md` with the F1 items that require a real VM.
 
-## [Unreleased] — F0 test/CI hygiene
+## 1.9.0 implementation record — F0 test/CI hygiene
 
 ### Fixed
 - **F0 (repo layout):** `pytest.ini` now sets `pythonpath = netmedic`. With a
@@ -204,7 +277,7 @@ All notable changes to NetMedic Linux are documented here.
   All push/PR jobs explicitly skip on `schedule`; the new job keeps SHA-pinned
   actions and `contents: read`.
 
-## [Unreleased] — N1–N3 follow-ups (post-v1.8.1)
+## 1.9.0 implementation record — N1–N3 follow-ups (post-v1.8.1)
 
 ### Fixed
 - **N3:** `validate_iface` rejects `"."`/`".."` explicitly (charset regex
@@ -216,7 +289,7 @@ All notable changes to NetMedic Linux are documented here.
   `run_smart_repair` F(61) → phase functions (worst C); radon target
   (nothing above rank C) met. Includes the N3 + N1 merges.
 
-## [Unreleased] — M8 architecture + M9 typing + M10 governance
+## 1.9.0 implementation record — M8 architecture + M9 typing + M10 governance
 
 ### Changed
 - **M10 (governance):** `git gc` (44 MB loose → 22 MB packed; nothing vendored to purge); docs drift fixed (PRIVILEGED_HELPER acceptance boxes checked with evidence, README 1.8.0/counts/links, DEVELOPMENT counts + 13-module mypy + glob warning, debian/changelog 1.8.0 entry, netmedic_ai version/requires-python sync; release-notes history left intact); ruff S603/S607/S110/S112/S108 moved from global ignore to 56 per-line `noqa` with reasons (S101/E501 stay global: test asserts + docs lines); new `docs/SETTINGS_CHECKLIST.md` for what code can't enforce.
@@ -259,12 +332,12 @@ closed. Suite 466 → 533.
 - v1.6.4: M6 (supply chain, provenance).
 - v1.7.0: M5 (AI pilot).
 
-## [Unreleased] — M2 and follow-ups (post-v1.6.1)
+## 1.9.0 implementation record — M2 and follow-ups (post-v1.6.1)
 
 ### Fixed
 - **M2 (timeout enforcement):** helper `_run_argv` now uses Popen + `killpg` instead of `subprocess.run(timeout)` (which killed only the direct child). New `execute_with_deadline()` + `DeadlineResult` (no signals; SIGALRM is not thread-safe). Daemon waits helper deadline + 5s IPC margin instead of firing first; EPERM-after-setuid documented as expected. `IPCBridge.stop()` no longer joins behind in-flight elevated calls.
 
-## [Unreleased] — v1.6.1 candidate
+## 1.9.0 implementation record — v1.6.1 candidate
 
 ### Security (audit F1-F5 + M1)
 - **F1 (vpn-run-script generic root):** caller hash no longer trusted — must equal root pin `PINNED_VPN_INSTALL_SHA256`; `script_id` allowlist (`openvpn-install`); env allowlist (11 Angristan vars only, no `LD_*`/`PATH`/`BASH_ENV`); helper executes with `env -i PATH=fixed` + `/bin/bash` (noexec-safe) and re-checks pin even on in-process calls.

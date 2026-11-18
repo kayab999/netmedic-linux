@@ -2,7 +2,7 @@
 
 Professional network diagnostics, repair, and infrastructure management for Linux. NetMedic combines a GTK3 interface with a hardened privileged IPC core, optional AI orchestration, and VPN lifecycle management.
 
-**Version:** 1.8.1 · **License:** [MIT](LICENSE)
+**Version:** 1.9.0 · **License:** [MIT](LICENSE)
 
 ---
 
@@ -69,6 +69,19 @@ pkaction --action-id com.kayab.netmedic.flush-dns
 # helper is auto-used when the libexec path exists; force off with NETMEDIC_USE_HELPER=0
 ```
 
+### Updating to 1.9.0
+
+The daemon refuses a privileged helper whose `HELPER_VERSION` does not match
+its own (1.9.0). After updating the application, reinstall the helper/policy
+and restart the daemon:
+
+```bash
+sudo ./scripts/install-polkit-policy.sh
+/usr/libexec/netmedic/helper --version   # expect {"ok":true,"version":"1.9.0"}
+systemctl --user restart netmedic-headless.service   # headless/MCP users
+# GUI: close and reopen `netmedic`
+```
+
 ---
 
 ## Project Structure
@@ -133,7 +146,7 @@ See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for details.
 
 ## Security
 
-- Root access is gated by the polkit helper (`auth_admin`/`auth_admin_keep`); the session token, `confirmed=true` and the MCP mutating gate protect the user-facing API only and are not an authentication boundary against same-UID processes
+- Root access is gated by the polkit helper (`auth_admin`/`auth_admin_keep`). The IPC same-UID peer check, `confirmed=true` and the MCP mutating gate are UX/defense-in-depth controls for the user-facing API; they are **not** an authentication boundary against same-UID processes
 - Single action catalog maps GUI, MCP, and AI to the same policy surface
 - Structured audit log at `~/.local/state/netmedic/audit.log` (mode 600)
 - Commands requiring root use `pkexec` (no setuid)

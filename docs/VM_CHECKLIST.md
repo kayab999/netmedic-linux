@@ -12,7 +12,7 @@ an item without pasting the literal output next to it.
   cd /tmp
   sudo /path/to/netmedic_linux/scripts/install-polkit-policy.sh
   ```
-  Expected: no `FileNotFoundError`, installer prints `version 1.8.2`, helper
+  Expected: no `FileNotFoundError`, installer prints `version 1.9.0`, helper
   dry-run succeeds, `pkaction --action-id com.kayab.netmedic.flush-dns` lists
   the action. Evidence: paste the output.
 

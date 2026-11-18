@@ -60,6 +60,23 @@ The AI can only propose actions registered in its security whitelist.
 - VPN install scripts are verified against a pinned SHA256 hash before execution.
 - Virtual test interfaces (`medicXX`) are cleaned up on exit.
 
+## Updating to 1.9.0
+
+The daemon and the privileged helper must share the same `HELPER_VERSION`
+(1.9.0). A mismatch is refused instead of running stale root code. After
+updating the application:
+
+```bash
+sudo ./scripts/install-polkit-policy.sh
+/usr/libexec/netmedic/helper --version   # expect {"ok":true,"version":"1.9.0"}
+systemctl --user restart netmedic-headless.service   # headless/MCP users
+# GUI: close and reopen `netmedic`
+```
+
+The 1.9.0 policy changes the VPN verb bindings and removes the polkit keep
+window for `change-dns`/`restart-adapter`. Reinstalling the policy is required;
+otherwise those actions fail or keep the old authorization behavior.
+
 ## Troubleshooting
 
 | Symptom | Solution |
