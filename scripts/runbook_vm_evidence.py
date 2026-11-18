@@ -114,7 +114,7 @@ def _check_versions() -> None:
         _ok(f"app, package and helper versions agree ({app})")
     else:
         _fail(
-            "version mismatch: app={app} package={package} helper={HELPER_VERSION}"
+            f"version mismatch: app={app} package={package} helper={HELPER_VERSION}"
         )
 
 
