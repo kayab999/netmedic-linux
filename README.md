@@ -31,6 +31,12 @@ chmod +x netmedic
 
 Download from the [Releases](https://github.com/kayab999/netmedic-linux/releases) page.
 
+> **Privileged actions need the system helper.** The pre-built binary does not
+> bundle the helper or the polkit policy. Install them from a source checkout
+> with `sudo ./scripts/install-polkit-policy.sh`; without them privileged
+> actions fail with `helper-missing`. There are no `.deb`/`.rpm` packages that
+> include the helper yet.
+
 ### Option B — Install from source
 
 ```bash

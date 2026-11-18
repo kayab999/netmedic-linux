@@ -12,6 +12,12 @@ NetMedic diagnoses and repairs common Linux network issues. It provides safe aut
   ```
 - **AI Palette:** Press **Ctrl+Space** to open the command palette (requires AI module).
 
+> **Pre-built binary limitation:** the binary does not bundle the privileged
+> helper or polkit policy. To use privileged actions, install them from a
+> source checkout with `sudo ./scripts/install-polkit-policy.sh`; otherwise
+> those actions fail with `helper-missing`. No `.deb`/`.rpm` package includes
+> the helper yet.
+
 ## Tab 1 — Basic Repair (Safe)
 
 These operations are non-destructive and safe for most situations.
