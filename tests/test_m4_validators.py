@@ -101,6 +101,28 @@ def test_conn_name_leading_dash_rejected():
         V.validate_conn_name("x" * 129)
 
 
+def test_validators_return_the_raw_accepted_value():
+    """F6.2: pilot preview shows the caller's raw value; validation is not
+    an excuse to rewrite it. Accepted values must come back byte-identical."""
+    for value in ("1.1.1.1", "8.8.8.8", "192.0.2.53", "255.255.255.255"):
+        assert V.validate_dns(value) == value
+    for value in ("eth0", "wlan0", "br-abc", "a" * 15):
+        assert V.validate_iface(value) == value
+    for value in ("Wired connection 1", "my.profile@home", "x" * 128):
+        assert V.validate_conn_name(value) == value
+
+    # Rejection is the only other allowed outcome; never silent repair.
+    for bad in ("01.1.1.1", "1.1.1", "1.1.1.1\n"):
+        with pytest.raises(ValueError):
+            V.validate_dns(bad)
+    for bad in ("-h", "bad iface!", "a" * 16):
+        with pytest.raises(ValueError):
+            V.validate_iface(bad)
+    for bad in ("-evil", "bad\nname"):
+        with pytest.raises(ValueError):
+            V.validate_conn_name(bad)
+
+
 def test_service_allowlist_preserved():
     assert V.validate_service("openvpn-server@server.service")
     with pytest.raises(ValueError, match="allowlisted"):

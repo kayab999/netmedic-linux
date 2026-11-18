@@ -96,7 +96,12 @@ an item without pasting the literal output next to it.
 - [ ] **Presupuesto de rollback.** Repetir con un timeout corto y verificar que el
   rollback se ejecuta dentro de `min(10s, timeout/3)` y que el helper no excede
   el deadline total.
-- [ ] **restart-adapter estado final.** Probar `lo` (operstate "unknown") y una
-  interfaz sin portadora; el mensaje debe distinguir carrier detected / no
+- [ ] **restart-adapter estado final (helper).** Probar `lo` (operstate "unknown")
+  y una interfaz sin portadora; el mensaje debe distinguir carrier detected / no
   carrier / unknown. Forzar timeout del `up` y verificar el reintento final y
   `ok=False` si IFF_UP sigue a 0.
+- [ ] **restart-adapter veracidad daemon (F6.2).** Con helper real, comprobar que
+  el daemon no ejecuta `ip ... link` tras el helper (sin poll de 5 s) y que la UI
+  muestra el mensaje literal del helper, con details `iff_up=...; carrier=...`.
+  Repetir con `lo` y con una interfaz sin portadora; no debe aparecer un
+  operstate fabricado.

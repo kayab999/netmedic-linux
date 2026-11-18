@@ -2,6 +2,19 @@
 
 All notable changes to NetMedic Linux are documented here.
 
+## [Unreleased] — F6.2 restart-adapter truth end-to-end
+
+### Fixed
+- `restart_adapter` no longer polls `ip link`/operstate for up to 5 s nor
+  accepts `"UP"` inside `<NO-CARRIER,...,UP> state DOWN`. It reports the
+  helper's own `ok`, message (`carrier detected`, `no carrier`,
+  `carrier unknown`, `not UP after restart`) and details
+  (`iff_up=...; carrier=...`) verbatim, so loopback and carrier-less links
+  show the real verdict.
+- `CommandResult` now carries the helper's `message` and `details`; the legacy
+  `stdout` details payload remains for existing callers.
+- No `HELPER_VERSION` change: the helper contract is unchanged (1.8.5).
+
 ## [Unreleased] — H4 supply-chain lock refresh
 
 ### Security

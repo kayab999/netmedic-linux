@@ -763,7 +763,14 @@ def test_restart_adapter_guards(medic, monkeypatch):
     assert "invalid" in medic.restart_adapter().message.lower()
 
 
-def test_restart_adapter_elevate_and_poll(medic, monkeypatch):
+def _no_ip_poll(monkeypatch):
+    def fail(*args, **kwargs):
+        raise AssertionError("restart_adapter must not poll ip/operstate")
+
+    monkeypatch.setattr("netmedic.network.CommandRunner.run", staticmethod(fail))
+
+
+def test_restart_adapter_cancel_fail_and_success(medic, monkeypatch):
     monkeypatch.setattr(medic, "get_default_interface", lambda: "eth0")
     monkeypatch.setattr(
         "netmedic.network.CommandRunner.run_elevated",
@@ -778,65 +785,63 @@ def test_restart_adapter_elevate_and_poll(medic, monkeypatch):
 
     monkeypatch.setattr(
         "netmedic.network.CommandRunner.run_elevated",
-        staticmethod(lambda verb, args=None, **k: _cmd(True)),
+        staticmethod(
+            lambda verb, args=None, **k: CommandResult(
+                True,
+                0,
+                "iff_up=up; carrier=up",
+                "",
+                [],
+                message="Adapter eth0 is UP (carrier detected)",
+                details="iff_up=up; carrier=up",
+            )
+        ),
     )
-    monkeypatch.setattr(
-        "netmedic.network.CommandRunner.run",
-        staticmethod(lambda cmd, timeout=None, **k: _cmd(True, json.dumps([{"operstate": "UP"}]))),
-    )
-    monkeypatch.setattr(medic, "_get_iface_ipv4", lambda iface: "192.168.1.10")
+    _no_ip_poll(monkeypatch)
     res = medic.restart_adapter()
     assert res.code == ResultCode.OK
-    assert res.details["operstate"] == "UP"
+    assert res.message == "Adapter eth0 is UP (carrier detected)"
+    assert res.details == "iff_up=up; carrier=up"
 
 
-def test_restart_adapter_text_fallback_and_timeout(medic, monkeypatch):
-    monkeypatch.setattr("time.sleep", lambda s: None)
+def test_restart_adapter_legacy_result_without_message(medic, monkeypatch):
+    """Legacy/mocked elevation has no helper message: use its payload text
+    without inventing an operstate post-condition."""
     monkeypatch.setattr(medic, "get_default_interface", lambda: "eth0")
     monkeypatch.setattr(
         "netmedic.network.CommandRunner.run_elevated",
-        staticmethod(lambda verb, args=None, **k: _cmd(True)),
+        staticmethod(lambda verb, args=None, **k: _cmd(True, "iff_up=up; carrier=up")),
     )
+    _no_ip_poll(monkeypatch)
 
-    def fake_run(cmd, timeout=None, **k):
-        if "-j" in cmd:
-            return _cmd(True, "not-json{{{")
-        return _cmd(True, "2: eth0: <UP> state UP mtu 1500")
-
-    monkeypatch.setattr("netmedic.network.CommandRunner.run", staticmethod(fake_run))
-    monkeypatch.setattr(medic, "_get_iface_ipv4", lambda iface: None)
-    monkeypatch.setattr("time.sleep", lambda s: None)
     res = medic.restart_adapter()
     assert res.code == ResultCode.OK
-
-    monkeypatch.setattr(
-        "netmedic.network.CommandRunner.run",
-        staticmethod(lambda cmd, timeout=None, **k: _cmd(False, "")),
-    )
-    res = medic.restart_adapter()
-    assert res.code == ResultCode.FAILED
-    assert "not UP" in res.message
+    assert res.message == "iff_up=up; carrier=up"
 
 
-def test_restart_adapter_down_then_details(medic, monkeypatch):
-    monkeypatch.setattr("time.sleep", lambda s: None)
+def test_restart_adapter_down_details_come_from_helper(medic, monkeypatch):
     monkeypatch.setattr(medic, "get_default_interface", lambda: "eth0")
     monkeypatch.setattr(
         "netmedic.network.CommandRunner.run_elevated",
-        staticmethod(lambda verb, args=None, **k: _cmd(True)),
+        staticmethod(
+            lambda verb, args=None, **k: CommandResult(
+                False,
+                1,
+                '{"ok":false}',
+                "Adapter eth0 not UP after restart",
+                [],
+                message="Adapter eth0 not UP after restart",
+                details="iff_up=down; carrier=down",
+            )
+        ),
     )
+    _no_ip_poll(monkeypatch)
 
-    def fake_run(cmd, timeout=None, **k):
-        if "-j" in cmd:
-            return _cmd(True, json.dumps([{"operstate": "DOWN"}]))
-        return _cmd(True, "2: eth0: <DOWN> state DOWN mtu 1500")
-
-    monkeypatch.setattr("netmedic.network.CommandRunner.run", staticmethod(fake_run))
-    monkeypatch.setattr(medic, "_get_iface_ipv4", lambda iface: None)
     res = medic.restart_adapter()
     assert res.code == ResultCode.FAILED
-    assert "not UP" in res.message
-    assert "DOWN" in (res.details or "")
+    assert res.message == "Adapter eth0 not UP after restart"
+    assert res.details == "iff_up=down; carrier=down"
+    assert "DOWN" not in res.details  # helper uses lowercase sysfs states
 
 
 # --- cleanup / virtual adapter ---

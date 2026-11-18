@@ -1,4 +1,4 @@
-# Fase 6.1 — Recoverability of change-dns/restart-adapter (implemented)
+# Fases 6.1/6.2 — Recoverability and restart-adapter truth (implemented)
 
 Root-side helper; no new verb/flag; caller supplies nothing to restore.
 
@@ -22,6 +22,15 @@ attempt with the remaining budget. Final state from IFF_UP in
 Carrier is read separately; absent => unknown, not an error. `ok=True` iff
 IFF_UP; the message distinguishes carrier detected / no carrier / unknown.
 If the interface stays down, `ok=False` with the real state in details.
+
+F6.2 (daemon truthfulness): the daemon does not re-derive the post-condition.
+`network.py:restart_adapter` has no `ip -j/-o link` poll, no 5 s loop and no
+`"UP" in stdout` text fallback. It returns `ok` = the helper's `ok` and
+propagates the helper's message and details verbatim (`carrier detected`,
+`no carrier`, `carrier unknown`, `not UP after restart`;
+`iff_up=...; carrier=...`). Loopback (`lo`) therefore succeeds without any
+operstate read: the helper reports IFF_UP with carrier unknown. Tests:
+`tests/test_f6_2_restart_truth.py`.
 
 plan_verb stays pure. Executor, clock and sysfs root are injectable. Tests:
 snapshot rc/timeout/invalid, con mod failure+timeout, con up failure+timeout,

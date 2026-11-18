@@ -28,6 +28,11 @@ class CommandResult:
     # F4: privileged helper may return a file payload (e.g. a .ovpn) here.
     # Never logged, journaled or audited; redacted everywhere it could leak.
     artifact: Optional[str] = field(default=None, repr=False)
+    # F6.2: the helper's own verdict, preserved verbatim. `stdout` keeps the
+    # legacy details payload for existing callers; new callers must prefer
+    # message/details instead of re-parsing or re-deriving the post-condition.
+    message: str = ""
+    details: Optional[Any] = None
 
 @dataclass(frozen=True)
 class NetResult:

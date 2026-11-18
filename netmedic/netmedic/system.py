@@ -247,10 +247,25 @@ class CommandRunner:
                         out = "" if details is None else str(details)
                         # PR2: propagate cancelled via code, not locale string
                         if not ok and code == "cancelled":
-                            return CommandResult(False, 126, "", "Authentication cancelled by user", result.command)
+                            return CommandResult(
+                                False,
+                                126,
+                                "",
+                                "Authentication cancelled by user",
+                                result.command,
+                                message="Authentication cancelled by user",
+                            )
                         if not ok and result.returncode == 126:
                             # pkexec dismissal already surfaced as 126
-                            return CommandResult(False, 126, "", msg or "Authentication cancelled by user", result.command)
+                            cancel_msg = msg or "Authentication cancelled by user"
+                            return CommandResult(
+                                False,
+                                126,
+                                "",
+                                cancel_msg,
+                                result.command,
+                                message=cancel_msg,
+                            )
                         return CommandResult(
                             ok,
                             0 if ok else (result.returncode or 1),
@@ -258,6 +273,8 @@ class CommandRunner:
                             "" if ok else msg,
                             result.command,
                             artifact if (isinstance(artifact, str) or artifact is None) else None,
+                            message=msg,
+                            details=details,
                         )
                 except json.JSONDecodeError:
                     pass
