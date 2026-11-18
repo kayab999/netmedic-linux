@@ -69,8 +69,18 @@ updating the application:
 ```bash
 sudo ./scripts/install-polkit-policy.sh
 /usr/libexec/netmedic/helper --version   # expect {"ok":true,"version":"1.9.0"}
-systemctl --user restart netmedic-headless.service   # headless/MCP users
 # GUI: close and reopen `netmedic`
+```
+
+Headless/MCP users also need the systemd **user** unit. It is installed by
+`install.sh`, not by `install-polkit-policy.sh`. If the unit is missing:
+
+```bash
+./install.sh --keep-venv --skip-tests
+systemctl --user daemon-reload
+systemctl --user enable --now netmedic-headless.service
+# If it was already installed:
+systemctl --user restart netmedic-headless.service
 ```
 
 The 1.9.0 policy changes the VPN verb bindings and removes the polkit keep
@@ -83,6 +93,7 @@ otherwise those actions fail or keep the old authorization behavior.
 |---------|----------|
 | **pkexec error 126 (cancelled)** | Authentication cancelled (Escape / dismiss). Retry and enter password. Distinct from helper-missing. |
 | **Helper not installed (127, helper-missing)** | Privileged helper not installed. Run `sudo ./scripts/install-polkit-policy.sh` then `netmedic --status`. Check `/usr/libexec/netmedic/helper` **and** the library at `/usr/lib/netmedic/netmedic/helper_main.py`. |
+| **Unit netmedic-headless.service not found** | The user unit is created by `./install.sh`, not by `install-polkit-policy.sh`. Run `./install.sh --keep-venv --skip-tests`, then `systemctl --user daemon-reload && systemctl --user enable --now netmedic-headless.service`. |
 | **Smart Repair: short-circuit ⏭️ SKIPPED** | Network already healthy (gateway/DNS/WAN OK). No privileged actions executed — nothing to repair. |
 | **Smart Repair: PARTIAL (TCP blocked, ICMP ok)** | Firewall or captive portal suspected. `details.per_probe` shows `8.8.8.8:icmp OK` but `1.1.1.1:80 FAIL`. Check `MANUAL §Diagnostics`. |
 | **Smart Repair: PARTIAL (portal detected)** | TCP reachable but a captive portal is answering (log in via browser). Override the 204 endpoint with `NETMEDIC_PORTAL_URL` if needed (see `docs/OPS.md`). |

@@ -78,8 +78,19 @@ and restart the daemon:
 ```bash
 sudo ./scripts/install-polkit-policy.sh
 /usr/libexec/netmedic/helper --version   # expect {"ok":true,"version":"1.9.0"}
-systemctl --user restart netmedic-headless.service   # headless/MCP users
 # GUI: close and reopen `netmedic`
+```
+
+If you use headless/MCP, the user unit is installed by `install.sh` (not by
+`install-polkit-policy.sh`). If it is missing (`Unit
+netmedic-headless.service not found`), create/refresh it first:
+
+```bash
+./install.sh --keep-venv --skip-tests
+systemctl --user daemon-reload
+systemctl --user enable --now netmedic-headless.service
+# If it was already installed:
+systemctl --user restart netmedic-headless.service
 ```
 
 ---
