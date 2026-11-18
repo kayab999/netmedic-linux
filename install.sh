@@ -49,7 +49,9 @@ if [ -f /etc/debian_version ]; then
             22.04) gir_dev="libgirepository1.0-dev" ;;
         esac
     fi
-    pkgs="python3-venv python3-dev $gir_dev libcairo2-dev gir1.2-gtk-3.0 network-manager iproute2 curl iputils-ping policykit-1"
+    # policykit-1 was split into polkitd + pkexec on Ubuntu 24.04+; both
+    # names exist on 22.04 too, so one list covers the supported releases.
+    pkgs="python3-venv python3-dev $gir_dev libcairo2-dev gir1.2-gtk-3.0 network-manager iproute2 curl iputils-ping polkitd pkexec"
     install_cmd="sudo apt-get install -y $pkgs"
 elif [ -f /etc/fedora-release ]; then
     # M7: Fedora package is 'polkit', not 'policykit' (no such package).

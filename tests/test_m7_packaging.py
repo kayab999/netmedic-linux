@@ -42,6 +42,25 @@ def test_installer_fedora_polkit_name():
     assert "curl iputils polkit\"" in text
 
 
+def test_no_removed_policykit_1_package():
+    """policykit-1 has no candidate on Ubuntu 24.04+; use polkitd + pkexec."""
+    for rel in (
+        "install.sh",
+        "packaging/debian/control",
+        ".github/workflows/ci.yml",
+        ".github/workflows/release.yml",
+    ):
+        # Comments may explain the rename; only executable lines matter.
+        code = "\n".join(
+            line for line in _read(rel).splitlines() if not line.lstrip().startswith("#")
+        )
+        assert "policykit-1" not in code, (
+            f"{rel}: policykit-1 was split into polkitd/pkexec on Ubuntu 24.04"
+        )
+    installer = _read("install.sh")
+    assert " polkitd " in installer and " pkexec" in installer
+
+
 def test_installer_fails_on_unsupported_distro():
     """Unknown distros must fail loudly, not continue via install_cmd=true."""
     text = _read("install.sh")
