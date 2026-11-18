@@ -86,9 +86,17 @@ an item without pasting the literal output next to it.
   `--output` a `vpn-install` (Fase 3b.1) y espera aprobación; no implementes
   aún.
 
-## Fase 6 — Recuperabilidad
+## Fase 6.1 — Recuperabilidad
 
 - [ ] **Rollback forzado de change-dns.** Forzar un `con up` fallido (interfaz abajo)
-  y verificar que la configuración DNS queda restaurada; salida literal del helper.
-- [ ] **restart-adapter estado final.** Verificar que si `up` falla, el mensaje
-  refleja el estado real (IFF_UP), sin tratar "unknown" como fallo.
+  y comprobar que `ipv4.dns` **y** `ipv4.ignore-auto-dns` quedan exactamente como
+  antes; el mensaje debe decir "config reverted" + "reactivation not confirmed"
+  (o "rollback FAILED" + comando manual). Adjuntar salida literal del helper y
+  `nmcli -g ipv4.dns,ipv4.ignore-auto-dns connection show <conn>` antes/después.
+- [ ] **Presupuesto de rollback.** Repetir con un timeout corto y verificar que el
+  rollback se ejecuta dentro de `min(10s, timeout/3)` y que el helper no excede
+  el deadline total.
+- [ ] **restart-adapter estado final.** Probar `lo` (operstate "unknown") y una
+  interfaz sin portadora; el mensaje debe distinguir carrier detected / no
+  carrier / unknown. Forzar timeout del `up` y verificar el reintento final y
+  `ok=False` si IFF_UP sigue a 0.

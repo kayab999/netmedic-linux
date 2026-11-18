@@ -14,6 +14,24 @@ All notable changes to NetMedic Linux are documented here.
 - Static guard `test_lock_build_tools_above_cve_floor` keeps both build
   tools above the known-vulnerable floor.
 
+## [Unreleased] — F6.1 shared deadline and veracious rollback
+
+### Security
+- `change-dns` uses one monotonic deadline for the whole verb: every command
+  receives only the time left in its phase, and `R = min(10s, total/3)` is
+  reserved for rollback. The daemon still waits `timeout + IPC margin`.
+- `restart-adapter` makes a final `up` attempt after a timeout and reports
+  IFF_UP plus carrier from sysfs (`unknown` carrier is not an error).
+- Rollback results are veracious: `config=unchanged|reverted|not-restored`;
+  a reverted config does not claim reactivation; a failed rollback includes
+  the exact manual command.
+- `VerbPlan.params` carries validated connection/server/interface; the executor
+  no longer slices argv, so dry-run and execution share one source of truth.
+
+### Changed
+- `HELPER_VERSION` 1.8.4 -> 1.8.5.
+- `--timeout` help now documents it as the total verb deadline (not per command).
+
 ## [Unreleased] — F3c cierres (hotfix)
 
 ### Security

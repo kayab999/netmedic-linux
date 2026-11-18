@@ -5,7 +5,7 @@ shape so callers cannot invent arbitrary elevated argv.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Mapping, Optional
 
 from netmedic.validators import (
@@ -34,8 +34,12 @@ __all__ = [
     "VPN_SCRIPT_PATHS",
     "VerbPlan",
     "VerbValidationError",
+    "change_dns_apply_commands",
+    "change_dns_restore_command",
+    "change_dns_up_command",
     "plan_verb",
     "plan_to_dict",
+    "restart_adapter_commands",
     "validate_iface",
     "validate_dns",
     "validate_client_name",
@@ -66,16 +70,23 @@ VPN_DNS_PROVIDERS: frozenset[str] = frozenset({
     "nextdns", "custom",
 })
 VPN_PROTOCOLS: frozenset[str] = frozenset({"udp", "tcp"})
-HELPER_VERSION = "1.8.4"
+HELPER_VERSION = "1.8.5"
 
 
 @dataclass(frozen=True)
 class VerbPlan:
-    """Planned root command sequence for a verb."""
+    """Planned root command sequence for a verb.
+
+    ``params`` holds the already-validated structured values the executor
+    needs (connection/server/interface).  The executor must never recover
+    them by slicing ``commands``: the dry-run and the executed argv have to
+    come from the same source.
+    """
 
     verb: str
     commands: List[List[str]]
     message: str = ""
+    params: Mapping[str, str] = field(default_factory=dict)
 
 
 class VerbValidationError(_ValidationError):
@@ -150,25 +161,57 @@ def _plan_renew_ip(verb: str, args: Dict[str, Any]) -> VerbPlan:
     raise VerbValidationError(f"Invalid renew mode: {mode!r}")
 
 
+def change_dns_apply_commands(conn: str, server: str) -> List[List[str]]:
+    """Single source of truth for the change-dns apply argv (dry-run == exec)."""
+    return [
+        [
+            "nmcli",
+            "con",
+            "mod",
+            conn,
+            "ipv4.dns",
+            server,
+            "ipv4.ignore-auto-dns",
+            "yes",
+        ],
+        ["nmcli", "con", "up", conn],
+    ]
+
+
+def change_dns_restore_command(conn: str, dns: str, ignore_auto_dns: str) -> List[str]:
+    """Rollback argv; built from the pre-change snapshot, never from callers."""
+    return [
+        "nmcli",
+        "con",
+        "mod",
+        conn,
+        "ipv4.dns",
+        dns,
+        "ipv4.ignore-auto-dns",
+        ignore_auto_dns,
+    ]
+
+
+def change_dns_up_command(conn: str) -> List[str]:
+    return ["nmcli", "con", "up", conn]
+
+
+def restart_adapter_commands(iface: str) -> List[List[str]]:
+    """Single source of truth for the restart-adapter apply argv."""
+    return [
+        ["ip", "link", "set", iface, "down"],
+        ["ip", "link", "set", iface, "up"],
+    ]
+
+
 def _plan_change_dns(verb: str, args: Dict[str, Any]) -> VerbPlan:
     server = validate_dns(_require_str(args, "server") or "1.1.1.1")
     conn = validate_conn_name(_require_str(args, "connection") or "")
     return VerbPlan(
         verb,
-        [
-            [
-                "nmcli",
-                "con",
-                "mod",
-                conn,
-                "ipv4.dns",
-                server,
-                "ipv4.ignore-auto-dns",
-                "yes",
-            ],
-            ["nmcli", "con", "up", conn],
-        ],
+        change_dns_apply_commands(conn, server),
         f"set DNS {server} on {conn}",
+        {"connection": conn, "server": server},
     )
 
 
@@ -176,11 +219,9 @@ def _plan_restart_adapter(verb: str, args: Dict[str, Any]) -> VerbPlan:
     iface = validate_iface(_require_str(args, "iface") or "")
     return VerbPlan(
         verb,
-        [
-            ["ip", "link", "set", iface, "down"],
-            ["ip", "link", "set", iface, "up"],
-        ],
+        restart_adapter_commands(iface),
         f"cycle adapter {iface}",
+        {"iface": iface},
     )
 
 
@@ -347,5 +388,6 @@ def plan_to_dict(plan: VerbPlan, *, dry_run: bool = True) -> Dict[str, Any]:
         "dry_run": dry_run,
         "verb": plan.verb,
         "message": plan.message,
+        "params": dict(plan.params),
         "commands": plan.commands,
     }

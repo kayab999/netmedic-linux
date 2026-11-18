@@ -83,6 +83,13 @@ Examples:
 | `vpn-revoke-client` | revoke | resolve vendored pin, stage, run `client revoke <name> --force` |
 | `iface-del` | cleanup | only `medic[0-9a-f]{6}` |
 
+**Deadline semantics:** `--timeout` is the total deadline for the whole verb,
+not a per-command limit. Multi-command verbs (`change-dns`, `restart-adapter`)
+share it and never start a command after the deadline. For `change-dns`,
+`R = min(10s, total/3)` is reserved for rollback. The daemon waits
+`timeout + CommandRunner._IPC_MARGIN` (see `netmedic/system.py`) so the
+process-group kill cannot cut the rollback in half.
+
 Output: single JSON line on stdout:
 
 ```json

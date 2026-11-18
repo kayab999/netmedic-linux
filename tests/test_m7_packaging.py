@@ -116,4 +116,4 @@ def test_version_strings_consistent():
     """Package version must track the release line (was stale 1.6.0)."""
     assert '__version__ = "1.8.1"' in _read("netmedic/netmedic/__init__.py")
     assert 'version = "1.8.1"' in _read("netmedic/pyproject.toml")
-    assert 'HELPER_VERSION = "1.8.4"' in _read("netmedic/netmedic/helper_verbs.py")
+    assert 'HELPER_VERSION = "1.8.5"' in _read("netmedic/netmedic/helper_verbs.py")
