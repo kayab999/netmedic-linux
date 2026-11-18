@@ -57,4 +57,4 @@ NetMedic is a single-user desktop privileged operations platform. This document 
 
 - **AI supply chain (Fase 7):** `netmedic_ai` is out of the release supply chain until `netmedic_ai/requirements.lock` (with hashes) lands. Model GGUF hash is hardcoded in `netmedic_ai/pilot.py` and verified at load.
 
-14. **Recoverability (Fase 6)** — `change-dns` snapshots both `ipv4.dns` and `ipv4.ignore-auto-dns` before applying; on failure restores config first, then `con up` best-effort, with a reserved rollback budget and veracious result. `restart-adapter` retries `up` and reports final state via IFF_UP.
+14. **Recoverability (Fase 6.1)** — `change-dns` snapshots both `ipv4.dns` and `ipv4.ignore-auto-dns` (fail-closed), applies the exact dry-run argv, and on failure restores the config first under a reserved rollback slice of one shared deadline (`R = min(10s, total/3)`), then attempts `con up` best-effort. The result distinguishes unchanged / reverted / not-restored and does not claim reactivation when it is unconfirmed. `restart-adapter` retries `up` once, then reports IFF_UP and carrier from sysfs (`unknown` carrier is not a failure).

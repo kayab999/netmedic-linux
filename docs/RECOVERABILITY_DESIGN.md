@@ -1,20 +1,33 @@
-# Fase 6 — Recoverability of change-dns/restart-adapter (approved)
+# Fase 6.1 — Recoverability of change-dns/restart-adapter (implemented)
 
 Root-side helper; no new verb/flag; caller supplies nothing to restore.
 
-change-dns: snapshot BOTH ipv4.dns and ipv4.ignore-auto-dns via separate
-`nmcli -g` calls; validate each IP (validate_dns), ignore-auto-dns yes|no;
-empty DNS valid. Unexpected value or snapshot failure => ABORT before modifying
-(fail-closed). Apply con mod + con up. On failure: restore config FIRST (con
-mod ipv4.dns "<prev>" ipv4.ignore-auto-dns <prev>, idempotent) then con up
-best-effort; config restored even if up fails. Reserve R=min(10s,total/3) for
-rollback with its own deadline. Result veracious: applied / reverted to <prev> /
-rollback FAILED (run manually <cmd>). One journal entry per attempt and rollback.
+change-dns: one monotonic deadline, `total = --timeout` (whole verb).
+`apply_deadline = start + total - R`, `rollback_deadline = start + total`,
+`R = min(10s, total/3)`; every command receives only the time left in its
+phase. Snapshot BOTH `ipv4.dns` and `ipv4.ignore-auto-dns` via separate
+`nmcli -g` calls; validate every DNS IP (`validate_dns`); ignore-auto-dns
+only `yes|no` (empty aborts); empty DNS is valid. Any snapshot
+failure/timeout/unexpected value => ABORT before modifying (fail-closed).
+Apply the exact argv the dry-run shows (`VerbPlan.params`, no index slicing).
+On failure: restore config FIRST (idempotent), then `con up` best-effort.
+Veracious result: `ok=False`; details distinguish stage plus
+`config=unchanged|reverted|not-restored`; a reverted config says
+"reactivation not confirmed"; a failed rollback includes the exact manual
+command. One journal entry per attempt and one per rollback (pkexec_uid).
 
-restart-adapter: down, up; one retry on up failure; then check real state WITHOUT
-treating "unknown" as failure: check IFF_UP in /sys/class/net/<iface>/flags.
-Report final state truthfully; ok=False if still down.
+restart-adapter: down, then up; if the first up times out/fails, one final
+attempt with the remaining budget. Final state from IFF_UP in
+`/sys/class/net/<if>/flags` (never operstate: lo/dummy report "unknown").
+Carrier is read separately; absent => unknown, not an error. `ok=True` iff
+IFF_UP; the message distinguishes carrier detected / no carrier / unknown.
+If the interface stays down, `ok=False` with the real state in details.
 
-plan_verb stays pure. Executor injectable. Tests: failure at each step, empty
-prev DNS, ignore-auto-dns "no", invalid snapshot => no con mod, budget exhausted.
-Bump HELPER_VERSION; update VERBS/THREAT_MODEL/COMPLIANCE_MATRIX/CHANGELOG. Bump HELPER_VERSION; update VERBS/THREAT_MODEL/COMPLIANCE_MATRIX/CHANGELOG. NO VERIFIED: real nmcli/ip as root -> VM_CHECKLIST. STOP: implementation begins after this note is committed.
+plan_verb stays pure. Executor, clock and sysfs root are injectable. Tests:
+snapshot rc/timeout/invalid, con mod failure+timeout, con up failure+timeout,
+restore failure, budget exhausted in rollback, empty previous DNS,
+ignore-auto-dns "no", dry-run argv == executed argv, restart retry/lo/down.
+
+HELPER_VERSION 1.8.5. `--timeout` is the total verb deadline; the daemon waits
+`timeout + IPC margin` (`system.py`). NO VERIFIED: real nmcli/ip as root ->
+`docs/VM_CHECKLIST.md`.

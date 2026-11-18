@@ -59,13 +59,13 @@ Consumidores in-repo (`tools/netmedic_mcp.py`, `netmedic_ai/toolkit.py: _run_too
 | `flush-dns` (`helper_verbs.py: plan "flush-dns"`) | `resolvectl flush-caches` | ⚠️ verificada **solo dentro del flujo Smart Repair** (post-diag); standalone queda EXECUTED | Standalone: "cache flushed" sin promesa de DNS |
 | `renew-ip` nmcli (`helper_verbs.py: plan "renew-ip"`) | `nmcli device reapply <iface>` | ✅ `ip -4 addr` before/after + ping gw (`network.py: renew_ip`) → `details{old_ip,new_ip,changed,gateway_ok}` | "IP changed .10→.11" o **"retained (lease reapplied)"** — nunca "renewed" a secas |
 | `renew-ip` dhclient (`helper_verbs.py: plan "renew-ip"`, dhclient branch) | `dhclient -r` + `dhclient <iface>` | `unverified-by-design` — path de fallback raramente ejercitado; dhclient compite con NM; nunca auto-escalar (§6) | Igual que arriba si se ejecuta |
-| `change-dns` (`helper_verbs.py: plan "change-dns"`) | `nmcli con mod … ipv4.dns … ignore-auto-dns yes` + `nmcli con up` | `unverified-by-design` (pendiente) — modifica perfil NM; verificación natural = re-run `network_status` (§6) | "DNS profile changed" sin promesa de resolución |
+| `change-dns` (`helper_verbs.py: plan "change-dns"`) | `nmcli con mod … ipv4.dns … ignore-auto-dns yes` + `nmcli con up` | ✅ snapshot prev `ipv4.dns` + `ipv4.ignore-auto-dns`; one deadline with reserved rollback; config restored first, `con up` best-effort | "DNS profile changed"; on failure "config reverted, reactivation not confirmed" or "rollback FAILED + exact command" |
 
 ### 3.3 Infraestructura privilegiada
 
 | Verbo helper | Comando real | Post-condición | Semántica de éxito |
 |---|---|---|---|
-| `restart-adapter` (`helper_verbs.py: plan "restart-adapter"`) | `ip link set <iface> down` + `up` | ✅ `ip -j link show` operstate UP, poll 5s (`network.py: restart_adapter`) | OK = link realmente UP |
+| `restart-adapter` (`helper_verbs.py: plan "restart-adapter"`) | `ip link set <iface> down` + `up` (one final retry if `up` times out/fails) | ✅ IFF_UP en `/sys/class/net/<if>/flags`; carrier aparte (`ausente` = desconocido) | OK = interfaz IFF_UP; el mensaje distingue "carrier detected" / "no carrier" / "carrier unknown"; DOWN => ok=False con estado real |
 | `reset-stack` (`helper_verbs.py: plan "reset-stack"`) | `systemctl restart NetworkManager` | ✅ `nmcli general status`, poll 15s (`network.py: reset_tcp_ip_stack`) | OK = NM operativo |
 | `toggle-firewall` (`helper_verbs.py: plan "toggle-firewall"`) | `ufw --force enable` / `disable` | ✅ `get_firewall_status()` expected vs final (`network.py: toggle_firewall`) | OK = estado verificado — **positive control del audit** |
 
@@ -126,7 +126,7 @@ Flag `POST_REPAIR_VERIFY` (default ON). El diagnóstico inicial **no cuenta** en
 
 | Ítem | Detalle | Acción |
 |---|---|---|
-| `change-dns` sin post-condición | Modifica perfil sin verificar resolución | Añadir `getent` recheck tras `nmcli con up` |
+| `change-dns` sin post-condición de resolución | Modifica perfil y ya restaura la config si falla (F6.1), pero no verifica resolución DNS tras `con up` | Añadir `getent` recheck tras `nmcli con up` |
 | `dhclient` fallback | Sin verificación + riesgo de conflicto con NM | Mantener tag `unverified-by-design`; nunca auto-escalar |
 | STR-04/05 | `ufw`/`rfkill` parse por strings (output no localiza; riesgo bajo) | `sf-str: allow` con ratchet |
 | Force renew real | `nmcli device reapply` **no** dispara DORA fresca; el path confiable documentado es `nmcli device disconnect/connect` — destructivo, solo como acción explícita | Backlog: acción "force renew" con advertencia |
