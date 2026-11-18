@@ -34,3 +34,10 @@ def test_current_release_line_is_supported() -> None:
     assert row.group(1).strip().lower().startswith("yes"), (
         f"SECURITY.md does not mark {release_line} as Yes: {row.group(1).strip()!r}"
     )
+
+
+def test_policy_installer_does_not_advertise_legacy_elevation() -> None:
+    """The root installer must not suggest disabling the helper in production."""
+    text = (ROOT / "scripts" / "install-polkit-policy.sh").read_text(encoding="utf-8")
+    assert "NETMEDIC_ALLOW_LEGACY_ELEVATION" not in text
+    assert "Force legacy" not in text
