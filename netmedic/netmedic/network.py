@@ -560,8 +560,12 @@ class NetworkMedic:
 
     def restart_adapter(self) -> NetResult:
         """
-        Baja y sube la interfaz de red por defecto. Verifies operstate UP post-cycle.
-        
+        Baja y sube la interfaz de red por defecto.
+
+        F6.2: the privileged helper owns the post-condition (IFF_UP + carrier
+        from sysfs). The daemon propagates the helper's verdict, message and
+        details verbatim; it must not re-check operstate or rewrite the text.
+
         Riesgo: Medio (Corte de conexión en la interfaz específica).
         Tiempo: 2s - 5s.
         Reversibilidad: Sí (Subir manualmente con 'ip link set UP').
@@ -575,47 +579,30 @@ class NetworkMedic:
             return NetResult("Restart Adapter", False, f"Refusing invalid interface name: {iface!r}", code=ResultCode.ERROR)
 
         res = CommandRunner.run_elevated("restart-adapter", {"iface": iface})
+        details = res.details if res.details is not None else (res.stderr or res.stdout or None)
         if not res.success:
             if _elevated_is_cancelled(res):
-                return NetResult("Restart Adapter", False, "Authentication cancelled by user", details=res.stderr, code=ResultCode.CANCELLED)
+                return NetResult(
+                    "Restart Adapter",
+                    False,
+                    res.message or "Authentication cancelled by user",
+                    details=details,
+                    code=ResultCode.CANCELLED,
+                )
             return NetResult(
                 "Restart Adapter",
                 False,
-                f"Failed to restart {iface}",
-                details=res.stderr or res.stdout,
+                res.message or res.stderr or res.stdout or "restart-adapter failed",
+                details=details,
                 code=ResultCode.FAILED,
             )
-        # Post-condition: PR6 SEM-03 use ip -j link show operstate poll up to 5s
-        import json
-        import time
-        operstate_ok = False
-        last_out = ""
-        for _ in range(5):
-            ip_check = CommandRunner.run(["ip", "-j", "link", "show", iface])
-            if ip_check.success:
-                try:
-                    data = json.loads(ip_check.stdout)
-                    if data and isinstance(data, list):
-                        state = data[0].get("operstate") or data[0].get("state") or ""
-                        if state == "UP":
-                            operstate_ok = True
-                            last_out = ip_check.stdout[:500]
-                            break
-                except json.JSONDecodeError:
-                    pass
-                # Fallback to text parse  # sf-str: allow ip link output not localized, low-risk display parse TODO: remove when json path covers all kernels
-                txt = CommandRunner.run(["ip", "-o", "link", "show", iface])
-                if "state UP" in txt.stdout or "UP" in txt.stdout:  # sf-str: allow ip link output not localized, low-risk display parse TODO: json-only
-                    operstate_ok = True
-                    last_out = txt.stdout[:500]
-                    break
-                last_out = txt.stdout[:500]
-            time.sleep(1)
-        if not operstate_ok:
-            return NetResult("Restart Adapter", False, f"Adapter {iface} not UP after restart", details=last_out[:300], code=ResultCode.FAILED)
-        ip_after = self._get_iface_ipv4(iface)
-        details = {"operstate": "UP", "ip": ip_after or "none"}
-        return NetResult("Restart Adapter", True, f"Adapter {iface} restarted", details=details, code=ResultCode.OK)
+        return NetResult(
+            "Restart Adapter",
+            True,
+            res.message or res.stdout or "restart-adapter reported success",
+            details=details,
+            code=ResultCode.OK,
+        )
 
     @staticmethod
     def read_firewall_status() -> str:
