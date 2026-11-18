@@ -2,6 +2,18 @@
 
 All notable changes to NetMedic Linux are documented here.
 
+## [Unreleased] — H4 supply-chain lock refresh
+
+### Security
+- `requirements.lock`: Pillow 12.3.0 -> 13.0.0 (CVE-2026-128066) and
+  setuptools 84.0.0 -> 84.2.1 (GHSA-xmj3-9gf7-h52w). The cp312 manylinux
+  wheel hashes were re-verified with `pip download`.
+- `pip-audit -r requirements.lock` is green on Python 3.12.
+
+### Changed
+- Static guard `test_lock_build_tools_above_cve_floor` keeps both build
+  tools above the known-vulnerable floor.
+
 ## [Unreleased] — F3c cierres (hotfix)
 
 ### Security
@@ -11,8 +23,8 @@ All notable changes to NetMedic Linux are documented here.
 - `SECURITY.md`: only 1.8.x supported; <=1.6.0 affected (C).
 - `COMPLIANCE_MATRIX.md`: ISO control column + honest status; model hash test
   and MCP gate test cited (D).
-- mypy CI command verified clean (13 modules); pip-audit against lock still
-  fails on Pillow 12.3.0 (H4 open).
+- mypy CI command verified clean (13 modules). H4 (`pip-audit` against the
+  lock) was open at the time and is closed by the H4 lock refresh entry above.
 
 ## [Unreleased] — F7 AI supply chain (partial)
 

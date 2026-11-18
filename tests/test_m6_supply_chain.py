@@ -87,6 +87,20 @@ def test_lock_has_hashes_for_pip_inputs():
         assert len(hashes.strip()) > len("--hash=sha256:"), name
 
 
+def _lock_version(name: str) -> tuple:
+    match = re.search(
+        rf"(?m)^{re.escape(name)}==" + r"([^\s\\]+)", _read("requirements.lock")
+    )
+    assert match, f"requirements.lock: missing {name}"
+    return tuple(int(part) for part in match.group(1).split(".") if part.isdigit())
+
+
+def test_lock_build_tools_above_cve_floor():
+    """H4: keep Pillow/setuptools above the known-vulnerable versions."""
+    assert _lock_version("pillow") >= (13, 0, 0), "Pillow < 13.0.0 has CVE-2026-128066"
+    assert _lock_version("setuptools") >= (84, 1, 0), "setuptools < 84.1.0 has GHSA-xmj3-9gf7-h52w"
+
+
 def test_dependabot_pip_dirs_exist():
     """Pip updates must point at dirs that contain manifests (stdlib-only)."""
     text = (REPO / ".github" / "dependabot.yml").read_text()
