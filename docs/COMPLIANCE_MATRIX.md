@@ -23,7 +23,7 @@ No afirma conformidad ni certificación. "Implementado" solo si hay test o artef
 | Recuperabilidad (change-dns/restart-adapter) | ISO 27001 A.8.9 | `helper_main.py:_execute_change_dns`, `_execute_restart_adapter` | `tests/test_f6_recoverability.py` | Implementado | VM: rollback real pendiente |
 | Mapeo ISO 27001 (matriz real) | ISO 27001 (anexo A) | — | — | Brecha | Esta matriz es el inicio; falta cobertura completa |
 | Proceso de divulgación de vulnerabilidades | ISO 29147 / 30111 | `SECURITY.md` | — | Parcial | Añadir timeline coordinado (hecho en F8) |
-| Cadena de suministro de dependencias | ISO 27001 A.8.28, 18974 | `requirements.lock` | CI `supply-chain-audit` | Parcial | Pillow 12.3.0 vulnerable; regenerar lock |
+| Cadena de suministro de dependencias | ISO 27001 A.8.28, 18974 | `requirements.lock` | CI `supply-chain-audit`; `tests/test_m6_supply_chain.py::test_lock_build_tools_above_cve_floor` | Implementado | Nuevas CVEs dependen del barrido semanal |
 
 ## Divulgación
 
