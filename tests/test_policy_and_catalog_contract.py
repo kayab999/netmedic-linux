@@ -88,13 +88,18 @@ def test_policy_xml_well_formed_and_annotated():
                 for d in child:
                     if d.tag.endswith("allow_active") or d.tag == "allow_active":
                         allow_active = (d.text or "").strip()
-        assert HELPER_PATH in annot.get("org.freedesktop.policykit.exec.path", ""), (
-            f"{action_id} missing exec.path annotate → {HELPER_PATH}"
-        )
-        # F4: argv1 must equal the helper verb for this action.
+        # F4: each action now has its own wrapper path so pkexec 0.105, which
+        # selects by exec.path only, cannot collapse every action into the
+        # first enumerated one.
         expected_verb = id_to_verb[action_id]
-        assert annot.get("org.freedesktop.policykit.exec.argv1") == expected_verb, (
-            f"{action_id} missing/incorrect exec.argv1 (want {expected_verb})"
+        expected_path = f"/usr/libexec/netmedic/helper-{expected_verb}"
+        assert annot.get("org.freedesktop.policykit.exec.path") == expected_path, (
+            f"{action_id} missing/incorrect exec.path annotate → {expected_path}"
+        )
+        # exec.argv1 is intentionally absent: the wrapper carries the verb, so
+        # the path alone identifies the action on both 0.105 and 0.120.
+        assert annot.get("org.freedesktop.policykit.exec.argv1") is None, (
+            f"{action_id} must not carry exec.argv1 in the per-verb design"
         )
         if action_id in no_keep_ids:
             assert allow_active == "auth_admin", f"{action_id} must use auth_admin (no keep)"
@@ -157,11 +162,11 @@ def test_is_privileged_matches_set():
         assert not is_privileged(action)
 
 
-def test_exec_path_argv1_pairs_are_unique():
+def test_exec_paths_are_unique_per_verb():
     """F3: each (exec.path, argv1) pair must be unique so pkexec disambiguates."""
     tree = ET.parse(POLICY)
     root = tree.getroot()
-    pairs = []
+    paths = []
     for action_el in root.iter():
         if not (action_el.tag.endswith("action") or action_el.tag == "action"):
             continue
@@ -170,7 +175,7 @@ def test_exec_path_argv1_pairs_are_unique():
             if child.tag.endswith("annotate") or child.tag == "annotate":
                 annot[child.get("key") or ""] = (child.text or "").strip()
         path = annot.get("org.freedesktop.policykit.exec.path")
-        argv1 = annot.get("org.freedesktop.policykit.exec.argv1")
-        if path and argv1:
-            pairs.append((path, argv1))
-    assert len(pairs) == len(set(pairs)), f"duplicate (exec.path, argv1): {pairs}"
+        if path and path.startswith("/usr/libexec/netmedic/helper-"):
+            paths.append(path)
+    assert len(paths) == len(set(paths)), f"duplicate exec.path: {paths}"
+    assert len(paths) == 12, f"expected 12 per-verb wrappers, got {len(paths)}"

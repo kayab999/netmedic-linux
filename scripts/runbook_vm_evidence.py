@@ -468,7 +468,7 @@ def _print_manual_steps() -> None:
 
 F1 install/journal:
   cd /tmp && sudo /path/to/netmedic_linux/scripts/install-polkit-policy.sh
-  pkexec /usr/libexec/netmedic/helper flush-dns --execute --json '{}'
+  pkexec /usr/libexec/netmedic/helper-flush-dns --execute --json '{}'
   journalctl -t netmedic-helper -n 1 --no-pager
 
 F2 tamper (run only after a VM snapshot; subshell + trap; records openvpn state before/after):
@@ -488,7 +488,7 @@ F2 tamper (run only after a VM snapshot; subshell + trap; records openvpn state 
     echo '# tampered' | sudo tee -a "$VPN" >/dev/null
 
     set +e
-    OUT=$(pkexec /usr/libexec/netmedic/helper vpn-install --execute --json '{"port":1194,"protocol":"udp","dns":"cloudflare"}' 2>"$ERR")
+    OUT=$(pkexec /usr/libexec/netmedic/helper-vpn-install --execute --json '{"port":1194,"protocol":"udp","dns":"cloudflare"}' 2>"$ERR")
     RC=$?
     set -e
     DIAG="stdout=[$OUT] stderr=[$(cat "$ERR")]"
@@ -550,9 +550,9 @@ F6.2 restart-adapter:
   after the helper.
 
 F2/F3 VPN end-to-end:
-  pkexec /usr/libexec/netmedic/helper vpn-install --execute --json '{"port":1194,"protocol":"udp","dns":"cloudflare","client_ipv6":false,"client":"client"}'
-  pkexec /usr/libexec/netmedic/helper vpn-add-client --execute --json '{"name":"laptop"}'
-  pkexec /usr/libexec/netmedic/helper vpn-revoke-client --execute --json '{"name":"laptop"}'
+  pkexec /usr/libexec/netmedic/helper-vpn-install --execute --json '{"port":1194,"protocol":"udp","dns":"cloudflare","client_ipv6":false,"client":"client"}'
+  pkexec /usr/libexec/netmedic/helper-vpn-add-client --execute --json '{"name":"laptop"}'
+  pkexec /usr/libexec/netmedic/helper-vpn-revoke-client --execute --json '{"name":"laptop"}'
   Check where `install --client` leaves the initial profile and whether
   `/root/client.ovpn` exists with a key that has no passphrase.
 

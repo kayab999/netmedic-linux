@@ -128,7 +128,6 @@ def test_policy_registers_every_privileged_action() -> None:
     actions = _policy_actions()
     privileged = [spec for spec in ACTIONS if spec.polkit_id]
     assert len(privileged) == 12
-    seen_argv1: set[str] = set()
     for spec in privileged:
         assert spec.polkit_id in actions, f"{spec.polkit_id} missing from installed policy"
         registered = subprocess.run(  # noqa: S603 (fixed binary, no shell)
@@ -141,13 +140,12 @@ def test_policy_registers_every_privileged_action() -> None:
             f"polkit does not see {spec.polkit_id}: {registered.stderr}"
         )
         action = actions[spec.polkit_id]
+        expected_path = HELPER.parent / f"helper-{spec.helper_verb}"
         assert _annotation(
             action, "org.freedesktop.policykit.exec.path"
-        ) == str(HELPER)
-        argv1 = _annotation(action, "org.freedesktop.policykit.exec.argv1")
-        assert argv1 == spec.helper_verb
-        assert argv1 not in seen_argv1, f"duplicate exec.argv1: {argv1}"
-        seen_argv1.add(argv1)
+        ) == str(expected_path)
+        # exec.argv1 is intentionally absent in the per-verb design.
+        assert _annotation(action, "org.freedesktop.policykit.exec.argv1") is None
         assert _default(action, "allow_active") == (
             "auth_admin_keep" if spec.keep_auth else "auth_admin"
         )

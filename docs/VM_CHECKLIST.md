@@ -18,7 +18,7 @@ an item without pasting the literal output next to it.
 
 - [ ] **Journal attribution (L3).**
   ```
-  pkexec /usr/libexec/netmedic/helper flush-dns --execute --json '{}'
+  pkexec /usr/libexec/netmedic/helper-flush-dns --execute --json '{}'
   journalctl -t netmedic-helper -n 1 --no-pager
   ```
   Expected: exactly one record starting `verb=flush-dns ok=1
@@ -63,9 +63,9 @@ an item without pasting the literal output next to it.
 
 - [ ] **VPN install/add/revoke end-to-end (Fase 3).**
   ```
-  pkexec /usr/libexec/netmedic/helper vpn-install --execute --json '{"port":1194,"protocol":"udp","dns":"cloudflare","client_ipv6":false,"client":"client"}'
-  pkexec /usr/libexec/netmedic/helper vpn-add-client --execute --json '{"name":"laptop"}'
-  pkexec /usr/libexec/netmedic/helper vpn-revoke-client --execute --json '{"name":"laptop"}'
+  pkexec /usr/libexec/netmedic/helper-vpn-install --execute --json '{"port":1194,"protocol":"udp","dns":"cloudflare","client_ipv6":false,"client":"client"}'
+  pkexec /usr/libexec/netmedic/helper-vpn-add-client --execute --json '{"name":"laptop"}'
+  pkexec /usr/libexec/netmedic/helper-vpn-revoke-client --execute --json '{"name":"laptop"}'
   ```
   Expected: install completes (service RUNNING); add creates PKI entry and delivers `.ovpn`; revoke marks client revoked. Verify the `.ovpn` lands in `~/.local/share/netmedic/vpn-clients/` mode 0600 and `artifact` is absent from journal/audit log.
 

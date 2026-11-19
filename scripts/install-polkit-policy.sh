@@ -83,6 +83,39 @@ sudo cp "$SRC_POLICY" "$DEST_POLICY"
 sudo chmod 644 "$DEST_POLICY"
 sudo chown root:root "$DEST_POLICY"
 
+# F4: pkexec 0.105 (Ubuntu 22.04/24.04) selects the action by exec.path only,
+# ignoring exec.argv1. A single shared helper path therefore collapses every
+# action into the first enumerated one. Install one root-owned wrapper per verb
+# so each polkit action has a unique, stable exec.path.
+echo "Installing per-verb helper wrappers → $LIBEXEC_DIR"
+"$PYTHON3" - "$DEST_POLICY" "$LIBEXEC_DIR" "$HELPER_WRAPPER" <<'PY'
+import os
+import sys
+import xml.etree.ElementTree as ET
+
+policy_path, libexec_dir, helper_wrapper = sys.argv[1:4]
+root = ET.parse(policy_path).getroot()
+for action in root.iter("action"):
+    action_id = action.get("id", "")
+    if not action_id.startswith("com.kayab.netmedic."):
+        continue
+    verb = action_id.rsplit(".", 1)[-1]
+    wrapper_path = os.path.join(libexec_dir, "helper-" + verb)
+    with open(wrapper_path, "w", encoding="utf-8") as handle:
+        handle.write("#!/bin/sh\\n")
+        handle.write('exec ' + helper_wrapper + ' ' + verb + ' "$@"\\n')
+    os.chmod(wrapper_path, 0o755)
+    os.chown(wrapper_path, 0, 0)
+PY
+# Remove stale wrappers that no longer correspond to a policy action.
+for existing in "$LIBEXEC_DIR"/helper-*; do
+    [ -e "$existing" ] || continue
+    verb="${existing##*/helper-}"
+    if ! grep -q "com.kayab.netmedic.$verb" "$DEST_POLICY"; then
+        sudo rm -f "$existing"
+    fi
+done
+
 echo "Verifying helper dry-run..."
 if ! "$HELPER_WRAPPER" flush-dns --dry-run >/dev/null; then
   echo "ERROR: helper dry-run failed" >&2

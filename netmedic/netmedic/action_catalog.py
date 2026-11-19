@@ -38,6 +38,19 @@ class ActionSpec:
     description: str
     message: str = ""
 
+    @property
+    def exec_path(self) -> Optional[str]:
+        """Per-verb wrapper path so pkexec 0.105 can distinguish actions.
+
+        pkexec 0.105 only compares org.freedesktop.policykit.exec.path, not
+        exec.argv1. One shared helper path therefore collapses every action
+        into the first enumerated one. A unique wrapper per verb keeps the
+        keep_auth/auth_admin distinction working on Ubuntu 22.04/24.04.
+        """
+        if self.helper_verb is None:
+            return None
+        return f"/usr/libexec/netmedic/helper-{self.helper_verb}"
+
 
 ACTIONS: Tuple[ActionSpec, ...] = (
     # Privileged: fixed helper verbs behind polkit.
