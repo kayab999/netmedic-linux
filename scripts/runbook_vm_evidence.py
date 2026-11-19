@@ -8,8 +8,9 @@ Run from the repository root on the target VM, recording the whole session:
 
 The script validates the installed helper, policy, pkexec, the vendored VPN
 installer hash and the fixed-verb dry-runs. It never performs destructive
-actions: the manual blocks for F5/F6.1/F6.2/F2-F3 are printed for the operator
-to execute and paste under the matching item in docs/VM_CHECKLIST.md.
+actions: helper invocations use `--dry-run`, which prints the plan without
+running it, and the manual blocks for F5/F6.1/F6.2/F2-F3 are printed for the
+operator to execute and paste under the matching item in docs/VM_CHECKLIST.md.
 """
 
 from __future__ import annotations
@@ -18,17 +19,24 @@ import hashlib
 import json
 import platform
 import re
+import shlex
 import stat
 import subprocess
 import sys
+import xml.etree.ElementTree as ET
 from datetime import datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "netmedic"))
 
-from netmedic.action_catalog import POLKIT_ACTION_IDS  # noqa: E402
-from netmedic.helper_verbs import (  # noqa: E402
+# Import after injecting the repo on sys.path; the repo modules are the source
+# of truth for the helper version, verbs and VPN pin.
+from netmedic.action_catalog import (  # noqa: E402 (repo path injected above)
+    POLKIT_ACTION_IDS,
+    spec_for_ipc,
+)
+from netmedic.helper_verbs import (  # noqa: E402 (repo path injected above)
     HELPER_VERSION,
     PINNED_VPN_INSTALL_SHA256,
 )
@@ -36,8 +44,29 @@ from netmedic.helper_verbs import (  # noqa: E402
 HELPER = Path("/usr/libexec/netmedic/helper")
 PKEXEC = Path("/usr/bin/pkexec")
 POLICY = Path("/usr/share/polkit-1/actions/com.kayab.netmedic.policy")
+REPO_POLICY = ROOT / "assets" / "com.kayab.netmedic.policy"
 VPN_SCRIPT = Path("/usr/lib/netmedic/scripts/openvpn-install.sh")
 REPO_VPN_SCRIPT = ROOT / "netmedic" / "netmedic" / "data" / "vpn" / "openvpn-install.sh"
+INSTALLED_HELPER_PKG = Path("/usr/lib/netmedic/netmedic")
+REPO_HELPER_PKG = ROOT / "netmedic" / "netmedic"
+HELPER_DIRS = (
+    Path("/usr/libexec/netmedic"),
+    Path("/usr/lib/netmedic"),
+    Path("/usr/lib/netmedic/scripts"),
+)
+HELPER_MODULES = (
+    "helper_verbs.py",
+    "helper_main.py",
+    "validators.py",
+    "action_catalog.py",
+)
+KEEP_AUTH_POLKIT_IDS = frozenset(
+    {
+        "com.kayab.netmedic.flush-dns",
+        "com.kayab.netmedic.renew-ip",
+    }
+)
+RUN_DIR = Path("/run/netmedic")
 
 FAILURES: list[str] = []
 WARNINGS: list[str] = []
@@ -86,12 +115,83 @@ def _check_regular_root(path: Path, label: str) -> None:
         return
     if not stat.S_ISREG(info.st_mode):
         _fail(f"{label} is not a regular file: {path}")
+    elif info.st_mode & 0o022:
+        _fail(
+            f"{label} is group/world writable: {path} "
+            f"mode={info.st_mode & 0o777:04o}"
+        )
     elif info.st_uid != 0:
         _fail(f"{label} is not root-owned: {path} (uid={info.st_uid})")
     elif not info.st_mode & 0o111:
         _fail(f"{label} is not executable: {path}")
     else:
         _ok(f"{label}: {path} root-owned regular executable mode={info.st_mode & 0o777:04o}")
+
+
+def _check_root_dir(path: Path) -> None:
+    try:
+        info = path.stat()
+    except OSError as exc:
+        _fail(f"directory missing: {path} ({exc})")
+        return
+    if not stat.S_ISDIR(info.st_mode):
+        _fail(f"not a directory: {path}")
+    elif info.st_uid != 0 or info.st_gid != 0:
+        _fail(f"directory is not root:root: {path} (uid={info.st_uid} gid={info.st_gid})")
+    elif info.st_mode & 0o022:
+        _fail(
+            f"directory is group/world writable: {path} "
+            f"mode={info.st_mode & 0o777:04o}"
+        )
+    else:
+        _ok(f"directory root:root, not group/world writable: {path}")
+
+
+def _check_helper_dirs() -> None:
+    for directory in HELPER_DIRS:
+        _check_root_dir(directory)
+
+
+def _check_helper_modules() -> None:
+    if not INSTALLED_HELPER_PKG.is_dir():
+        _fail(f"installed helper package missing: {INSTALLED_HELPER_PKG}")
+        return
+
+    problems = 0
+    for name in HELPER_MODULES:
+        repo_file = REPO_HELPER_PKG / name
+        installed_file = INSTALLED_HELPER_PKG / name
+        if not repo_file.is_file():
+            _fail(f"repo helper module missing: {repo_file}")
+            problems += 1
+            continue
+        if not installed_file.is_file():
+            _fail(f"installed helper module missing: {installed_file}")
+            problems += 1
+            continue
+        repo_hash = _sha256(repo_file)
+        installed_hash = _sha256(installed_file)
+        if repo_hash != installed_hash:
+            _fail(
+                f"installed {name} hash {installed_hash} != repo {repo_hash}"
+            )
+            problems += 1
+
+    expected = set(HELPER_MODULES) | {"__init__.py"}
+    unexpected = sorted(
+        entry.name
+        for entry in INSTALLED_HELPER_PKG.glob("*.py")
+        if entry.name not in expected
+    )
+    if unexpected:
+        _fail(f"unexpected .py file(s) in {INSTALLED_HELPER_PKG}: {unexpected}")
+        problems += 1
+
+    if problems == 0:
+        _ok(
+            f"installed helper modules match repo "
+            f"({len(HELPER_MODULES)} files, no extra .py)"
+        )
 
 
 def _read_repo_version() -> str:
@@ -141,6 +241,97 @@ def _check_pkexec() -> None:
     _check_regular_root(PKEXEC, "pkexec")
 
 
+def _check_policy_hash() -> None:
+    if not REPO_POLICY.is_file():
+        _fail(f"repo polkit policy missing: {REPO_POLICY}")
+        return
+    if not POLICY.is_file():
+        _fail(f"installed policy missing: {POLICY}")
+        return
+    repo_hash = _sha256(REPO_POLICY)
+    installed_hash = _sha256(POLICY)
+    if repo_hash != installed_hash:
+        _fail(f"installed policy hash {installed_hash} != repo {repo_hash}")
+    else:
+        _ok("installed policy hash matches assets/com.kayab.netmedic.policy")
+
+
+def _check_policy_actions() -> None:
+    try:
+        root = ET.parse(POLICY).getroot()  # noqa: S314 (root-owned local policy)
+    except (OSError, ET.ParseError) as exc:
+        _fail(f"cannot parse installed policy {POLICY}: {exc}")
+        return
+
+    nodes = {node.get("id"): node for node in root.findall("action")}
+    seen_argv1: dict[str, str] = {}
+    problems = 0
+    for ipc_action, polkit_id in sorted(
+        POLKIT_ACTION_IDS.items(), key=lambda item: item[1]
+    ):
+        spec = spec_for_ipc(ipc_action)
+        node = nodes.get(polkit_id)
+        if spec is None:
+            _fail(f"{ipc_action}: no action_catalog spec for {polkit_id}")
+            problems += 1
+            continue
+        if node is None:
+            _fail(f"installed policy is missing action {polkit_id}")
+            problems += 1
+            continue
+
+        annotate = {
+            element.get("key"): (element.text or "")
+            for element in node.findall("annotate")
+        }
+        exec_path = annotate.get("org.freedesktop.policykit.exec.path")
+        exec_argv1 = annotate.get("org.freedesktop.policykit.exec.argv1")
+        if exec_path != str(HELPER):
+            _fail(f"{polkit_id}: exec.path {exec_path!r} != {str(HELPER)!r}")
+            problems += 1
+        if exec_argv1 != spec.helper_verb:
+            _fail(
+                f"{polkit_id}: exec.argv1 {exec_argv1!r} "
+                f"!= catalog {spec.helper_verb!r}"
+            )
+            problems += 1
+        elif exec_argv1 in seen_argv1:
+            _fail(
+                f"{polkit_id}: exec.argv1 {exec_argv1!r} "
+                f"also used by {seen_argv1[exec_argv1]}"
+            )
+            problems += 1
+        else:
+            assert exec_argv1 is not None
+            seen_argv1[exec_argv1] = polkit_id
+
+        allow_active = (node.findtext("defaults/allow_active") or "").strip()
+        wanted = "auth_admin_keep" if spec.keep_auth else "auth_admin"
+        if allow_active != wanted:
+            _fail(
+                f"{polkit_id}: allow_active {allow_active!r} != {wanted!r}"
+            )
+            problems += 1
+
+    configured_keep = frozenset(
+        polkit_id
+        for ipc_action, polkit_id in POLKIT_ACTION_IDS.items()
+        if (spec := spec_for_ipc(ipc_action)) is not None and spec.keep_auth
+    )
+    if configured_keep != KEEP_AUTH_POLKIT_IDS:
+        _fail(
+            f"catalog keeps {sorted(configured_keep)}, "
+            f"expected {sorted(KEEP_AUTH_POLKIT_IDS)}"
+        )
+        problems += 1
+
+    if problems == 0:
+        _ok(
+            f"policy maps all {len(POLKIT_ACTION_IDS)} actions "
+            f"to helper verbs with expected auth retention"
+        )
+
+
 def _check_policy() -> None:
     if not POLICY.is_file():
         _fail(f"polkit policy missing: {POLICY}")
@@ -150,6 +341,9 @@ def _check_policy() -> None:
         _fail(f"polkit policy is not root-owned: {POLICY} (uid={info.st_uid})")
     else:
         _ok(f"polkit policy present, root-owned, mode={info.st_mode & 0o777:04o}")
+
+    _check_policy_hash()
+    _check_policy_actions()
 
     result = _run(["pkaction"])
     if result.returncode != 0:
@@ -188,30 +382,43 @@ def _check_vpn_installer() -> None:
 
 
 def _check_run_dir() -> None:
-    staged = Path("/run/netmedic")
-    if not staged.exists():
-        _warn("/run/netmedic not present (created on demand for VPN staging)")
+    if not RUN_DIR.exists():
+        _warn(f"{RUN_DIR} not present (created on demand for VPN staging)")
         return
-    info = staged.stat()
+    info = RUN_DIR.stat()
     if info.st_uid != 0 or info.st_mode & 0o777 != 0o700:
         _fail(
-            f"/run/netmedic must be root:root 0700, got uid={info.st_uid} "
+            f"{RUN_DIR} must be root:root 0700, got uid={info.st_uid} "
             f"mode={info.st_mode & 0o777:04o}"
         )
     else:
-        _ok("/run/netmedic is root:root 0700")
+        _ok(f"{RUN_DIR} is root:root 0700")
 
 
 def _check_dry_runs() -> None:
     cases = [
         ("flush-dns", None),
+        ("change-dns", {"connection": "netmedic-test", "server": "1.1.1.1"}),
         ("restart-adapter", {"iface": "lo"}),
         ("vpn-list", None),
+        (
+            "vpn-install",
+            {
+                "port": 1194,
+                "protocol": "udp",
+                "dns": "cloudflare",
+                "client_ipv6": False,
+                "client": "client",
+            },
+        ),
+        ("vpn-add-client", {"name": "laptop"}),
+        ("vpn-revoke-client", {"name": "laptop"}),
     ]
     for verb, params in cases:
         argv = [str(HELPER), verb, "--dry-run"]
         if params is not None:
             argv.extend(["--json", json.dumps(params, separators=(",", ":"))])
+        print(f"dry-run argv: {shlex.join(argv)}")
         result = _run(argv)
         if result.returncode != 0:
             _fail(f"dry-run {verb} rc={result.returncode}: {result.stderr.strip()}")
@@ -244,8 +451,7 @@ def _print_environment() -> None:
 
 
 def _print_manual_steps() -> None:
-    print(
-        """
+    text = """
 === Manual checks (execute separately, paste under docs/VM_CHECKLIST.md) ===
 
 F1 install/journal:
@@ -253,11 +459,32 @@ F1 install/journal:
   pkexec /usr/libexec/netmedic/helper flush-dns --execute --json '{}'
   journalctl -t netmedic-helper -n 1 --no-pager
 
-F2 tamper (restore afterwards):
-  sudo cp /usr/lib/netmedic/scripts/openvpn-install.sh /tmp/vpn.bak
-  echo '# tampered' | sudo tee -a /usr/lib/netmedic/scripts/openvpn-install.sh
-  pkexec /usr/libexec/netmedic/helper vpn-install --execute --json '{"port":1194,"protocol":"udp","dns":"cloudflare"}'
-  sudo cp /tmp/vpn.bak /usr/lib/netmedic/scripts/openvpn-install.sh
+F2 tamper (run only after a VM snapshot; the trap restores the file):
+  set -euo pipefail
+  VPN=/usr/lib/netmedic/scripts/openvpn-install.sh
+  PIN=__PIN__
+  BAK=$(mktemp)
+  sudo cp -p "$VPN" "$BAK"
+  trap 'sudo cp -p "$BAK" "$VPN"; rm -f "$BAK"' EXIT
+  echo '# tampered' | sudo tee -a "$VPN" >/dev/null
+  if pkexec /usr/libexec/netmedic/helper vpn-install --execute --json '{"port":1194,"protocol":"udp","dns":"cloudflare"}'; then
+    echo 'FAIL: helper accepted a tampered VPN installer'
+  else
+    echo 'PASS: helper rejected the tampered VPN installer'
+  fi
+  sudo cp -p "$BAK" "$VPN"
+  trap - EXIT
+  rm -f "$BAK"
+  if test "$(sha256sum "$VPN" | cut -d' ' -f1)" = "$PIN"; then
+    echo 'PASS: VPN installer restored to the pin'
+  else
+    echo 'FAIL: VPN installer did not return to the pin'
+  fi
+  if dpkg -l openvpn 2>/dev/null | grep -q '^ii'; then
+    echo 'FAIL: openvpn package is installed after the tamper attempt'
+  else
+    echo 'PASS: openvpn package is not installed after the tamper attempt'
+  fi
 
 F5 re-prompt (run each twice within 5 minutes):
   change-dns and restart-adapter must ask every time; flush-dns keeps the window.
@@ -284,7 +511,7 @@ F2/F3 VPN end-to-end:
 
 Do not mark any item complete without the literal output next to it.
 """
-    )
+    print(text.replace("__PIN__", PINNED_VPN_INSTALL_SHA256))
 
 
 def main() -> int:
@@ -293,6 +520,8 @@ def main() -> int:
     _check_regular_root(HELPER, "helper")
     _check_helper_version()
     _check_pkexec()
+    _check_helper_dirs()
+    _check_helper_modules()
     _check_policy()
     _check_vpn_installer()
     _check_run_dir()
