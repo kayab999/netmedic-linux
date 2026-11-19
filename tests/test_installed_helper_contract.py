@@ -145,7 +145,7 @@ def test_policy_registers_every_privileged_action() -> None:
             action, "org.freedesktop.policykit.exec.path"
         ) == str(expected_path)
         # exec.argv1 is intentionally absent in the per-verb design.
-        assert _annotation(action, "org.freedesktop.policykit.exec.argv1") is None
+        assert _annotation(action, "org.freedesktop.policykit.exec.argv1") == ""
         assert _default(action, "allow_active") == (
             "auth_admin_keep" if spec.keep_auth else "auth_admin"
         )
