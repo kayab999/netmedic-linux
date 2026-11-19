@@ -1,21 +1,36 @@
-# Privileged Helper Design (v1.5 target — as built v1.6.1, hardened through v1.8.0)
+# Privileged Helper Design (v1.9.0 — typed verbs, installed contract)
 
-## Problem
+## Status
 
-Today NetMedic elevates with:
+This document describes the helper as shipped in **1.9.0** and keeps the
+migration history for context. Production elevation is helper-only; the legacy
+`pkexec <allowlisted argv>` path exists for tests and is disabled unless
+`NETMEDIC_TEST_MODE=1` and `NETMEDIC_ALLOW_LEGACY_ELEVATION=1` are both set.
+
+`HELPER_VERSION` is `1.9.0`. The daemon refuses privileged work unless the
+installed helper reports the same version through `--version` with `ok=true`
+(see “Version gate” below). Re-run `./scripts/install-polkit-policy.sh` after
+updating the project.
+
+## Background (pre-v1.6)
+
+The original design elevated with:
 
 ```text
 IPC polkit (com.kayab.netmedic.*)  →  pkexec <arbitrary allowlisted argv>
 ```
 
-The fine-grained polkit action IDs gate **IPC entry**, not the **actual root command**. `CommandRunner` prefixes any allowlisted binary with generic `org.freedesktop.policykit.exec` (`pkexec`). That is defense-in-depth for accidental misuse, but not least privilege:
+The fine-grained polkit action IDs gated **IPC entry**, not the **actual root
+command**: `CommandRunner` prefixed any allowlisted binary with generic
+`org.freedesktop.policykit.exec` (`pkexec`). That was defense-in-depth for
+accidental misuse, but not least privilege.
 
-| Property | Current | Desired |
-|----------|---------|---------|
-| Polkit subject | IPC action ID | Helper verb / fixed program |
-| Root argv | Client-chosen within binary allowlist | Fixed map action → argv template |
-| Audit | IPC audit log | IPC + helper audit (optional) |
-| Attack surface | Any code path that reaches `CommandRunner.run(..., require_root=True)` | Only helper entrypoints |
+| Property | Legacy (tests only) | Current 1.9.0 |
+|----------|---------------------|---------------|
+| Polkit subject | IPC action ID | Helper path + fixed `argv1` (verb) |
+| Root argv | Client-chosen within binary allowlist | Fixed per-verb argv template |
+| Audit | IPC audit log | IPC audit + root-side journal record |
+| Attack surface | Any code path reaching `CommandRunner.run(..., require_root=True)` | Only helper entrypoints |
 
 ## Goals
 
@@ -25,11 +40,12 @@ The fine-grained polkit action IDs gate **IPC entry**, not the **actual root com
 4. **No shell**; argv-only execution.
 5. **Backward-compatible IPC API** (action names unchanged).
 
-## Non-goals (v1.5, reaffirmed v1.8.0)
+## Non-goals (v1.9.0)
 
 - Multi-user mutually untrusted operators
 - Network-exposed helper
 - Replacing NetworkManager with a custom daemon
+- Shipping a native `.deb`/`.rpm` in 1.9.0 (tracked separately)
 
 ## Architecture
 
@@ -98,6 +114,51 @@ Output: single JSON line on stdout:
 
 Exit codes: `0` success, `1` operational failure, `2` invalid args, `3` integrity/auth local check failed, `126` cancelled.
 
+### Version gate (1.9.0)
+
+Before any privileged operation, `CommandRunner._check_helper_version()` runs
+the installed wrapper with `--version` and requires **all** of:
+
+1. exit code `0`
+2. a JSON object
+3. `ok is True`
+4. a non-empty `version`
+5. an exact match with `HELPER_VERSION`
+
+Missing helper, timeout, non-zero exit, invalid JSON, `ok=false`, an empty
+version and a mismatch all block elevation with a reinstall hint. The explicit
+development marker `python|-m|netmedic.helper_main` keeps its in-repo fallback;
+production never takes that path.
+
+### Policy retention (`keep_auth`)
+
+`action_catalog.ACTIONS` sets `keep_auth` per action. It maps to polkit
+`allow_active`:
+
+- `keep_auth=True` → `auth_admin_keep` (5-minute window for low-impact,
+  idempotent verbs such as `flush-dns` and `renew-ip`)
+- `keep_auth=False` → `auth_admin` (re-prompt every time for disruptive or
+  destructive verbs such as `change-dns`, firewall, VPN install/revoke)
+
+`allow_any` and `allow_inactive` stay `auth_admin`.
+
+### Installed layout and staging
+
+`./scripts/install-polkit-policy.sh` writes:
+
+| Path | Content |
+|------|---------|
+| `/usr/libexec/netmedic/helper` | `sh` wrapper: fixed `/usr/bin/python3 -I -s` + launcher |
+| `/usr/lib/netmedic/_run_helper.py` | root-owned launcher with explicit `sys.path` |
+| `/usr/lib/netmedic/netmedic/` | `helper_main.py`, `helper_verbs.py`, `validators.py`, `action_catalog.py`, root-owned `0644` |
+| `/usr/lib/netmedic/scripts/openvpn-install.sh` | vendored installer, root-owned `0644` |
+| `/usr/share/polkit-1/actions/com.kayab.netmedic.policy` | generated policy, root-owned `0644` |
+
+VPN verbs resolve the fixed installer path, read it with `O_NOFOLLOW`, reject
+non-regular/foreign-owned/writable/oversized files, verify the pinned SHA-256,
+copy it to a root-owned staging directory under `/run/netmedic` (`0700`) and
+execute only that copy.
+
 ### Argument validation (helper-side)
 
 - Interface names: `^[A-Za-z0-9._@+-]+$` (and medic allowlist for delete).
@@ -111,6 +172,7 @@ Exit codes: `0` success, `1` operational failure, `2` invalid args, `3` integrit
 <action id="com.kayab.netmedic.flush-dns">
   ...
   <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/netmedic/helper</annotate>
+  <annotate key="org.freedesktop.policykit.exec.argv1">flush-dns</annotate>
   <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
 </action>
 ```
@@ -145,7 +207,7 @@ pkexec --disable-internal-agent /usr/libexec/netmedic/helper flush-dns
 
    Entry point: `netmedic-helper` (setuptools console script).
 
-### Phase C — Packaging + call-site migration ✅ (in progress toward D)
+### Phase C — Packaging + call-site migration ✅
 
 1. ✅ `scripts/install-polkit-policy.sh` installs `/usr/libexec/netmedic/helper` wrapper + annotated policy
 2. ✅ Polkit actions annotate `org.freedesktop.policykit.exec.path` → helper
@@ -153,7 +215,7 @@ pkexec --disable-internal-agent /usr/libexec/netmedic/helper flush-dns
 4. ✅ Auto-enable helper when system wrapper exists (`NETMEDIC_USE_HELPER` unset)
 5. AppImage note: helper still needs host install for elevation (AppImage cannot ship setuid)
 
-### Phase D — Cutover ✅ (v1.5.0)
+### Phase D — Cutover ✅ (v1.6.1; extended through 1.9.0)
 
 1. ✅ Production elevation only via helper; `require_root=True` blocked without `NETMEDIC_ALLOW_LEGACY_ELEVATION`
 2. ✅ Single interactive polkit: IPC skips polkit when helper active; `pkexec helper` is the prompt
@@ -175,17 +237,22 @@ pkexec --disable-internal-agent /usr/libexec/netmedic/helper flush-dns
 | Layer | Tests |
 |-------|-------|
 | Unit | Verb validation, medic* filter, JSON errors |
-| Integration | Mock pkexec; assert helper argv construction |
-| Manual | Live pkexec on one distro per release checklist |
-| CI | Dry-run helper without root; policy XML well-formed |
+| Integration (CI) | `helper-install-integration`: installs helper + policy, checks `--version`/`--list-verbs`, all 12 `pkaction` rows (`exec.path`, `argv1`, `allow_active`), every dry-run and invalid-input rejection |
+| Integration (unit) | Mock pkexec; assert helper argv construction and the fail-closed version gate |
+| Manual / VM | Live pkexec, interactive Polkit, destructive verbs, rollback and journal audit on a clean Ubuntu VM (`docs/VM_CHECKLIST.md`) |
 
-## Open decisions
+## Resolved decisions
 
-1. **Language of helper:** Python (share validators) vs Go/Rust (smaller attack surface, no user venv). Recommendation: **Python first** in `netmedic` package with `console_scripts` entry `netmedic-helper`, then optional native rewrite.
-2. **Pass iface/conn as flags or JSON:** flags for simple verbs; JSON for multi-field (`change-dns`).
-3. **Whether IPC polkit check remains** once helper is annotated: keep both initially (double prompt risk). Prefer **server-side polkit only** *or* **helper polkit only** after UX validation — not both interactive prompts.
+1. **Language:** Python first, sharing validators and `action_catalog`; a native
+   rewrite remains a future option.
+2. **Arguments:** JSON for multi-field verbs (`change-dns`, VPN), flags for
+   simple verbs; `--dry-run` and `--execute` share the same planned argv.
+3. **Polkit ownership:** helper-only interactive authorization in production;
+   the IPC layer checks peer/token/confirmation and does not prompt again.
+4. **Policy generation:** the XML is generated from `action_catalog.ACTIONS`;
+   `scripts/generate_policy.py --check` gates drift.
 
-## Acceptance criteria (v1.5 — all met as of v1.6.1, re-verified v1.8.0)
+## Acceptance criteria (v1.9.0)
 
 - [x] Every `require_root=True` production call site goes through a helper verb.
   (`system.py` refuses direct elevation outside `TEST_MODE`-gated legacy.)
@@ -198,7 +265,14 @@ pkexec --disable-internal-agent /usr/libexec/netmedic/helper flush-dns
 - [x] Tests cover invalid iface / DNS / client name at helper boundary.
   (`test_helper_verbs.py`, `test_m4_validators.py`.)
 - [x] Threat model and ARCHITECTURE updated for single elevation path.
-  (Both at v1.6; `VERBS.md` is the live verb contract.)
+  (Threat model now states 1.9.0; `VERBS.md` is the live verb contract.)
+- [x] Installed wrapper and policy verified in CI.
+  (`helper-install-integration`: root-owned layout, version, verbs, 12
+  `pkaction` rows, dry-runs, invalid-input rejection.)
+- [x] Version mismatch or an unreadable probe blocks elevation.
+  (`tests/test_helper_version_gate.py`; rc, JSON, `ok`, version and timeout.)
+- [x] IPC acceptance and message size are bounded.
+  (`_MAX_CONNECTIONS` semaphore; exact 65,536-byte framing limit.)
 
 ## Related
 
