@@ -5,6 +5,7 @@ import socket
 import stat
 import struct
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Callable, Dict, Optional
 
@@ -14,6 +15,11 @@ from netmedic.lifecycle import LifecycleManager
 logger = logging.getLogger(__name__)
 
 _MAX_WORKERS = 4
+# Bound accepted + queued connections, not just running workers. Four workers
+# with a 30 s receive timeout otherwise let a same-UID peer queue unbounded
+# tasks by opening sockets that never send a request.
+_MAX_CONNECTIONS = _MAX_WORKERS * 8
+_LIMIT_LOG_INTERVAL = 5.0
 _SO_PEERCRED = 17
 
 
@@ -35,6 +41,8 @@ class NetMedicIPCServer:
         self.server: Optional[socket.socket] = None
         self.thread: Optional[threading.Thread] = None
         self._pool = ThreadPoolExecutor(max_workers=_MAX_WORKERS, thread_name_prefix="IPCWorker")
+        self._slots = threading.BoundedSemaphore(_MAX_CONNECTIONS)
+        self._last_limit_log = 0.0
 
     def start(self) -> None:
         self._remove_stale_socket()
@@ -51,7 +59,7 @@ class NetMedicIPCServer:
         except OSError:
             logger.warning("Failed to chmod IPC socket to 0600", exc_info=True)
 
-        self.server.listen(5)
+        self.server.listen(_MAX_CONNECTIONS)
         self.running = True
 
         self.thread = threading.Thread(target=self._listen_loop, daemon=True, name="IPCListener")
@@ -82,13 +90,45 @@ class NetMedicIPCServer:
                     conn, _ = self.server.accept()
                 except socket.timeout:
                     continue
-                self._pool.submit(self._handle_connection, conn)
+                if not self._slots.acquire(blocking=False):
+                    self._log_connection_limit()
+                    self._close_connection(conn)
+                    continue
+                try:
+                    self._pool.submit(self._handle_connection_guarded, conn)
+                except Exception:
+                    self._slots.release()
+                    self._close_connection(conn)
+                    if self.running:
+                        logger.error("IPC submit failure", exc_info=True)
             except OSError:
                 if self.running:
                     logger.error("IPC accept loop failure", exc_info=True)
             except Exception:
                 if self.running:
                     logger.error("IPC accept loop failure", exc_info=True)
+
+    def _log_connection_limit(self) -> None:
+        now = time.monotonic()
+        if now - self._last_limit_log >= _LIMIT_LOG_INTERVAL:
+            logger.warning(
+                "IPC connection limit reached (%d); rejecting new connection",
+                _MAX_CONNECTIONS,
+            )
+            self._last_limit_log = now
+
+    @staticmethod
+    def _close_connection(conn: socket.socket) -> None:
+        try:
+            conn.close()
+        except OSError:
+            pass
+
+    def _handle_connection_guarded(self, conn: socket.socket) -> None:
+        try:
+            self._handle_connection(conn)
+        finally:
+            self._slots.release()
 
     def _handle_connection(self, conn: socket.socket) -> None:
         peer_pid, peer_uid = _peer_credentials(conn)
