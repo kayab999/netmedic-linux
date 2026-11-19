@@ -88,7 +88,7 @@ sudo chown root:root "$DEST_POLICY"
 # action into the first enumerated one. Install one root-owned wrapper per verb
 # so each polkit action has a unique, stable exec.path.
 echo "Installing per-verb helper wrappers → $LIBEXEC_DIR"
-"$PYTHON3" - "$DEST_POLICY" "$LIBEXEC_DIR" "$HELPER_WRAPPER" <<'PY'
+sudo "$PYTHON3" - "$DEST_POLICY" "$LIBEXEC_DIR" "$HELPER_WRAPPER" <<'PY'
 import os
 import sys
 import xml.etree.ElementTree as ET
