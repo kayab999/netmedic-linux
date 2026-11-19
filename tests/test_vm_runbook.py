@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import importlib.util
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -167,6 +168,39 @@ def test_policy_hash_and_actions_are_checked(
     runbook._check_policy_hash()
 
     assert any("policy hash" in item for item in runbook.FAILURES)
+
+
+def test_pkaction_listing_ignores_polkit_0_105_exit_code(
+    runbook: Any, monkeypatch: pytest.MonkeyPatch, capsys: Any
+) -> None:
+    stdout = "\n".join(runbook.POLKIT_ACTION_IDS.values()) + "\n"
+    monkeypatch.setattr(
+        runbook,
+        "_run",
+        lambda argv: subprocess.CompletedProcess(argv, 1, stdout, ""),
+    )
+
+    runbook._check_pkaction_listing()
+
+    out = capsys.readouterr().out
+    assert "PASS: pkaction lists all" in out
+    assert not runbook.FAILURES
+
+
+def test_pkaction_listing_fails_when_actions_are_missing(
+    runbook: Any, monkeypatch: pytest.MonkeyPatch, capsys: Any
+) -> None:
+    monkeypatch.setattr(
+        runbook,
+        "_run",
+        lambda argv: subprocess.CompletedProcess(argv, 127, "", "pkaction: not found"),
+    )
+
+    runbook._check_pkaction_listing()
+
+    out = capsys.readouterr().out
+    assert "FAIL: pkaction missing" in out
+    assert runbook.FAILURES
 
 
 def _f2_block() -> str:

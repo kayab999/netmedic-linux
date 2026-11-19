@@ -344,16 +344,28 @@ def _check_policy() -> None:
 
     _check_policy_hash()
     _check_policy_actions()
+    _check_pkaction_listing()
 
+
+def _check_pkaction_listing() -> None:
+    """Validate the daemon-visible action list.
+
+    polkit 0.105 (Ubuntu 22.04/24.04) returns rc=1 even on a successful
+    enumeration, so the verdict must come from the listed action ids, not from
+    the process exit status. An empty list still fails, including when pkaction
+    itself is missing or cannot reach the authority.
+    """
     result = _run(["pkaction"])
-    if result.returncode != 0:
-        _fail(f"pkaction rc={result.returncode}: {result.stderr.strip()}")
-        return
     listed = set(result.stdout.split())
     expected = set(POLKIT_ACTION_IDS.values())
     missing = sorted(expected - listed)
     if missing:
-        _fail(f"pkaction does not list {len(missing)} expected action(s): {missing}")
+        detail = result.stderr.strip()
+        suffix = f": {detail}" if detail else ""
+        _fail(
+            f"pkaction missing {len(missing)} NetMedic action(s): {missing}"
+            f"{suffix}"
+        )
     else:
         _ok(f"pkaction lists all {len(expected)} NetMedic actions")
 
