@@ -264,7 +264,7 @@ def _check_policy_actions() -> None:
         return
 
     nodes = {node.get("id"): node for node in root.findall("action")}
-    seen_argv1: dict[str, str] = {}
+    seen_exec_path: dict[str, str] = {}
     problems = 0
     for ipc_action, polkit_id in sorted(
         POLKIT_ACTION_IDS.items(), key=lambda item: item[1]
@@ -286,24 +286,24 @@ def _check_policy_actions() -> None:
         }
         exec_path = annotate.get("org.freedesktop.policykit.exec.path")
         exec_argv1 = annotate.get("org.freedesktop.policykit.exec.argv1")
-        if exec_path != str(HELPER):
-            _fail(f"{polkit_id}: exec.path {exec_path!r} != {str(HELPER)!r}")
+        expected_path = str(Path(HELPER).parent / f"helper-{spec.helper_verb}")
+        if exec_path != expected_path:
+            _fail(f"{polkit_id}: exec.path {exec_path!r} != {expected_path!r}")
             problems += 1
-        if exec_argv1 != spec.helper_verb:
+        if exec_argv1 not in ("", None):
             _fail(
-                f"{polkit_id}: exec.argv1 {exec_argv1!r} "
-                f"!= catalog {spec.helper_verb!r}"
+                f"{polkit_id}: exec.argv1 must be absent in per-verb design, "
+                f"got {exec_argv1!r}"
             )
             problems += 1
-        elif exec_argv1 in seen_argv1:
+        elif exec_path in seen_exec_path:
             _fail(
-                f"{polkit_id}: exec.argv1 {exec_argv1!r} "
-                f"also used by {seen_argv1[exec_argv1]}"
+                f"{polkit_id}: exec.path {exec_path!r} "
+                f"also used by {seen_exec_path[exec_path]}"
             )
             problems += 1
         else:
-            assert exec_argv1 is not None
-            seen_argv1[exec_argv1] = polkit_id
+            seen_exec_path[exec_path] = polkit_id
 
         allow_active = (node.findtext("defaults/allow_active") or "").strip()
         wanted = "auth_admin_keep" if spec.keep_auth else "auth_admin"
