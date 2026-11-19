@@ -52,7 +52,7 @@ jobs:
       fail-fast: false
       matrix:
         helper_mode: ["0", "1"]
-        python-version: ["3.10", "3.11", "3.12"]
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
     env:
       NETMEDIC_TEST_MODE: "1"
       NETMEDIC_SKIP_POLKIT: "1"

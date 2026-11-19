@@ -63,6 +63,12 @@ policy must be reinstalled (see Breaking changes).
   # GUI: close and reopen `netmedic`
   ```
 
+### Compatibility
+
+- Python 3.13 joins the CI matrix in both elevation modes. The supported range
+  remains **3.10–3.13** (`requires-python = ">=3.10,<3.14"`), and
+  `scripts/check-deps.sh` warns above 3.13.
+
 ### Behavior changes
 
 - `restart-adapter` details no longer include the interface IP or a fabricated

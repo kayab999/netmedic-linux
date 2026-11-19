@@ -155,7 +155,7 @@ See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for details.
 ## System Requirements
 
 - **OS:** Ubuntu 22.04/24.04 (primary; Debian/Fedora/Arch best-effort)
-- **Python:** 3.10–3.13 (pinned in CI; see `requirements.lock`)
+- **Python:** 3.10–3.13 (tested in CI; see `requirements.lock`)
 - **System packages:** GTK3, GObject introspection, NetworkManager (`nmcli`), PolicyKit
 - **Optional AI:** `llama-cpp-python`, ~950 MB GGUF model (not bundled in repo)
 
