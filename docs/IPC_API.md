@@ -9,8 +9,9 @@ NetMedic exposes a local Unix socket API for automation, MCP, AI, and third-part
 | Property | Value |
 |----------|-------|
 | Socket | `~/.local/state/netmedic/ipc.sock` (mode `600`) |
-| Framing | Newline-delimited JSON (max 64 KiB per message) |
+| Framing | Newline-delimited JSON; at most exactly 65,536 bytes before the newline |
 | Timeout | 30 seconds per request |
+| Connections | Active + pending capped (32 by default); excess connections are closed immediately |
 | Peer identity | `SO_PEERCRED` — peer UID must match the daemon owner |
 
 ## Request format
@@ -50,8 +51,20 @@ Require **all** of (checked in this order — cheap checks first):
 
 1. Peer UID matching the NetMedic process owner
 2. `confirmed: true` (strict boolean — not `"true"` or `1`)
-3. Valid `session_token` from `get_session_token` (**before** polkit, to avoid prompt spam)
-4. PolicyKit authorization for the mapped action ID
+3. Valid `session_token` from `get_session_token` (**before** elevation, to avoid prompt spam)
+4. Action name mapped to a fixed helper verb and Polkit action ID in `action_catalog.ACTIONS`
+5. Helper version compatibility (`1.9.0`+): exact `HELPER_VERSION` match
+
+What happens next depends on the elevation mode:
+
+| Mode | After the IPC checks | Interactive authorization |
+|------|----------------------|---------------------------|
+| **Helper mode (production, 1.9.0)** | Daemon runs `pkexec /usr/libexec/netmedic/helper <verb> --execute --json …` | Polkit prompt is raised by `pkexec` for the annotated action (`exec.path` + `exec.argv1`). The IPC layer does **not** perform a second Polkit check. |
+| **Legacy mode (tests only)** | Daemon expands the verb to allowlisted argv and runs it under `pkexec` | The IPC action ID is mapped by `polkit_auth`; requires `NETMEDIC_TEST_MODE=1` and `NETMEDIC_ALLOW_LEGACY_ELEVATION=1`. Root work is refused without both. |
+
+The helper is the effective privilege boundary. `session_token` and `confirmed`
+are anti-confusion and anti-CSRF-style checks, not authentication of a same-UID
+process; Polkit on the helper decides whether root work runs.
 
 Privileged actions: `flush_dns`, `renew_ip`, `change_dns`, `restart_adapter`, `reset_tcp_ip_stack`, `toggle_firewall`, `vpn_reconnect`, `vpn_create_client`, `vpn_revoke_client`, `vpn_list_clients`, `vpn_install`, `vpn_start_service`.
 
@@ -108,10 +121,12 @@ Privileged attempts (granted and denied) append JSON lines to `~/.local/state/ne
 2. Connect to the Unix socket in the user's state directory.
 3. Call `get_session_token` before privileged operations.
 4. Pass `confirmed: true` and `session_token` for privileged actions.
-5. Handle polkit prompts (GUI agent or `pkttyagent` for headless mutation).
-6. Install the system polkit policy once:
+5. Handle the Polkit prompt raised by `pkexec` on the helper (GUI agent, or `pkttyagent` for headless mutation).
+6. Install the system helper and polkit policy once:
    `./scripts/install-polkit-policy.sh`
-   (or `sudo cp assets/com.kayab.netmedic.policy /usr/share/polkit-1/actions/`).
+   (installs `/usr/libexec/netmedic/helper`, the root-owned helper package and
+   `/usr/share/polkit-1/actions/com.kayab.netmedic.policy`).
+   Without it, helper mode is unavailable and production elevation stays off.
 
 ## GUI bridge
 
