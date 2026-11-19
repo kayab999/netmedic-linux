@@ -20,7 +20,6 @@ sys.path.insert(0, str(REPO / "netmedic"))
 from netmedic.action_catalog import ACTIONS  # noqa: E402
 
 POLICY_PATH = REPO / "assets" / "com.kayab.netmedic.policy"
-HELPER_PATH = "/usr/libexec/netmedic/helper"
 VENDOR_URL = "https://github.com/kayab999/netmedic-linux"
 
 HEADER = """<?xml version="1.0" encoding="UTF-8"?>
@@ -49,7 +48,6 @@ ACTION_TMPL = """  <action id="%(id)s">
       <allow_active>%(allow_active)s</allow_active>
     </defaults>
     <annotate key="org.freedesktop.policykit.exec.path">%(helper)s</annotate>
-    <annotate key="org.freedesktop.policykit.exec.argv1">%(verb)s</annotate>
     <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
   </action>
 """
@@ -61,7 +59,7 @@ def render() -> str:
     for spec in ACTIONS:
         if spec.polkit_id is None:
             continue
-        assert spec.helper_verb is not None and spec.message, spec
+        assert spec.helper_verb is not None and spec.message and spec.exec_path, spec
         if not first:
             parts.append("\n")
         first = False
@@ -70,8 +68,7 @@ def render() -> str:
             "description": spec.description,
             "message": spec.message,
             "allow_active": "auth_admin_keep" if spec.keep_auth else "auth_admin",
-            "helper": HELPER_PATH,
-            "verb": spec.helper_verb,
+            "helper": spec.exec_path,
         })
     parts.append("</policyconfig>\n")
     return "".join(parts)
