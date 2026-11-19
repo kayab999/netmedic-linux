@@ -1,10 +1,35 @@
-# Release Notes — NetMedic v1.6.0
+# Release Notes — NetMedic v1.9.0
+
+Remediation release for the independent audit. It aligns the application,
+package and privileged helper at **1.9.0**.
+
+Security: helper version checks are fail-closed; IPC connections have real
+backpressure and an exact protocol limit; helper exit codes come from structured
+fields, so `rc=3` cannot be changed by a message rewrite; the vendored VPN
+installer remains SHA256-pinned and is executed from a root-owned staged copy.
+The installed helper and polkit policy must be reinstalled because the helper
+version and policy changed.
+
+Quality: 686 local tests pass (plus 26 opt-in installed-helper contract tests in
+CI); CI covers Python 3.10–3.13 with the helper both enabled and disabled,
+installed-helper integration, netns goldens, smoke, build and SAST.
+
+Compatibility: no new runtime dependency. The optional AI pilot remains
+experimental and outside the supported 1.9.0 surface; it requires its own
+hash-pinned lock and an admin-owned, user-non-writable model directory. See
+`CHANGELOG.md`, `docs/PRIVILEGED_HELPER.md` and `docs/AI_SUPPLY_CHAIN.md` for
+the detailed contract and upgrade steps.
 
 > Current releases live on GitHub: v1.6.1 (security F1–F5+M1), v1.6.2
 > (hardening M2–M4), v1.6.3 (packaging M7), v1.6.4 (supply chain M6),
 > v1.7.0 (AI pilot M5), v1.8.0 (architecture M8 + typing M9),
-> v1.8.1 (governance M10 + SHA pins). This file keeps the v1.6.0
+> v1.8.1 (governance M10 + SHA pins), v1.9.0 (audit remediation, helper
+> hardening and fail-closed contracts). This file keeps the v1.6.0
 > history below untouched; see `CHANGELOG.md` for the full record.
+
+---
+
+# Release Notes — NetMedic v1.6.0
 
 Enterprise-grade hardening release (B+ → A+ across the engagement).
 
