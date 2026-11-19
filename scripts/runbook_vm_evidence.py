@@ -459,32 +459,54 @@ F1 install/journal:
   pkexec /usr/libexec/netmedic/helper flush-dns --execute --json '{}'
   journalctl -t netmedic-helper -n 1 --no-pager
 
-F2 tamper (run only after a VM snapshot; the trap restores the file):
-  set -euo pipefail
-  VPN=/usr/lib/netmedic/scripts/openvpn-install.sh
-  PIN=__PIN__
-  BAK=$(mktemp)
-  sudo cp -p "$VPN" "$BAK"
-  trap 'sudo cp -p "$BAK" "$VPN"; rm -f "$BAK"' EXIT
-  echo '# tampered' | sudo tee -a "$VPN" >/dev/null
-  if pkexec /usr/libexec/netmedic/helper vpn-install --execute --json '{"port":1194,"protocol":"udp","dns":"cloudflare"}'; then
-    echo 'FAIL: helper accepted a tampered VPN installer'
-  else
-    echo 'PASS: helper rejected the tampered VPN installer'
-  fi
-  sudo cp -p "$BAK" "$VPN"
-  trap - EXIT
-  rm -f "$BAK"
-  if test "$(sha256sum "$VPN" | cut -d' ' -f1)" = "$PIN"; then
-    echo 'PASS: VPN installer restored to the pin'
-  else
-    echo 'FAIL: VPN installer did not return to the pin'
-  fi
-  if dpkg -l openvpn 2>/dev/null | grep -q '^ii'; then
-    echo 'FAIL: openvpn package is installed after the tamper attempt'
-  else
-    echo 'PASS: openvpn package is not installed after the tamper attempt'
-  fi
+F2 tamper (run only after a VM snapshot; runs in a subshell and restores via trap):
+  (
+    set -euo pipefail
+    VPN=/usr/lib/netmedic/scripts/openvpn-install.sh
+    PIN=__PIN__
+    BAK=$(mktemp)
+    ERR=$(mktemp)
+    trap 'if test -s "$BAK"; then sudo cp -p "$BAK" "$VPN"; fi; rm -f "$BAK" "$ERR"' EXIT
+    sudo cp -p "$VPN" "$BAK"
+    echo '# tampered' | sudo tee -a "$VPN" >/dev/null
+
+    set +e
+    OUT=$(pkexec /usr/libexec/netmedic/helper vpn-install --execute --json '{"port":1194,"protocol":"udp","dns":"cloudflare"}' 2>"$ERR")
+    RC=$?
+    set -e
+    DIAG="stdout=[$OUT] stderr=[$(cat "$ERR")]"
+
+    if [ "$RC" -eq 3 ]; then
+      if printf '%s' "$OUT" | grep -Fq '"ok":false' &&
+         printf '%s' "$OUT" | grep -Fq 'Security abort: Script integrity failure.'; then
+        echo 'PASS: helper rejected the tampered installer (rc=3, ok=false, integrity failure)'
+      else
+        echo "INCONCLUSIVE/FAIL: rc=$RC missing ok=false or the integrity message: $DIAG"
+      fi
+    else
+      case "$RC" in
+        126) echo "INCONCLUSIVE/FAIL: rc=$RC cancelado (autorización descartada), no rechazo por integridad: $DIAG" ;;
+        127) echo "INCONCLUSIVE/FAIL: rc=$RC helper ausente o no autorizado: $DIAG" ;;
+        2)   echo "INCONCLUSIVE/FAIL: rc=$RC args inválidos: $DIAG" ;;
+        1)   echo "INCONCLUSIVE/FAIL: rc=$RC fallo operativo, no rechazo por integridad: $DIAG" ;;
+        *)   echo "INCONCLUSIVE/FAIL: rc=$RC resultado inesperado: $DIAG" ;;
+      esac
+    fi
+
+    sudo cp -p "$BAK" "$VPN"
+    trap - EXIT
+    rm -f "$BAK" "$ERR"
+    if test "$(sha256sum "$VPN" | cut -d' ' -f1)" = "$PIN"; then
+      echo 'PASS: VPN installer restored to the pin'
+    else
+      echo 'FAIL: VPN installer did not return to the pin'
+    fi
+    if dpkg -l openvpn 2>/dev/null | grep -q '^ii'; then
+      echo 'FAIL: openvpn package is installed after the tamper attempt'
+    else
+      echo 'PASS: openvpn package is not installed after the tamper attempt'
+    fi
+  )
 
 F5 re-prompt (run each twice within 5 minutes):
   change-dns and restart-adapter must ask every time; flush-dns keeps the window.

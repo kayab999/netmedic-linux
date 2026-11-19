@@ -167,3 +167,41 @@ def test_policy_hash_and_actions_are_checked(
     runbook._check_policy_hash()
 
     assert any("policy hash" in item for item in runbook.FAILURES)
+
+
+def _f2_block() -> str:
+    text = RUNBOOK.read_text(encoding="utf-8")
+    start = text.index("F2 tamper")
+    end = text.index("F5 re-prompt", start)
+    return text[start:end]
+
+
+def test_f2_block_requires_integrity_exit_code_and_message() -> None:
+    block = _f2_block()
+
+    assert "set -euo pipefail" in block
+    assert "[ \"$RC\" -eq 3 ]" in block
+    assert "OUT=$(pkexec" in block
+    assert "RC=$?" in block
+    assert '"ok":false' in block
+    assert "Security abort: Script integrity failure." in block
+
+    pass_at = block.index("PASS: helper rejected")
+    assert block.index('"ok":false') < pass_at
+    assert block.index("Security abort") < pass_at
+
+    assert "INCONCLUSIVE/FAIL: rc=$RC" in block
+    for code, label in (
+        ("126", "cancelado"),
+        ("127", "helper ausente"),
+        ("2", "args"),
+        ("1", "fallo operativo"),
+    ):
+        assert code in block
+        assert label in block
+
+    assert "VM snapshot" in block
+    assert "cp -p" in block
+    assert "sha256sum" in block
+    assert "dpkg -l openvpn" in block
+    assert "trap " in block
