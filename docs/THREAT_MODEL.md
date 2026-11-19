@@ -64,4 +64,3 @@ NetMedic is a single-user desktop privileged operations platform. This document 
 - Multi-user systems with mutually untrusted local users
 - Remote IPC exposure
 - Kernel-level attack resistance
-
