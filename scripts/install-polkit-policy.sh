@@ -102,8 +102,8 @@ for action in root.iter("action"):
     verb = action_id.rsplit(".", 1)[-1]
     wrapper_path = os.path.join(libexec_dir, "helper-" + verb)
     with open(wrapper_path, "w", encoding="utf-8") as handle:
-        handle.write("#!/bin/sh\\n")
-        handle.write('exec ' + helper_wrapper + ' ' + verb + ' "$@"\\n')
+        handle.write("#!/bin/sh\n")
+        handle.write('exec ' + helper_wrapper + ' ' + verb + ' "$@"\n')
     os.chmod(wrapper_path, 0o755)
     os.chown(wrapper_path, 0, 0)
 PY
