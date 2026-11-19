@@ -9,9 +9,10 @@ authors = [
     { name = "Kayab Software", email = "support@kayabsoftware.com" },
 ]
 description = "Professional network diagnostics, repair, and infrastructure management for Linux."
-# Floor 3.10 — 3.8 EOL, PyGObject>=3.42, X|Y typing, CI 3.10-3.12 on Ubuntu 22.04/24.04.
-# M7: ceiling raised to <3.14 — 3.13 verified (suite green); Pillow dropped
-# from runtime (only scripts/generate_icon.py uses it; build image pins its own).
+# Floor 3.10 — 3.8 EOL, PyGObject>=3.42, X|Y typing, CI 3.10-3.13 on Ubuntu 22.04/24.04.
+# M7: ceiling <3.14; 3.13 is covered by the CI matrix (PyGObject builds from
+# source there). Pillow is not a runtime dependency (only scripts/generate_icon.py
+# uses it; the build image pins its own).
 requires-python = ">=3.10,<3.14"
 dependencies = [
     "PyGObject>=3.42",

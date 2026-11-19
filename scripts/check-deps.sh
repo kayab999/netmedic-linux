@@ -39,8 +39,8 @@ if [ "$PY_MAJOR" -lt 3 ] || { [ "$PY_MAJOR" -eq 3 ] && [ "$PY_MINOR" -lt 10 ]; }
     echo "Python 3.10+ required, found $PY_VERSION"
     exit 1
 fi
-if [ "$PY_MAJOR" -eq 3 ] && [ "$PY_MINOR" -gt 12 ]; then
-    echo "WARNING: Python $PY_VERSION is above the pinned 3.10-3.12 range (CI matrix). Continuing."
+if [ "$PY_MAJOR" -eq 3 ] && [ "$PY_MINOR" -gt 13 ]; then
+    echo "WARNING: Python $PY_VERSION is above the pinned 3.10-3.13 range (CI matrix). Continuing."
 fi
 
 echo "Dependency preflight passed (Python $PY_VERSION)."
