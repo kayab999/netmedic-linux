@@ -68,6 +68,10 @@ policy must be reinstalled (see Breaking changes).
 - Python 3.13 joins the CI matrix in both elevation modes. The supported range
   remains **3.10–3.13** (`requires-python = ">=3.10,<3.14"`), and
   `scripts/check-deps.sh` warns above 3.13.
+- The optional AI pilot remains **experimental and outside the supported
+  1.9.0 surface**. Enabling it requires a hash-pinned AI lock and an
+  admin-owned, user-non-writable model directory; see
+  `docs/AI_SUPPLY_CHAIN.md` and issue #62.
 
 ### Behavior changes
 

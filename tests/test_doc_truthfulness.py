@@ -76,3 +76,16 @@ def test_ipc_api_separates_helper_and_legacy_modes() -> None:
     assert "org.freedesktop.policykit.exec.argv1" in text or "exec.argv1" in text
     assert "does **not** perform a second polkit check" in lower
     assert "65,536" in text
+
+
+def test_ai_module_is_declared_experimental_and_out_of_scope() -> None:
+    """Optional AI must not look like a supported 1.9.0 surface."""
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    assert "experimental" in readme.lower()
+    assert "outside the supported 1.9.0 surface" in readme
+
+    ai_doc = (ROOT / "docs" / "AI_SUPPLY_CHAIN.md").read_text(encoding="utf-8")
+    assert "experimental and outside the supported 1.9.0 surface" in ai_doc
+    assert "NETMEDIC_AI_MODEL_DIR" in ai_doc
+    assert "admin-owned" in ai_doc
+    assert "not writable by the user" in ai_doc

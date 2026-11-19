@@ -13,7 +13,7 @@ Professional network diagnostics, repair, and infrastructure management for Linu
 | **Smart Repair** | Automated diagnostics, DNS flush, DHCP renewal |
 | **Infrastructure** | Firewall toggle (UFW), TCP/IP stack reset, adapter cycling |
 | **VPN Operator** | OpenVPN (Angristan) install with a vendored, root-pinned installer |
-| **AI Pilot** *(optional)* | Natural-language commands via Ctrl+Space palette (Nandi model) |
+| **AI Pilot** *(optional, experimental)* | Natural-language commands via Ctrl+Space palette (Nandi model); outside the supported 1.9.0 surface |
 | **Security** | Polkit IPC, action catalog, audit log, singleton locking |
 | **Automation** | MCP server and headless IPC daemon for scripting and agents |
 
@@ -157,7 +157,11 @@ See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for details.
 - **OS:** Ubuntu 22.04/24.04 (primary; Debian/Fedora/Arch best-effort)
 - **Python:** 3.10–3.13 (tested in CI; see `requirements.lock`)
 - **System packages:** GTK3, GObject introspection, NetworkManager (`nmcli`), PolicyKit
-- **Optional AI:** `llama-cpp-python`, ~950 MB GGUF model (not bundled in repo)
+- **Optional AI:** `llama-cpp-python`, ~950 MB GGUF model (not bundled in repo).
+  The AI pilot is **experimental and outside the supported 1.9.0 surface**; it
+  requires its own hash-pinned dependency lock and a model file plus directory
+  that are admin-owned and not writable by the user (see
+  `docs/AI_SUPPLY_CHAIN.md`).
 
 ---
 
