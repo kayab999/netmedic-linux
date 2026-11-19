@@ -1,6 +1,17 @@
 # AI supply chain (Fase 7)
 
-`netmedic_ai` is **out of the release supply chain** until the lock below lands.
+## Status in 1.9.0
+
+`netmedic_ai` is **experimental and outside the supported 1.9.0 surface**. It
+is **out of the release supply chain** until the lock below lands, and the main
+release does not depend on it. The GUI/CLI, IPC, helper and Polkit path remain
+fully functional without AI.
+
+Strict or shared deployments that enable the AI pilot must point
+`NETMEDIC_AI_MODEL_DIR` at a model file and directory that are **admin-owned
+and not writable by the user running NetMedic** (read-only mount or root-owned
+`0755` directory with a `0644` model). This limits the verify-then-reopen race
+in `netmedic_ai/pilot.py` until issue #62-B loads from the verified descriptor.
 
 - Dependency: `llama-cpp-python>=0.2.57` (sdist only on PyPI; no wheel).
 - Install must use `pip install --require-hashes -r netmedic_ai/requirements.lock`.
