@@ -147,11 +147,25 @@ class CommandRunner:
 
     @staticmethod
     def _check_helper_version() -> Optional[str]:
-        """F5: refuse a stale system helper (fixes only reach users who re-run installer)."""
+        """F5: refuse a stale or unreadable system helper.
+
+        Fail closed: elevation is allowed only when the probe exits 0, returns
+        a JSON object with ``ok is True`` and an exact ``HELPER_VERSION``
+        match. Anything else (missing helper, timeout, rc != 0, invalid JSON,
+        ok=false, empty version) blocks privileged operations. The dev
+        ``python -m`` marker keeps its explicit in-repo fallback.
+        """
         # Dev fallback (python -m) always matches in-repo version.
         helper = str(Config.get_helper_path())
         if "|" in helper:
             return None
+
+        def blocked(reason: str) -> str:
+            return (
+                f"Privileged helper version check failed: {reason}. "
+                "Re-run: ./scripts/install-polkit-policy.sh"
+            )
+
         try:
             proc = subprocess.run(  # noqa: S603 (fixed argv (helper path + verb + JSON); no shell)
                 CommandRunner._helper_version_argv(),
@@ -160,18 +174,32 @@ class CommandRunner:
                 timeout=5,
                 check=False,
             )
-        except Exception:
-            return None  # fail-open on version probe; elevation itself is still gated
+        except subprocess.TimeoutExpired:
+            return blocked("probe timed out")
+        except Exception as exc:
+            return blocked(f"probe failed ({exc})")
+
+        if proc.returncode != 0:
+            detail = (proc.stderr or "").strip().splitlines()
+            suffix = f": {detail[-1]}" if detail else ""
+            return blocked(f"helper --version exited rc={proc.returncode}{suffix}")
+
+        raw = (proc.stdout or "").strip()
+        if not raw:
+            return blocked("helper --version produced no output")
         try:
-            payload = json.loads((proc.stdout or "").strip().splitlines()[-1])
-            ver = str(payload.get("version", ""))
-        except Exception:
-            return None
-        if ver and ver != HELPER_VERSION:
-            return (
-                f"Privileged helper version mismatch (have {ver}, want {HELPER_VERSION}). "
-                "Re-run: ./scripts/install-polkit-policy.sh"
-            )
+            payload = json.loads(raw.splitlines()[-1])
+        except (IndexError, ValueError):
+            return blocked("helper --version returned invalid JSON")
+        if not isinstance(payload, dict):
+            return blocked("helper --version returned an invalid payload")
+        if payload.get("ok") is not True:
+            return blocked("helper --version did not report ok=true")
+        ver = payload.get("version")
+        if not isinstance(ver, str) or not ver.strip():
+            return blocked("helper --version reported no version")
+        if ver != HELPER_VERSION:
+            return blocked(f"version mismatch (have {ver}, want {HELPER_VERSION})")
         return None
 
     @staticmethod
