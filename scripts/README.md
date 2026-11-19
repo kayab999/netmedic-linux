@@ -11,7 +11,7 @@
 | `netns-golden.sh` | Hermetic netns harness (A WAN-drop + B TCP-block), CI `netns-golden` job |
 | `prepare_release_assets.sh` | Binary + `SHA256SUMS` + SBOMs (freeze + CycloneDX) for releases |
 | `smoke_release.sh` | 6-step release smoke (version, status, helper, policy, pytest) |
-| `runbook_vm_evidence.py` | GUI runbook evidence helper (renew/flush rows) |
+| `runbook_vm_evidence.py` | Read-only 1.9.x VM evidence: versions, helper/policy hashes and modes, action mapping, pkexec, VPN pin, dry-runs; prints destructive manual blocks |
 | `soak_sample.sh` | Hourly soak sampler → `soak.csv` (RSS/FDs/threads/log sizes); see `docs/OPS.md` |
 
 All scripts resolve paths relative to the repository root automatically.
