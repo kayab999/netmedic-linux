@@ -22,9 +22,12 @@ def recv_message(
     if timeout is not None:
         sock.settimeout(timeout)
     buf = bytearray()
-    while len(buf) < max_size:
+    # A delimiter exactly at max_size is valid, so read at most one byte past
+    # the limit to detect it. Never accept or retain a longer line.
+    while len(buf) <= max_size:
+        remaining = max_size + 1 - len(buf)
         try:
-            chunk = sock.recv(4096)
+            chunk = sock.recv(min(4096, remaining))
         except socket.timeout as exc:
             raise ValueError("IPC response timed out") from exc
         if not chunk:
@@ -32,9 +35,15 @@ def recv_message(
         buf.extend(chunk)
         if b"\n" in buf:
             line, _remainder = buf.split(b"\n", 1)
+            if len(line) > max_size:
+                raise ValueError(
+                    f"IPC message exceeds maximum size of {max_size} bytes"
+                )
             return line
     if not buf:
         raise ValueError("IPC connection closed before response")
+    if len(buf) > max_size:
+        raise ValueError(f"IPC message exceeds maximum size of {max_size} bytes")
     raise ValueError("IPC response incomplete")
 
 
