@@ -15,6 +15,30 @@ retired as of 1.9.0; the upgrade requires reinstalling the helper and polkit
 policy because `HELPER_VERSION` changed. This is a deliberate single-maintainer
 decision, not an accidental omission.
 
+## Release signatures
+
+Release artifacts are signed with the dedicated Kayab Software release key.
+It is sign-only and is never used for Git commits or everyday email.
+
+- **Fingerprint:** `8C1BA036E834F3235593561C1A83A6D7885575E6`
+- **Public key:** [docs/RELEASE_KEY.asc](docs/RELEASE_KEY.asc)
+- **UID:** `Kayab Software Release Signing <support@kayabsoftware.com>`
+- **Algorithm:** RSA 4096, created 2026-11-19, expires 2028-11-18.
+
+Verify a downloaded release:
+
+```bash
+gpg --import docs/RELEASE_KEY.asc
+gpg --verify SHA256SUMS.asc SHA256SUMS
+sha256sum -c SHA256SUMS
+```
+
+`gpg --verify` must report a good signature made by the fingerprint above.
+Importing the key without a trust path still prints `Good signature` together
+with an untrusted-key warning; compare the fingerprint that GPG prints instead
+of relying on the warning text. `sha256sum -c` must report `OK` for every
+artifact listed in `SHA256SUMS`.
+
 ## Threat model
 
 NetMedic is a **single-user desktop** privileged network tool. See [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md).
