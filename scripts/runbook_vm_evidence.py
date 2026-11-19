@@ -459,7 +459,7 @@ F1 install/journal:
   pkexec /usr/libexec/netmedic/helper flush-dns --execute --json '{}'
   journalctl -t netmedic-helper -n 1 --no-pager
 
-F2 tamper (run only after a VM snapshot; runs in a subshell and restores via trap):
+F2 tamper (run only after a VM snapshot; subshell + trap; records openvpn state before/after):
   (
     set -euo pipefail
     VPN=/usr/lib/netmedic/scripts/openvpn-install.sh
@@ -468,6 +468,11 @@ F2 tamper (run only after a VM snapshot; runs in a subshell and restores via tra
     ERR=$(mktemp)
     trap 'if test -s "$BAK"; then sudo cp -p "$BAK" "$VPN"; fi; rm -f "$BAK" "$ERR"' EXIT
     sudo cp -p "$VPN" "$BAK"
+    if dpkg -l openvpn 2>/dev/null | grep -q '^ii'; then
+      DPKG_BEFORE=installed
+    else
+      DPKG_BEFORE=absent
+    fi
     echo '# tampered' | sudo tee -a "$VPN" >/dev/null
 
     set +e
@@ -502,9 +507,17 @@ F2 tamper (run only after a VM snapshot; runs in a subshell and restores via tra
       echo 'FAIL: VPN installer did not return to the pin'
     fi
     if dpkg -l openvpn 2>/dev/null | grep -q '^ii'; then
-      echo 'FAIL: openvpn package is installed after the tamper attempt'
+      DPKG_AFTER=installed
     else
-      echo 'PASS: openvpn package is not installed after the tamper attempt'
+      DPKG_AFTER=absent
+    fi
+    echo "openvpn package: before=$DPKG_BEFORE after=$DPKG_AFTER"
+    if [ "$DPKG_BEFORE" != "$DPKG_AFTER" ]; then
+      echo "FAIL: openvpn package state changed $DPKG_BEFORE -> $DPKG_AFTER"
+    elif [ "$DPKG_AFTER" = "installed" ]; then
+      echo 'WARN: openvpn was already installed; reinstall by the helper is undetectable on this VM'
+    else
+      echo 'PASS: openvpn package state unchanged (absent before and after)'
     fi
   )
 

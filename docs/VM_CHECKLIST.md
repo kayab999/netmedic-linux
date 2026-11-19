@@ -44,14 +44,18 @@ an item without pasting the literal output next to it.
   `e0ac8731423204c671f7699003e9fb6f191be77ae15ca8e5a28031f498947a07`.
 
 - [ ] **Helper refuses a tampered system copy (fail-closed).**
+  Use the F2 block printed by
+  `python3 scripts/runbook_vm_evidence.py` (subshell, `cp -p`, `trap`,
+  `sha256sum` and before/after `dpkg` state). The block must see:
   ```
-  sudo cp /usr/lib/netmedic/scripts/openvpn-install.sh /tmp/vpn.bak
-  echo '# tampered' | sudo tee -a /usr/lib/netmedic/scripts/openvpn-install.sh
-  pkexec /usr/libexec/netmedic/helper vpn-install --execute --json '{"port":1194,"protocol":"udp","dns":"cloudflare"}'
-  sudo cp /tmp/vpn.bak /usr/lib/netmedic/scripts/openvpn-install.sh
+  pkexec rc=3
+  {"ok":false,...,"message":"Security abort: Script integrity failure.",...}
+  PASS: helper rejected the tampered installer (rc=3, ok=false, integrity failure)
+  PASS: VPN installer restored to the pin
   ```
-  Expected: helper exits non-zero with an `integrity` message; no script
-  runs. Restore the backup and confirm the hash again.
+  Any other rc (126/127/2/1) is `INCONCLUSIVE/FAIL`, not a rejection.
+  `openvpn` must be in the same state before and after; if it was already
+  installed, the block reports `WARN` because a reinstall is undetectable.
 
 - [ ] **No outbound download at install.** Run the GUI/daemon without network
   access and confirm the VPN panel never invokes `curl` for the installer

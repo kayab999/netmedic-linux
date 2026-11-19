@@ -204,4 +204,7 @@ def test_f2_block_requires_integrity_exit_code_and_message() -> None:
     assert "cp -p" in block
     assert "sha256sum" in block
     assert "dpkg -l openvpn" in block
+    assert "DPKG_BEFORE" in block
+    assert "DPKG_AFTER" in block
+    assert "openvpn package state unchanged" in block
     assert "trap " in block
