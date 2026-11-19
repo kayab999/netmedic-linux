@@ -130,6 +130,52 @@ jobs:
           # unless tests opt in. Contract + helper verb tests are the focus.
           python -m pytest tests/test_helper_verbs.py tests/test_policy_and_catalog_contract.py -q
 
+  helper-install-integration:
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: test
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.12"
+
+      - name: Install helper and polkit policy
+        # H3: exercises the real installed wrapper and policy instead of the
+        # in-repo dev marker. Interactive authorization and destructive verbs
+        # remain VM checks (docs/VM_CHECKLIST.md).
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y polkitd pkexec
+          chmod +x scripts/install-polkit-policy.sh
+          ./scripts/install-polkit-policy.sh
+
+      - name: Restart polkit and wait for action registration
+        run: |
+          sudo systemctl restart polkit || sudo service polkit restart
+          for _ in $(seq 1 30); do
+            if pkaction --action-id com.kayab.netmedic.flush-dns >/dev/null 2>&1; then
+              echo "polkit registered com.kayab.netmedic.flush-dns"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::polkit did not register the NetMedic policy"
+          pkaction 2>&1 | grep netmedic || true
+          exit 1
+
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip wheel setuptools pytest
+          pip install -e netmedic/ --config-settings editable_mode=strict --no-deps
+
+      - name: Installed helper contract
+        env:
+          NETMEDIC_INSTALLED_HELPER: "1"
+        run: python -m pytest tests/test_installed_helper_contract.py -q
+
   netns-golden:
     if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
