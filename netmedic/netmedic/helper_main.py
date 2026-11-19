@@ -176,7 +176,15 @@ ROOT_STAGE_DIR = "/run/netmedic"
 
 
 class StagingError(Exception):
-    """Staging dir unusable; fail closed with an integrity-class error."""
+    """Staging dir unusable or installer integrity failed; fail closed.
+
+    ``code`` is the structured result code consumed by ``main`` so the exit
+    status never depends on human-readable text.
+    """
+
+    def __init__(self, message: str, *, code: str = "op_fail") -> None:
+        super().__init__(message)
+        self.code = code
 
 
 def _ensure_root_stage_dir(staging_dir: str = ROOT_STAGE_DIR) -> Path:
@@ -214,7 +222,7 @@ def _stage_verified_bytes(data: bytes, expected: str, staging_dir: str = ROOT_ST
     location -- execution never reads the system path. Raises StagingError.
     """
     if _hash_bytes(data) != expected:
-        raise StagingError("Security abort: Script integrity failure.")
+        raise StagingError("Security abort: Script integrity failure.", code="integrity")
     staged_dir = _ensure_root_stage_dir(staging_dir)
     fd, staged = tempfile.mkstemp(prefix="sealed-", suffix=".sh", dir=str(staged_dir))
     try:
@@ -229,7 +237,7 @@ def _stage_verified_bytes(data: bytes, expected: str, staging_dir: str = ROOT_ST
             os.unlink(staged)
         except OSError:
             pass
-        raise StagingError("Security abort: Sealed script integrity failure.")
+        raise StagingError("Security abort: Sealed script integrity failure.", code="integrity")
     return staged
 
 
@@ -287,7 +295,7 @@ def _read_vpn_script(script_id: str) -> bytes:
             f"Refusing installer that is too large ({VPN_SCRIPT_MAX_BYTES} bytes max): {path}"
         )
     if _hash_bytes(data) != PINNED_VPN_INSTALL_SHA256:
-        raise StagingError("Security abort: Script integrity failure.")
+        raise StagingError("Security abort: Script integrity failure.", code="integrity")
     return data
 
 
@@ -461,7 +469,7 @@ def _execute_vpn_cli(
         try:
             stage_dir = _ensure_root_stage_dir(staging_dir)
         except StagingError as exc:
-            return {"ok": False, "message": str(exc), "details": None}
+            return {"ok": False, "message": str(exc), "details": None, "code": exc.code}
         fd, out_path = tempfile.mkstemp(
             prefix=f"{client_name}-", suffix=".ovpn", dir=str(stage_dir)
         )
@@ -482,7 +490,7 @@ def _execute_vpn_cli(
                 os.unlink(out_path)
             except OSError:
                 pass
-        return {"ok": False, "message": str(exc), "details": None}
+        return {"ok": False, "message": str(exc), "details": None, "code": exc.code}
 
     # F3: fixed minimal env, fixed PATH, explicit bash (survives noexec mounts).
     cmd = ["env", "-i", f"PATH={FIXED_PATH}", FIXED_BASH, staged, *script_args, *extra_flags]
@@ -499,7 +507,12 @@ def _execute_vpn_cli(
                 os.unlink(out_path)
             except OSError:
                 pass
-        return {"ok": False, "message": f"Timeout ({timeout}s) exceeded", "details": None}
+        return {
+            "ok": False,
+            "message": f"Timeout ({timeout}s) exceeded",
+            "details": None,
+            "code": "op_fail",
+        }
     finally:
         if staged is not None:
             try:
@@ -560,6 +573,7 @@ def _execute_vpn_cli(
         "ok": False,
         "message": err or f"VPN command failed (exit {proc.returncode})",
         "details": None,
+        "code": "op_fail",
     }
 
 
@@ -624,9 +638,9 @@ def _execute_change_dns(
         conn = validate_conn_name(str(plan.params.get("connection") or ""))
         server = validate_dns(str(plan.params.get("server") or ""))
     except VerbValidationError:
-        return {"ok": False, "message": "Malformed change-dns plan", "details": None}
+        return {"ok": False, "message": "Malformed change-dns plan", "details": None, "code": "op_fail"}
     if plan.commands != change_dns_apply_commands(conn, server):
-        return {"ok": False, "message": "Malformed change-dns plan", "details": None}
+        return {"ok": False, "message": "Malformed change-dns plan", "details": None, "code": "op_fail"}
 
     total = float(timeout)
     reserve = min(10.0, total / 3.0)
@@ -779,9 +793,9 @@ def _execute_restart_adapter(
     try:
         iface = validate_iface(str(plan.params.get("iface") or ""))
     except VerbValidationError:
-        return {"ok": False, "message": "Malformed restart-adapter plan", "details": None}
+        return {"ok": False, "message": "Malformed restart-adapter plan", "details": None, "code": "op_fail"}
     if plan.commands != restart_adapter_commands(iface):
-        return {"ok": False, "message": "Malformed restart-adapter plan", "details": None}
+        return {"ok": False, "message": "Malformed restart-adapter plan", "details": None, "code": "op_fail"}
 
     total = float(timeout if timeout is not None else 60.0)
     start = now()
@@ -836,11 +850,11 @@ def _read_vpn_index() -> Dict[str, Any]:
     try:
         fd = os.open(INDEX_TXT_PATH, os.O_RDONLY | os.O_NOFOLLOW)
     except OSError as exc:
-        return {"ok": False, "message": f"Cannot read PKI index: {exc}", "details": None}
+        return {"ok": False, "message": f"Cannot read PKI index: {exc}", "details": None, "code": "op_fail"}
     try:
         st = os.fstat(fd)
         if not stat.S_ISREG(st.st_mode):
-            return {"ok": False, "message": "PKI index is not a regular file", "details": None}
+            return {"ok": False, "message": "PKI index is not a regular file", "details": None, "code": "op_fail"}
         # 1 MiB cap (matches audit: subprocess output must be size-capped).
         chunks: List[bytes] = []
         remaining = 1 << 20
@@ -853,7 +867,7 @@ def _read_vpn_index() -> Dict[str, Any]:
         data = b"".join(chunks).decode("utf-8", errors="replace").strip()[:20000]
         return {"ok": True, "message": "read VPN PKI index", "details": data or None, "verb": "vpn-list"}
     except OSError as exc:
-        return {"ok": False, "message": f"Cannot read PKI index: {exc}", "details": None}
+        return {"ok": False, "message": f"Cannot read PKI index: {exc}", "details": None, "code": "op_fail"}
     finally:
         try:
             os.close(fd)
@@ -893,6 +907,7 @@ def _execute_plan_inner(plan: VerbPlan, *, timeout: Optional[int] = None) -> Dic
                 "ok": False,
                 "message": f"Timeout ({timeout}s) exceeded",
                 "details": " ".join(argv),
+                "code": "op_fail",
             }
         if proc.returncode != 0:
             err = (proc.stderr or proc.stdout or "").strip()
@@ -907,6 +922,7 @@ def _execute_plan_inner(plan: VerbPlan, *, timeout: Optional[int] = None) -> Dic
                 "ok": False,
                 "message": err or f"Command failed (exit {proc.returncode})",
                 "details": " ".join(argv),
+                "code": "op_fail",
             }
         if proc.stdout:
             outputs.append(proc.stdout.strip())
@@ -983,7 +999,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         verb_args = _parse_json_args(args.json_args)
         plan = plan_verb(args.verb, verb_args)
     except VerbValidationError as exc:
-        return _emit({"ok": False, "message": str(exc)}, EXIT_BAD_ARGS)
+        return _emit({"ok": False, "message": str(exc), "code": "bad_args"}, EXIT_BAD_ARGS)
 
     execute = _should_execute(args.execute, args.dry_run)
     if not execute:
@@ -993,11 +1009,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     result = execute_plan(plan, timeout=args.timeout)
     if result.get("ok"):
         return _emit(result, EXIT_OK)
-    message = (result.get("message") or "").lower()
-    if "integrity" in message or "security abort" in message:  # sf-str: allow exit-code mapping from helper payload, low-risk internal
+    # Structured mapping only: never infer a security-relevant exit code from
+    # human-readable text (issue #52). Missing codes are operational failures.
+    code = result.get("code")
+    if code == "integrity":
         return _emit(result, EXIT_INTEGRITY)
-    if "cancel" in message or "dismissed" in message:  # sf-str: allow helper payload code fallback, primary is code==cancelled
+    if code == "cancelled":
         return _emit(result, EXIT_CANCELLED)
+    if code == "bad_args":
+        return _emit(result, EXIT_BAD_ARGS)
     return _emit(result, EXIT_OP_FAIL)
 
 
