@@ -1,10 +1,36 @@
 """Guardian: docs must not claim IPC token/confirmed as root protection."""
+import base64
+import hashlib
 import re
 from pathlib import Path
 
 from netmedic.helper_verbs import HELPER_VERSION
 
 ROOT = Path(__file__).resolve().parent.parent
+
+RELEASE_KEY_FINGERPRINT = "8C1BA036E834F3235593561C1A83A6D7885575E6"
+
+
+def _public_key_fingerprint(armored: str) -> str:
+    """Return the v4 fingerprint of the first public-key packet (no gpg needed)."""
+    match = re.search(
+        r"-----BEGIN PGP PUBLIC KEY BLOCK-----\r?\n\r?\n(.*?)"
+        r"-----END PGP PUBLIC KEY BLOCK-----",
+        armored,
+        re.S,
+    )
+    assert match, "not an armored public key block"
+    body = "".join(
+        line
+        for line in match.group(1).splitlines()
+        if line and not line.startswith("=")
+    )
+    raw = base64.b64decode(body)
+    # Old-format public-key packet: 0x99, 2-byte length, then the key body.
+    assert raw[0] == 0x99, f"unexpected packet tag byte: {raw[0]:#04x}"
+    length = int.from_bytes(raw[1:3], "big")
+    # OpenPGP v4 fingerprints are defined as SHA-1 over the key packet.
+    return hashlib.sha1(raw[: 3 + length]).hexdigest().upper()  # noqa: S324
 
 
 def test_no_false_ipc_root_claim() -> None:
@@ -36,6 +62,23 @@ def test_current_release_line_is_supported() -> None:
     assert row.group(1).strip().lower().startswith("yes"), (
         f"SECURITY.md does not mark {release_line} as Yes: {row.group(1).strip()!r}"
     )
+
+
+def test_release_signing_key_is_published_and_verifiable() -> None:
+    """SECURITY.md and the committed key must agree on the real fingerprint."""
+    security = (ROOT / "SECURITY.md").read_text(encoding="utf-8")
+    assert RELEASE_KEY_FINGERPRINT in security
+    assert "docs/RELEASE_KEY.asc" in security
+    assert "gpg --verify SHA256SUMS.asc SHA256SUMS" in security
+    assert "sha256sum -c SHA256SUMS" in security
+
+    key_path = ROOT / "docs" / "RELEASE_KEY.asc"
+    assert key_path.is_file(), "docs/RELEASE_KEY.asc is missing"
+    key_text = key_path.read_text(encoding="utf-8")
+    assert key_text.lstrip().startswith("-----BEGIN PGP PUBLIC KEY BLOCK-----")
+    assert key_text.rstrip().endswith("-----END PGP PUBLIC KEY BLOCK-----")
+    assert "PRIVATE KEY" not in key_text
+    assert _public_key_fingerprint(key_text) == RELEASE_KEY_FINGERPRINT
 
 
 def test_policy_installer_does_not_advertise_legacy_elevation() -> None:
