@@ -38,7 +38,7 @@ jobs:
         # M6: pinned (were unpinned latest). Build venv consumes the
         # hash-pinned lock (cp312 scope matches setup-python 3.12).
         run: |
-          python -m pip install --upgrade pip wheel setuptools "pytest==9.1.0" "pytest-cov==7.1.0" "hypothesis==6.168.1" "cyclonedx-bom==8.6.2"
+          python -m pip install --upgrade pip wheel setuptools "pytest==9.1.0" "pytest-cov==7.1.0" "hypothesis==6.168.1"
           pip install -e netmedic/ --config-settings editable_mode=strict
           pip install -e netmedic_ai/
           # build_binary.sh requires ./venv (same split as CI build-smoke)
