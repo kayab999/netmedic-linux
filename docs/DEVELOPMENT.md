@@ -25,13 +25,28 @@ After adding a new `netmedic/*.py` module, re-run the same `pip install -e` comm
 
 ### Manual setup (Python 3.10–3.13; CI matrix tests 3.10–3.13, see `requirements.lock`)
 
+Desktop (GTK GUI):
+
 ```bash
 python3.12 -m venv venv
 source venv/bin/activate
 pip install -r requirements-dev.lock
-pip install -e netmedic/ --config-settings editable_mode=strict
+pip install -e "netmedic[gui]" --config-settings editable_mode=strict
 pip install -e netmedic_ai/
 ```
+
+Headless core (no GTK/PyGObject):
+
+```bash
+python3.12 -m venv venv
+source venv/bin/activate
+pip install -e netmedic/ --no-deps --config-settings editable_mode=strict
+```
+
+`netmedic/pyproject.toml` declares no mandatory runtime dependency. The `gui`
+extra requests `PyGObject>=3.42`; on distributions where it comes from the
+system package (Ubuntu `python3-gi`), install that package instead of building
+PyGObject from source.
 
 ## Running the Application
 

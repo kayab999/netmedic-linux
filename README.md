@@ -49,9 +49,18 @@ chmod +x install.sh
 
 ### Headless mode (IPC daemon, no GUI)
 
+The diagnostic core and headless mode do not import GTK/PyGObject. To install
+without the GUI extra:
+
 ```bash
+python3 -m venv venv
+./venv/bin/pip install --no-deps -e netmedic/ --config-settings editable_mode=strict
 ./venv/bin/netmedic --headless
-# Or after install.sh:
+```
+
+After `install.sh` (desktop profile), the systemd unit is available:
+
+```bash
 systemctl --user enable --now netmedic-headless.service
 ```
 
@@ -162,7 +171,11 @@ See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for details.
 
 - **OS:** Ubuntu 22.04/24.04 (primary; Debian/Fedora/Arch best-effort)
 - **Python:** 3.10–3.13 (tested in CI; see `requirements.lock`)
-- **System packages:** GTK3, GObject introspection, NetworkManager (`nmcli`), PolicyKit
+- **Desktop profile:** GTK3, GObject introspection, NetworkManager (`nmcli`),
+  PolicyKit. GTK/PyGObject is the optional `gui` extra (`netmedic[gui]`).
+- **Headless profile:** Python only; the diagnostic core uses stdlib and does
+  not require GTK, NetworkManager, `pkexec` or Polkit. Optional integrations
+  and privileged actions appear as unavailable capabilities.
 - **Optional AI:** `llama-cpp-python`, ~950 MB GGUF model (not bundled in repo).
   The AI pilot is **experimental and outside the supported 1.9.0 surface**; it
   requires its own hash-pinned dependency lock and a model file plus directory

@@ -184,6 +184,68 @@ def test_parse_args():
     assert rt.parse_args(["--status-json"]).status_json is True
 
 
+def test_is_missing_gi():
+    assert rt._is_missing_gi(ModuleNotFoundError("no gi", name="gi"))
+    assert rt._is_missing_gi(ModuleNotFoundError("no gi", name="gi.repository"))
+    assert not rt._is_missing_gi(ModuleNotFoundError("no cairo", name="cairo"))
+    assert not rt._is_missing_gi(RuntimeError("boom"))
+
+
+def test_gui_dependency_error_detects_missing_gtk_typelib():
+    assert rt._is_gui_dependency_error(ValueError("Namespace Gtk not available"))
+    assert rt._is_gui_dependency_error(OSError("libgtk-3.so.0: cannot open"))
+    assert not rt._is_gui_dependency_error(ValueError("invalid argument"))
+
+
+def test_load_gui_missing_pygobject_is_actionable(monkeypatch, capsys):
+    import builtins
+
+    real_import = builtins.__import__
+
+    def fake_import(name, *args, **kwargs):
+        if name == "netmedic.gui":
+            raise ModuleNotFoundError("No module named 'gi'", name="gi")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+    with pytest.raises(SystemExit) as exc:
+        rt.load_gui()
+    assert exc.value.code == 1
+    err = capsys.readouterr().err
+    assert "netmedic[gui]" in err
+    assert "--headless" in err
+    assert "Traceback" not in err
+
+
+def test_load_gui_missing_gtk_typelib_is_actionable(monkeypatch, capsys):
+    import builtins
+
+    real_import = builtins.__import__
+
+    def fake_import(name, *args, **kwargs):
+        if name == "netmedic.gui":
+            raise ValueError("Namespace Gtk not available")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+    with pytest.raises(SystemExit) as exc:
+        rt.load_gui()
+    assert exc.value.code == 1
+    assert "netmedic[gui]" in capsys.readouterr().err
+
+
+def test_headless_does_not_load_gui(monkeypatch):
+    def boom():
+        raise AssertionError("headless mode must not import the GUI")
+
+    monkeypatch.setattr(rt, "load_gui", boom)
+    monkeypatch.setattr("signal.signal", lambda *a, **k: None)
+    monkeypatch.setattr(rt, "bootstrap", lambda headless=False: False)
+    with pytest.raises(SystemExit) as exc:
+        rt.run(headless=True)
+    assert exc.value.code == 1
+
+
 def test_run_status_paths(monkeypatch):
     calls = []
     monkeypatch.setattr(

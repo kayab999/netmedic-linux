@@ -14,15 +14,19 @@ description = "Professional network diagnostics, repair, and infrastructure mana
 # source there). Pillow is not a runtime dependency (only scripts/generate_icon.py
 # uses it; the build image pins its own).
 requires-python = ">=3.10,<3.14"
-dependencies = [
-    "PyGObject>=3.42",
-]
+# LUCP Phase 2: the diagnostic core and headless mode are stdlib-only. GTK is
+# an optional extra so `pip install netmedic --no-deps` works on hosts without
+# PyGObject; the desktop installer requests `netmedic[gui]`.
+dependencies = []
 
 [project.scripts]
 netmedic = "netmedic.app:main"
 netmedic-helper = "netmedic.helper_main:main"
 
 [project.optional-dependencies]
+gui = [
+    "PyGObject>=3.42",
+]
 ai = [
     "llama-cpp-python>=0.2.57"
 ]
