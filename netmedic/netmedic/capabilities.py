@@ -135,13 +135,6 @@ _TOOL_CAPABILITIES: Tuple[Tuple[str, str, str, str, str], ...] = (
         "List IPv4/IPv6 addresses per interface.",
     ),
     (
-        "default_route",
-        LEVEL_L0,
-        "ip",
-        "iproute2",
-        "Read the current default route and gateway.",
-    ),  # closes default_route above
-    (
         "icmp_latency",
         LEVEL_L0,
         "ping",
@@ -299,6 +292,12 @@ _NATIVE_CAPABILITIES: Tuple[Tuple[str, str, str, str], ...] = (
         LEVEL_L0,
         "native",
         "Detect a captive portal through a bounded HTTP probe.",
+    ),
+    (
+        "default_route",
+        LEVEL_L0,
+        "native",
+        "Read the default route and gateway from /proc/net/route (ip enrichment).",
     ),
 )
 

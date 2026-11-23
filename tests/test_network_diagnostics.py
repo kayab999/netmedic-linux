@@ -226,6 +226,7 @@ def test_get_gateway_ip(medic, monkeypatch):
 
 
 def test_get_gateway_ip_missing(medic, monkeypatch):
+    monkeypatch.setattr("netmedic.topology.collect_default_gateways_v4", lambda: [])
     _run_router(monkeypatch, {"ip": _cmd(True, "default dev eth0 scope link")})
     assert medic.get_gateway_ip() is None
     _run_router(monkeypatch, {"ip": _cmd(False, "")})
