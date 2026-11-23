@@ -163,7 +163,8 @@ def test_is_privileged_matches_set():
 
 
 def test_exec_paths_are_unique_per_verb():
-    """F3: each (exec.path, argv1) pair must be unique so pkexec disambiguates."""
+    """F3: each action has a unique per-verb exec.path so pkexec 0.105 can
+    distinguish actions that share the base helper."""
     tree = ET.parse(POLICY)
     root = tree.getroot()
     paths = []

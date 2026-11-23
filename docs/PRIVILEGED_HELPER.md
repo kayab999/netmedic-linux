@@ -27,7 +27,7 @@ accidental misuse, but not least privilege.
 
 | Property | Legacy (tests only) | Current 1.9.0 |
 |----------|---------------------|---------------|
-| Polkit subject | IPC action ID | Helper path + fixed `argv1` (verb) |
+| Polkit subject | IPC action ID | Per-verb wrapper path `helper-<verb>` |
 | Root argv | Client-chosen within binary allowlist | Fixed per-verb argv template |
 | Audit | IPC audit log | IPC audit + root-side journal record |
 | Attack surface | Any code path reaching `CommandRunner.run(..., require_root=True)` | Only helper entrypoints |
@@ -73,7 +73,7 @@ accidental misuse, but not least privilege.
 | Piece | Role |
 |-------|------|
 | `netmedic-helper` | Small CLI installed to `/usr/libexec/netmedic/helper` (or `/usr/bin/netmedic-helper`) |
-| Polkit policy | `annotate` each action with `org.freedesktop.policykit.exec.path` = helper path; optional `argv1` = verb |
+| Polkit policy | `annotate` each action with a unique `org.freedesktop.policykit.exec.path` = `/usr/libexec/netmedic/helper-<verb>`; `exec.argv1` is not used because pkexec 0.105 matches on path only |
 | `CommandRunner` | For production: `pkexec /usr/libexec/netmedic/helper <verb> [args…]` instead of raw tool |
 | Verb registry | Shared constants with `action_catalog` (or generated from it) |
 
@@ -171,8 +171,8 @@ execute only that copy.
 ```xml
 <action id="com.kayab.netmedic.flush-dns">
   ...
-  <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/netmedic/helper</annotate>
-  <annotate key="org.freedesktop.policykit.exec.argv1">flush-dns</annotate>
+  <!-- Unique per verb: pkexec 0.105 only compares exec.path. -->
+  <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/netmedic/helper-flush-dns</annotate>
   <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
 </action>
 ```
@@ -237,7 +237,7 @@ pkexec --disable-internal-agent /usr/libexec/netmedic/helper flush-dns
 | Layer | Tests |
 |-------|-------|
 | Unit | Verb validation, medic* filter, JSON errors |
-| Integration (CI) | `helper-install-integration`: installs helper + policy, checks `--version`/`--list-verbs`, all 12 `pkaction` rows (`exec.path`, `argv1`, `allow_active`), every dry-run and invalid-input rejection |
+| Integration (CI) | `helper-install-integration`: installs helper + policy, checks `--version`/`--list-verbs`, all 12 unique per-verb `pkaction` rows (`exec.path`, `allow_active`), every dry-run and invalid-input rejection |
 | Integration (unit) | Mock pkexec; assert helper argv construction and the fail-closed version gate |
 | Manual / VM | Live pkexec, interactive Polkit, destructive verbs, rollback and journal audit on a clean Ubuntu VM (`docs/VM_CHECKLIST.md`) |
 
@@ -258,8 +258,9 @@ pkexec --disable-internal-agent /usr/libexec/netmedic/helper flush-dns
   (`system.py` refuses direct elevation outside `TEST_MODE`-gated legacy.)
 - [x] No `pkexec nmcli|ip|ufw|systemctl|env …` direct construction outside helper.
   (Production path is `pkexec helper <verb>` only; raw argv survives in tests.)
-- [x] Polkit policy annotations point at helper path.
-  (Enforced by `test_policy_and_catalog_contract.py`: `exec.path` + per-verb `argv1`.)
+- [x] Polkit policy annotations point at a unique per-verb wrapper path.
+  (Enforced by `test_policy_and_catalog_contract.py`: 12 distinct
+  `/usr/libexec/netmedic/helper-<verb>` values, no `exec.argv1`.)
 - [x] VPN script execution re-hashes under elevated context.
   (Root-owned staging in `/run/netmedic` + double hash; F1 pin in v1.6.1.)
 - [x] Tests cover invalid iface / DNS / client name at helper boundary.

@@ -116,7 +116,9 @@ def test_ipc_api_separates_helper_and_legacy_modes() -> None:
     lower = text.lower()
     assert "helper mode" in lower
     assert "legacy mode" in lower
-    assert "org.freedesktop.policykit.exec.argv1" in text or "exec.argv1" in text
+    # Per-verb wrappers: pkexec 0.105 matches on exec.path only.
+    assert "helper-<verb>" in text
+    assert "per-verb" in lower
     assert "does **not** perform a second polkit check" in lower
     assert "65,536" in text
 

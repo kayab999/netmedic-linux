@@ -59,7 +59,7 @@ What happens next depends on the elevation mode:
 
 | Mode | After the IPC checks | Interactive authorization |
 |------|----------------------|---------------------------|
-| **Helper mode (production, 1.9.0)** | Daemon runs `pkexec /usr/libexec/netmedic/helper <verb> --execute --json …` | Polkit prompt is raised by `pkexec` for the annotated action (`exec.path` + `exec.argv1`). The IPC layer does **not** perform a second Polkit check. |
+| **Helper mode (production, 1.9.0)** | Daemon runs `pkexec /usr/libexec/netmedic/helper-<verb> --execute --json …` | Polkit prompt is raised by `pkexec` for the per-verb action (`org.freedesktop.policykit.exec.path` = `/usr/libexec/netmedic/helper-<verb>`). `exec.argv1` is intentionally absent because pkexec 0.105 selects by path only. The IPC layer does **not** perform a second Polkit check. |
 | **Legacy mode (tests only)** | Daemon expands the verb to allowlisted argv and runs it under `pkexec` | The IPC action ID is mapped by `polkit_auth`; requires `NETMEDIC_TEST_MODE=1` and `NETMEDIC_ALLOW_LEGACY_ELEVATION=1`. Root work is refused without both. |
 
 The helper is the effective privilege boundary. `session_token` and `confirmed`
