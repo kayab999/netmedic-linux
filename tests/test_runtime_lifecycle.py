@@ -185,17 +185,24 @@ def test_parse_args():
 
 
 def test_run_status_paths(monkeypatch):
-    seen = {}
+    calls = []
     monkeypatch.setattr(
-        "netmedic.status.print_status", lambda as_json=False: seen.update(json=as_json) or 0
+        "netmedic.status.print_status",
+        lambda *, as_json=False, require_privileged=False: calls.append(
+            (as_json, require_privileged)
+        )
+        or 0,
     )
     with pytest.raises(SystemExit) as exc:
         rt.run(status=True)
     assert exc.value.code == 0
-    assert seen["json"] is False
+    assert calls[-1] == (False, False)
     with pytest.raises(SystemExit):
         rt.run(status_json=True)
-    assert seen["json"] is True
+    assert calls[-1] == (True, False)
+    with pytest.raises(SystemExit):
+        rt.run(status=True, require_privileged=True)
+    assert calls[-1] == (False, True)
 
 
 def test_run_bootstrap_fail(monkeypatch):

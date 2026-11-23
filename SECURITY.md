@@ -52,7 +52,7 @@ Primary residual risk: a **same-UID** local process can talk to the IPC socket a
    ./scripts/install-polkit-policy.sh
    netmedic --status
    ```
-2. Confirm `production_ready: true` and helper path `/usr/libexec/netmedic/helper`.
+2. Confirm `core_ready: true`, `privileged_ready: true` and helper path `/usr/libexec/netmedic/helper` (`production_ready` is a deprecated alias of `core_ready`).
 3. Do **not** set `NETMEDIC_ALLOW_LEGACY_ELEVATION=1` in production.
 4. Do **not** set `NETMEDIC_SKIP_POLKIT=1` outside tests (`NETMEDIC_TEST_MODE=1` only).
 5. Keep state dir private (`~/.local/state/netmedic` mode `0700`).

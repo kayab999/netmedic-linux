@@ -198,14 +198,30 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
         action="store_true",
         help="Same as --status but JSON output",
     )
+    parser.add_argument(
+        "--require-privileged",
+        action="store_true",
+        help="With --status, exit 1 unless privileged_ready is true",
+    )
     return parser.parse_args(argv)
 
 
-def run(headless: bool = False, *, status: bool = False, status_json: bool = False) -> None:
+def run(
+    headless: bool = False,
+    *,
+    status: bool = False,
+    status_json: bool = False,
+    require_privileged: bool = False,
+) -> None:
     if status or status_json:
         from netmedic.status import print_status
 
-        sys.exit(print_status(as_json=bool(status_json)))
+        sys.exit(
+            print_status(
+                as_json=bool(status_json),
+                require_privileged=bool(require_privileged),
+            )
+        )
 
     signal.signal(signal.SIGINT, handle_signals)
     signal.signal(signal.SIGTERM, handle_signals)

@@ -75,12 +75,12 @@ def test_report_install_health_ok_and_incomplete(win, monkeypatch):
     w, _ = win
     monkeypatch.setattr(
         "netmedic.status.collect_status",
-        lambda: {"production_ready": True, "helper_mode": True, "hints": []},
+        lambda: {"privileged_ready": True, "helper_mode": True, "hints": []},
     )
     assert w._report_install_health() is False
     monkeypatch.setattr(
         "netmedic.status.collect_status",
-        lambda: {"production_ready": False, "hints": ["install policy"]},
+        lambda: {"privileged_ready": False, "hints": ["install policy"]},
     )
     assert w._report_install_health() is False
 
