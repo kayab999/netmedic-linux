@@ -81,7 +81,7 @@ jobs:
       - name: Install Python packages
         run: |
           python -m pip install --upgrade pip wheel setuptools pytest pytest-cov ruff mypy pip-audit hypothesis
-          pip install -e netmedic/ --config-settings editable_mode=strict
+          pip install -e "netmedic[gui]" --config-settings editable_mode=strict
           pip install -e netmedic_ai/
 
       - name: Lint
@@ -129,6 +129,38 @@ jobs:
           # Full suite with helper forced on; fixtures still force 0 via autouse
           # unless tests opt in. Contract + helper verb tests are the focus.
           python -m pytest tests/test_helper_verbs.py tests/test_policy_and_catalog_contract.py -q
+
+  headless-core:
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.12"
+
+      - name: Install core without GTK/PyGObject
+        # LUCP Phase 2: no apt GTK packages and no gui extra here.
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --no-deps -e netmedic/
+          python -m pip install pytest hypothesis
+
+      - name: Core imports never load gi
+        run: |
+          python -c "import sys, netmedic.capabilities, netmedic.probes, netmedic.status, netmedic.network, netmedic.runtime; assert 'gi' not in sys.modules, sorted(m for m in sys.modules if m.startswith('gi'))"
+
+      - name: Headless status gate
+        env:
+          XDG_STATE_HOME: ${{ runner.temp }}/netmedic-state
+        run: |
+          python -m netmedic --status
+          python -m netmedic --status-json | python -c "import json,sys; r=json.load(sys.stdin); assert r['core_ready'] is True; assert r['privileged_ready'] is False"
+
+      - name: Core tests without GTK
+        run: python -m pytest tests/test_capabilities.py tests/test_status.py tests/test_probes.py tests/test_packaging_metadata.py -q
 
   helper-install-integration:
     if: github.event_name != 'schedule'
@@ -234,7 +266,7 @@ jobs:
             polkitd pkexec gir1.2-polkit-1.0 network-manager iproute2 \
             iputils-ping curl xvfb dbus-x11
           python -m pip install --upgrade pip wheel setuptools pytest hypothesis
-          pip install -e netmedic/ --config-settings editable_mode=strict
+          pip install -e "netmedic[gui]" --config-settings editable_mode=strict
           pip install -e netmedic_ai/
       - name: Release smoke
         env:
@@ -264,7 +296,46 @@ jobs:
           python -m pip install --upgrade pip wheel setuptools pyinstaller
           python -m venv venv
           ./venv/bin/pip install --upgrade pip wheel setuptools pyinstaller pillow
-          ./venv/bin/pip install -e netmedic/ --config-settings editable_mode=strict
+          ./venv/bin/pip install -e "netmedic[gui]" --config-settings editable_mode=strict
+
+      - name: Wheel and sdist metadata
+        # LUCP Phase 2: shipped metadata must not require GTK for the core.
+        run: |
+          python -m pip install build
+          rm -rf /tmp/netmedic-pkg
+          python -m build --wheel --sdist --outdir /tmp/netmedic-pkg netmedic/
+          python - <<'PY'
+          import glob
+          import tarfile
+          import zipfile
+
+          def requires(text):
+              return [
+                  line.split(":", 1)[1].strip()
+                  for line in text.splitlines()
+                  if line.startswith("Requires-Dist:")
+              ]
+
+          wheels = glob.glob("/tmp/netmedic-pkg/*.whl")
+          sdists = glob.glob("/tmp/netmedic-pkg/*.tar.gz")
+          assert len(wheels) == 1 and len(sdists) == 1, (wheels, sdists)
+
+          with zipfile.ZipFile(wheels[0]) as archive:
+              wheel_meta = archive.read(
+                  next(n for n in archive.namelist() if n.endswith("/METADATA"))
+              ).decode()
+          with tarfile.open(sdists[0]) as archive:
+              member = next(m for m in archive.getmembers() if m.name.endswith("/PKG-INFO"))
+              sdist_meta = archive.extractfile(member).read().decode()
+
+          for label, text in (("wheel", wheel_meta), ("sdist", sdist_meta)):
+              reqs = requires(text)
+              mandatory = [r for r in reqs if "extra ==" not in r and "extra==" not in r]
+              assert not mandatory, (label, mandatory)
+              gui = [r for r in reqs if 'extra == "gui"' in r]
+              assert any(r.lower().startswith("pygobject") for r in gui), (label, reqs)
+              print(f"{label}: {reqs}")
+          PY
 
       - name: Build standalone binary
         run: |

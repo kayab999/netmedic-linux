@@ -82,9 +82,8 @@ source venv/bin/activate
 pip install --upgrade pip wheel setuptools
 pip install "pytest==9.1.0" "pytest-cov==7.1.0" "ruff==0.15.12" "hypothesis==6.168.1"
 
-echo -e "${BLUE}[3/6] Installing NetMedic core...${NC}"
-pip install PyGObject
-pip install -e netmedic/ --config-settings editable_mode=strict
+echo -e "${BLUE}[3/6] Installing NetMedic core (desktop profile)...${NC}"
+pip install -e "netmedic[gui]" --config-settings editable_mode=strict
 # Dock/desktop Exec uses this interpreter (strict snapshot), not PYTHONPATH.
 python -c "import netmedic.constants, netmedic.probes, netmedic.gui"
 

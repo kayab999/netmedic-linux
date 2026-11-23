@@ -7,7 +7,7 @@ import time
 import warnings
 from logging.handlers import RotatingFileHandler
 from types import FrameType
-from typing import List, Optional
+from typing import Callable, List, Optional
 
 from netmedic.config import Config
 from netmedic.network import NetworkMedic
@@ -206,6 +206,39 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+GUI_INSTALL_HINT = (
+    "NetMedic GUI is unavailable because PyGObject/GTK3 is not installed.\n"
+    "Install the GUI extra and the system GTK3/GObject packages, for example:\n"
+    "  pip install 'netmedic[gui]'\n"
+    "For diagnostics without GTK:\n"
+    "  netmedic --headless"
+)
+
+
+def _is_missing_gi(exc: BaseException) -> bool:
+    name = getattr(exc, "name", "") or ""
+    return name == "gi" or name.startswith("gi.")
+
+
+def _is_gui_dependency_error(exc: BaseException) -> bool:
+    if _is_missing_gi(exc):
+        return True
+    text = str(exc).lower()
+    return "namespace gtk" in text or "libgtk" in text or "gtk-3" in text
+
+
+def load_gui() -> Callable[[], None]:
+    """Import the GUI entry point or exit with an actionable message."""
+    try:
+        from netmedic.gui import run_gui
+    except (ImportError, ValueError) as exc:
+        if _is_gui_dependency_error(exc):
+            print(GUI_INSTALL_HINT, file=sys.stderr)
+            sys.exit(1)
+        raise
+    return run_gui
+
+
 def run(
     headless: bool = False,
     *,
@@ -223,6 +256,10 @@ def run(
             )
         )
 
+    # Resolve the GUI before starting the daemon: a missing PyGObject must be a
+    # clear install hint, not a partially started headless process.
+    run_gui = None if headless else load_gui()
+
     signal.signal(signal.SIGINT, handle_signals)
     signal.signal(signal.SIGTERM, handle_signals)
     signal.signal(signal.SIGHUP, handle_signals)
@@ -236,7 +273,7 @@ def run(
             while True:
                 time.sleep(10)
         else:
-            from netmedic.gui import run_gui
+            assert run_gui is not None
             run_gui()
     except Exception as exc:
         logging.critical("Unhandled Application Error: %s", exc, exc_info=True)

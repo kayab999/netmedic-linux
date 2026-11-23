@@ -6,6 +6,13 @@ All notable changes to NetMedic Linux are documented here.
 
 ### Added
 
+- **LUCP Phase 2a — optional GUI package.** `netmedic` no longer requires
+  PyGObject at runtime: `dependencies = []` and GTK lives in the `gui` extra
+  (`pip install 'netmedic[gui]'`). The diagnostic core and `--headless` mode
+  install and run with `--no-deps` on hosts without GTK. Starting the GUI
+  without PyGObject now prints an actionable install hint instead of a
+  traceback. CI adds a headless-core job without GTK and checks wheel/sdist
+  metadata for mandatory dependencies.
 - **LUCP Phase 1 — capability registry and readiness split.** `--status` and
   `--status-json` now expose `schema_version`, `scope` (current network
   namespace plus a conservative container hint) and `capabilities` with
