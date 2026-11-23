@@ -195,7 +195,7 @@ class NetworkMedic:
                 gw = routes[0].get("gateway")
                 if gw:
                     return gw
-        except Exception:  # noqa: BLE001 (enrichment must not break diagnostics)
+        except Exception:  # noqa: BLE001, S110 (enrichment must not break diagnostics)
             pass
         # Enrichment/fallback: iproute2.
         res = CommandRunner.run(["ip", "route", "show", "default"])
