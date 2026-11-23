@@ -1,9 +1,7 @@
 """Minimal rtnetlink client tests (read-only, hermetic)."""
 from __future__ import annotations
 
-import socket
 import struct
-from unittest.mock import patch
 
 from netmedic import rtnetlink as rt
 
@@ -58,7 +56,7 @@ def test_collect_links_parses_crafted_message(monkeypatch) -> None:
     monkeypatch.setattr(rt, "_send_dump_request", lambda *a, **k: [msg, done])
     links = rt.collect_links()
     assert links is not None
-    assert any(l["name"] == "eth9" and l["mtu"] == 1400 and l["index"] == 42 for l in links)
+    assert any(link["name"] == "eth9" and link["mtu"] == 1400 and link["index"] == 42 for link in links)
 
 
 def test_collect_default_routes_parses_crafted_message(monkeypatch) -> None:
@@ -84,6 +82,5 @@ def test_collect_default_routes_parses_crafted_message(monkeypatch) -> None:
 
 def test_collect_links_returns_none_on_nlmsg_error(monkeypatch) -> None:
     # NLMSG_ERROR with nonzero errno.
-    err = struct.pack("IHHII", 16 + 4, rt.NLMSG_ERROR, 0, 1, 1) + struct.pack("i", -1) + b"\x00" * 12
     monkeypatch.setattr(rt, "_send_dump_request", lambda *a, **k: None)
     assert rt.collect_links() is None
