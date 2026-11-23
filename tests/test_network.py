@@ -2,6 +2,7 @@ from unittest.mock import patch, MagicMock
 from netmedic.models import ResultCode
 from netmedic.network import NetworkMedic
 
+@patch("netmedic.probes.check_dns_resolution", lambda: (True, {"google.com": True}, "google.com"))
 @patch('netmedic.system.CommandRunner.run')
 def test_diagnostics_success(mock_run):
     def _run(cmd, *a, **kw):
@@ -23,6 +24,7 @@ def test_diagnostics_success(mock_run):
     assert "Gateway Reachable" in res.message
     assert "DNS Resolution OK" in res.message
 
+@patch("netmedic.probes.check_dns_resolution", lambda: (False, {"google.com": False}, ""))
 @patch('netmedic.system.CommandRunner.run')
 def test_diagnostics_fail_dns(mock_run):
     def _run(cmd, *a, **kw):

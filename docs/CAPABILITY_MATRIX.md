@@ -11,7 +11,7 @@ reflects the Phase 1 split.
 | Interface list/state/MAC | `ip` + `/sys` | L0 target | Must become native-first |
 | Addresses | `ip` | L0 target | rtnetlink in Phase 5 |
 | Default route/gateway | `ip` + `/proc/net/route` | L0 target | Native IPv4/IPv6 needed |
-| System name resolution | `getent` | L0 target | Replace with `socket.getaddrinfo` |
+| System name resolution | `socket.getaddrinfo()` | L0 | Native NSS resolution; no `getent` dependency |
 | TCP connectivity | `curl` | L0 target | Replace with `socket.create_connection` |
 | HTTP/TLS access | `curl` | L0 target | stdlib HTTP client |
 | Captive portal hint | Ubuntu-specific endpoint | L0 target | Neutral configurable endpoint |

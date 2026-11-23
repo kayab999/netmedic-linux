@@ -65,7 +65,6 @@ def test_missing_tools_are_unavailable_not_unknown():
     caps = {cap.id: cap for cap in collect_capabilities(_ctx())}
     for cap_id in (
         "interface_inventory",
-        "system_name_resolution",
         "tcp_connectivity",
         "networkmanager",
         "firewall_admin",

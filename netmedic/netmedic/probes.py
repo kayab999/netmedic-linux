@@ -4,22 +4,115 @@ Used by network.py diagnostics and sensors.get_network_snapshot().
 from __future__ import annotations
 
 import concurrent.futures
-from typing import Dict, Tuple
+import socket
+import threading
+from typing import Any, Dict, Tuple
 
 from netmedic.system import CommandRunner
 
+_DNS_HOSTS = ("google.com", "cloudflare.com")
+_DNS_TIMEOUT = 5.0
+
+
+def _dns_reason(exc: BaseException) -> str:
+    if isinstance(exc, concurrent.futures.TimeoutError):
+        return "timeout"
+    if isinstance(exc, socket.gaierror):
+        errno = getattr(exc, "errno", None)
+        if errno == socket.EAI_NONAME:
+            return "eai_noname"
+        if errno == socket.EAI_AGAIN:
+            return "eai_again"
+        if errno == socket.EAI_FAIL:
+            return "eai_fail"
+        if errno == socket.EAI_SERVICE:
+            return "eai_service"
+        if errno == socket.EAI_FAMILY:
+            return "eai_family"
+        if errno == socket.EAI_SOCKTYPE:
+            return "eai_socktype"
+        return "gai_error"
+    if isinstance(exc, socket.timeout):
+        return "timeout"
+    return "resolution_error"
+
+
+def _resolve_host(host: str, timeout: float) -> Tuple[str, Dict[str, Any]]:
+    """Resolve one host with the system resolver (NSS), bounded by ``timeout``."""
+    result: Dict[str, Any] = {
+        "success": False,
+        "addresses": [],
+        "families": [],
+        "reason_code": None,
+    }
+    holder: Dict[str, Any] = {"infos": None, "exc": None}
+
+    def worker() -> None:
+        try:
+            holder["infos"] = socket.getaddrinfo(host, None)
+        except BaseException as exc:  # noqa: BLE001 - probe must not raise
+            holder["exc"] = exc
+
+    thread = threading.Thread(target=worker, daemon=True)
+    thread.start()
+    thread.join(timeout)
+
+    if thread.is_alive():
+        result["reason_code"] = "timeout"
+        return host, result
+
+    if holder["exc"] is not None:
+        result["reason_code"] = _dns_reason(holder["exc"])
+        return host, result
+
+    infos = holder["infos"] or []
+    addresses: list[str] = []
+    families: set[str] = set()
+    for family, _type, _proto, _canon, sockaddr in infos or []:
+        try:
+            address = sockaddr[0]
+        except (IndexError, TypeError):
+            continue
+        if address and address not in addresses:
+            addresses.append(address)
+        if family == socket.AF_INET:
+            families.add("ipv4")
+        elif family == socket.AF_INET6:
+            families.add("ipv6")
+        else:
+            families.add(str(family))
+
+    result["success"] = bool(addresses)
+    result["addresses"] = addresses[:8]
+    result["families"] = sorted(families)
+    if not result["success"]:
+        result["reason_code"] = "no_addresses"
+    return host, result
+
+
+def check_dns_resolution_detailed() -> Tuple[bool, Dict[str, Dict[str, Any]], str]:
+    """Native (stdlib) system name resolution.
+
+    Returns ``(overall_ok, per_host, successful_host)`` where ``per_host`` maps
+    each host to ``{success, addresses, families, reason_code}``. A real
+    negative result (EAI_NONAME/EAI_AGAIN) is reported as such; it never
+    triggers a fallback to another tool.
+    """
+    per: Dict[str, Dict[str, Any]] = {}
+    ok_host = ""
+    for host in _DNS_HOSTS:
+        _host, info = _resolve_host(host, _DNS_TIMEOUT)
+        per[_host] = info
+        if info["success"] and not ok_host:
+            ok_host = _host
+    overall = any(info.get("success") for info in per.values())
+    return overall, per, ok_host
+
 
 def check_dns_resolution() -> Tuple[bool, Dict[str, bool], str]:
-    """Probe DNS with two hosts. Returns (overall_ok, per_host, successful_host)."""
-    hosts = ["google.com", "cloudflare.com"]
-    per = {}
-    ok_host = ""
-    for h in hosts:
-        res = CommandRunner.run(["getent", "hosts", h], timeout=5)
-        per[h] = res.success
-        if res.success and not ok_host:
-            ok_host = h
-    overall = any(per.values())
+    """Compatibility wrapper around :func:`check_dns_resolution_detailed`."""
+    overall, detailed, ok_host = check_dns_resolution_detailed()
+    per = {host: bool(info.get("success")) for host, info in detailed.items()}
     return overall, per, ok_host
 
 
