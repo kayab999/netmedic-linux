@@ -47,10 +47,11 @@ def test_http_success_is_internet_ok(mock_connect):
     assert label == "1.1.1.1:80"
 
 
+@patch("netmedic.probes._http_probe", return_value={"status": 204, "headers": {}, "body": "", "error": None, "tcp_ok": True, "http_ok": True, "tls_ok": None, "reason_code": "ok"})
 @patch("socket.create_connection", side_effect=ConnectionRefusedError("refused"))
 @patch("netmedic.probes.check_dns_resolution", lambda: (True, {"google.com": True}, "google.com"))
 @patch("netmedic.system.CommandRunner.run")
-def test_diagnostics_tcp_blocked_icmp_ok_is_partial(mock_run, mock_connect):
+def test_diagnostics_tcp_blocked_icmp_ok_is_partial(mock_run, mock_connect, mock_http):
     def _run(cmd, *a, **kw):
         if cmd[0] == "ip" and "default" in cmd:
             return _cmd(True, "default via 192.168.1.1 dev eth0")
@@ -74,10 +75,11 @@ def test_diagnostics_tcp_blocked_icmp_ok_is_partial(mock_run, mock_connect):
     assert "TCP blocked" in res.message
 
 
+@patch("netmedic.probes._http_probe", return_value={"status": 302, "headers": {"Location": "http://portal.local/"}, "body": "", "error": None, "tcp_ok": True, "http_ok": True, "tls_ok": None, "reason_code": "ok"})
 @patch("socket.create_connection", side_effect=ConnectionRefusedError("refused"))
 @patch("netmedic.probes.check_dns_resolution", lambda: (True, {"google.com": True}, "google.com"))
 @patch("netmedic.system.CommandRunner.run")
-def test_captive_hint_when_dns_ok_tcp_fail(mock_run, mock_connect):
+def test_captive_hint_when_dns_ok_tcp_fail(mock_run, mock_connect, mock_http):
     def _run(cmd, *a, **kw):
         if cmd[0] == "ip" and "default" in cmd:
             return _cmd(True, "default via 192.168.1.1 dev eth0")

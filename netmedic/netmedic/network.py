@@ -344,7 +344,7 @@ class NetworkMedic:
             details["nm_divergence"] = f"NM reports {nm_details} but probes report OK"
         if portal_hint:
             details["captive_portal_hint"] = portal_hint
-            details["suggestion"] = "Gateway OK, WAN down → likely upstream/ISP/captive portal. Check router uplink, try http://connectivity-check.ubuntu.com"
+            details["suggestion"] = "Gateway OK, WAN down → likely upstream/ISP/captive portal. Check router uplink or captive portal login page."
         # Also keep string for log backward compat in data
         data = {"gateway": gw_ip, "gateway_ok": gw_ok, "dns_ok": dns_ok, "internet_ok": net_ok, "net_probe": net_label, "dns_probe": dns_host, "captive_portal": portal_hint, "nm": nm_details, "nm_full": nm_full}
         if success:
