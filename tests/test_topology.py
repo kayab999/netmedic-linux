@@ -1,7 +1,6 @@
 """Native topology collectors (L0) — hermetic fixture tests."""
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 from netmedic.topology import (
