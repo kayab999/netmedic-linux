@@ -1,5 +1,4 @@
 from unittest.mock import patch, MagicMock
-import socket
 from netmedic.models import ResultCode
 from netmedic.network import NetworkMedic
 
