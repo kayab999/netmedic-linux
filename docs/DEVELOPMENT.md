@@ -58,7 +58,7 @@ PyGObject from source.
 ./venv/bin/netmedic --headless
 ```
 
-## Testing (546 tests, 69 files; CI gate `--cov-fail-under=80`, currently 85%+)
+## Testing (CI gate `--cov-fail-under=80`, currently 85%+)
 
 ```bash
 ./venv/bin/python -m pytest tests/ -v

@@ -127,7 +127,7 @@ systemctl --user restart netmedic-headless.service
 netmedic-linux/
 ├── netmedic/          # Core application package
 ├── netmedic_ai/       # Optional AI pilot module
-├── tests/             # Test suite (546 tests, 69 files; 2 root-only netns skips)
+├── tests/             # Test suite (see CI for current count; 2 root-only netns skips)
 ├── docs/              # User & developer documentation
 ├── scripts/           # Build & packaging scripts
 ├── assets/            # Icon and desktop entry template
