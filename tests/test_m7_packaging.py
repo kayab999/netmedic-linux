@@ -39,7 +39,7 @@ def test_installer_fedora_polkit_name():
     """Fedora package is 'polkit' — 'policykit' does not exist there."""
     text = _read("install.sh")
     assert "iputils policykit\"" not in text
-    assert "curl iputils polkit\"" in text
+    assert "gtk3 NetworkManager polkit" in text
 
 
 def test_no_removed_policykit_1_package():
@@ -112,7 +112,22 @@ def test_pillow_not_runtime_dep():
         assert "from PIL" not in src and "import PIL" not in src, path
 
 
-def test_version_strings_consistent():
+def test_installer_supports_headless_profile():
+    """install.sh must offer an explicit headless profile."""
+    text = _read("install.sh")
+    assert "--headless" in text
+    assert "--profile=" in text
+    assert 'PROFILE="headless"' in text
+    assert 'install_cmd=""' in text
+    assert "Skipping automatic system package installation." in text
+
+
+def test_check_deps_supports_profiles():
+    """check-deps.sh must distinguish desktop and headless requirements."""
+    text = _read("scripts/check-deps.sh")
+    assert "--profile=" in text
+    assert "headless" in text
+    assert "GUI (GTK3/PyGObject): not required for headless profile" in text
     """Release, package and helper versions must be one value (1.9.0)."""
     app_version = re.search(
         r'^__version__ = "([^"]+)"', _read("netmedic/netmedic/__init__.py"), re.M

@@ -6,6 +6,13 @@ All notable changes to NetMedic Linux are documented here.
 
 ### Added
 
+- **LUCP Phase 2b — portable headless installer.** `install.sh` now accepts
+  `--headless` / `--profile=desktop|headless`. The headless profile installs
+  only the Python core, skips GTK/NetworkManager/Polkit/helper and runs the
+  core test subset. Unknown distributions no longer abort solely because the
+  package manager is unrecognized; `scripts/check-deps.sh` reports Python,
+  optional tools, GUI and helper status by profile without making optional
+  capabilities mandatory.
 - **LUCP Phase 2a — optional GUI package.** `netmedic` no longer requires
   PyGObject at runtime: `dependencies = []` and GTK lives in the `gui` extra
   (`pip install 'netmedic[gui]'`). The diagnostic core and `--headless` mode

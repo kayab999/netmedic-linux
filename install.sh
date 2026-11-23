@@ -13,11 +13,12 @@ NC='\033[0m'
 SKIP_TESTS=0
 RECREATE_VENV=1
 INSTALL_AI=0
+PROFILE="desktop"
 # M7: --yes means non-interactive (assume defaults, never prompt).
 NONINTERACTIVE=0
 
 usage() {
-    echo "Usage: ./install.sh [--yes] [--skip-tests] [--with-ai] [--keep-venv]"
+    echo "Usage: ./install.sh [--yes] [--skip-tests] [--with-ai] [--keep-venv] [--headless] [--profile=desktop|headless]"
 }
 
 for arg in "$@"; do
@@ -26,16 +27,28 @@ for arg in "$@"; do
         --skip-tests) SKIP_TESTS=1 ;;
         --with-ai) INSTALL_AI=1 ;;
         --keep-venv) RECREATE_VENV=0 ;;
+        --headless) PROFILE="headless" ;;
+        --profile=*) PROFILE="${arg#--profile=}" ;;
+        --profile)
+            echo "Missing value for --profile" >&2
+            usage
+            exit 2
+            ;;
         -h|--help) usage; exit 0 ;;
         *) echo "Unknown option: $arg"; usage; exit 1 ;;
     esac
 done
 
-echo -e "${BLUE}=== NetMedic Linux Installer (v1.9.0) ===${NC}"
+case "$PROFILE" in
+    desktop|headless) ;;
+    *) echo "Unknown profile: $PROFILE"; usage; exit 1 ;;
+esac
+
+echo -e "${BLUE}=== NetMedic Linux Installer (v1.9.0, profile: $PROFILE) ===${NC}"
 
 echo -e "${BLUE}[0/6] Runtime dependency preflight...${NC}"
 chmod +x scripts/check-deps.sh
-./scripts/check-deps.sh
+./scripts/check-deps.sh --profile="$PROFILE"
 
 echo -e "${BLUE}[1/6] Detecting system dependencies...${NC}"
 if [ -f /etc/debian_version ]; then
@@ -51,24 +64,43 @@ if [ -f /etc/debian_version ]; then
     fi
     # policykit-1 was split into polkitd + pkexec on Ubuntu 24.04+; both
     # names exist on 22.04 too, so one list covers the supported releases.
-    pkgs="python3-venv python3-dev $gir_dev libcairo2-dev gir1.2-gtk-3.0 network-manager iproute2 curl iputils-ping polkitd pkexec"
+    pkgs="python3-venv python3-dev iproute2 curl iputils-ping"
+    if [ "$PROFILE" = "desktop" ]; then
+        pkgs="$pkgs $gir_dev libcairo2-dev gir1.2-gtk-3.0 network-manager polkitd pkexec"
+    fi
     install_cmd="sudo apt-get install -y $pkgs"
 elif [ -f /etc/fedora-release ]; then
     # M7: Fedora package is 'polkit', not 'policykit' (no such package).
-    pkgs="python3-devel gobject-introspection-devel cairo-gobject-devel gtk3 NetworkManager iproute curl iputils polkit"
+    pkgs="python3-devel iproute curl iputils"
+    if [ "$PROFILE" = "desktop" ]; then
+        pkgs="$pkgs gobject-introspection-devel cairo-gobject-devel gtk3 NetworkManager polkit"
+    fi
     install_cmd="sudo dnf install -y $pkgs"
 elif [ -f /etc/arch-release ]; then
-    pkgs="python gobject-introspection cairo gtk3 networkmanager iproute2 curl iputils polkit"
+    pkgs="python iproute2 curl iputils"
+    if [ "$PROFILE" = "desktop" ]; then
+        pkgs="$pkgs gobject-introspection cairo gtk3 networkmanager polkit"
+    fi
     install_cmd="sudo pacman -S --noconfirm $pkgs"
 else
-    # M7: fail instead of silently continuing with 'true' — a half-installed
-    # tree previously printed "Installation complete" with broken deps.
+    # LUCP Phase 2b: an unknown manager is not, by itself, fatal. Report it
+    # and let the preflight decide whether the profile is already satisfied.
     echo -e "${RED}Unsupported distro for automatic dependency install.${NC}"
-    echo "Install Python 3.10-3.13, GTK3, NetworkManager, and GObject introspection headers manually,"
-    echo "then re-run with --skip-tests if the preflight passes: ./scripts/check-deps.sh"
-    exit 1
+    echo "Install Python 3.10-3.13 and the profile dependencies manually, then re-run."
+    echo "Headless profile needs only Python; desktop profile also needs GTK3,"
+    echo "GObject introspection, NetworkManager and PolicyKit."
+    install_cmd=""
 fi
-$install_cmd
+
+if [ -f /etc/debian_version ] && [ -n "${install_cmd:-}" ]; then
+    sudo apt-get update -qq || true
+fi
+
+if [ -n "${install_cmd:-}" ]; then
+    $install_cmd
+else
+    echo -e "${BLUE}Skipping automatic system package installation.${NC}"
+fi
 
 echo -e "${BLUE}[2/6] Creating virtual environment...${NC}"
 if [ "$RECREATE_VENV" -eq 1 ]; then
@@ -82,10 +114,14 @@ source venv/bin/activate
 pip install --upgrade pip wheel setuptools
 pip install "pytest==9.1.0" "pytest-cov==7.1.0" "ruff==0.15.12" "hypothesis==6.168.1"
 
-echo -e "${BLUE}[3/6] Installing NetMedic core (desktop profile)...${NC}"
-pip install -e "netmedic[gui]" --config-settings editable_mode=strict
-# Dock/desktop Exec uses this interpreter (strict snapshot), not PYTHONPATH.
-python -c "import netmedic.constants, netmedic.probes, netmedic.gui"
+echo -e "${BLUE}[3/6] Installing NetMedic core ($PROFILE profile)...${NC}"
+if [ "$PROFILE" = "desktop" ]; then
+    pip install -e "netmedic[gui]" --config-settings editable_mode=strict
+    python -c "import netmedic.constants, netmedic.probes, netmedic.gui"
+else
+    pip install -e netmedic/ --config-settings editable_mode=strict
+    python -c "import netmedic.constants, netmedic.probes, netmedic.runtime"
+fi
 
 # M7: --yes never prompts (previous code prompted unless --with-ai).
 if [ "$INSTALL_AI" -eq 0 ] && [ "$NONINTERACTIVE" -eq 0 ] && [ -t 0 ]; then
@@ -109,7 +145,8 @@ if [ "$INSTALL_AI" -eq 1 ]; then
     pip install -e "netmedic[ai]"
 fi
 
-echo -e "${BLUE}[4/6] Installing polkit policy, icon, and desktop launcher...${NC}"
+echo -e "${BLUE}[4/6] Installing desktop artifacts (profile: $PROFILE)...${NC}"
+if [ "$PROFILE" = "desktop" ]; then
 # Polkit only loads actions from system paths on most distros — user XDG paths
 # are not sufficient. Prefer system install; fall back to sudo.
 POLKIT_SYSTEM="/usr/share/polkit-1/actions/com.kayab.netmedic.policy"
@@ -162,6 +199,8 @@ rm -f "$DESKTOP_TMP"
 chmod +x ~/.local/share/applications/netmedic.desktop
 update-desktop-database ~/.local/share/applications 2>/dev/null || true
 
+fi
+
 SERVICE_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
 mkdir -p "$SERVICE_DIR"
 sed -e "s|@EXEC@|\"${REPO_ROOT}/venv/bin/netmedic\"|g" \
@@ -170,7 +209,11 @@ systemctl --user daemon-reload 2>/dev/null || true
 
 if [ "$SKIP_TESTS" -eq 0 ]; then
     echo -e "${BLUE}[5/6] Running test suite...${NC}"
-    python -m pytest tests/ -q
+    if [ "$PROFILE" = "desktop" ]; then
+        python -m pytest tests/ -q
+    else
+        python -m pytest tests/test_capabilities.py tests/test_status.py tests/test_probes.py tests/test_packaging_metadata.py -q
+    fi
 else
     echo -e "${BLUE}[5/6] Skipping test suite (--skip-tests).${NC}"
 fi
