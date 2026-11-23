@@ -6,6 +6,12 @@ All notable changes to NetMedic Linux are documented here.
 
 ### Added
 
+- **LUCP Phase 3A — native system name resolution.** `check_dns_resolution` now
+  uses `socket.getaddrinfo()` instead of `getent hosts`, with bounded per-host
+  timeouts and explicit `eai_*` reason codes. `EAI_NONAME`/`EAI_AGAIN` are
+  reported as real results rather than retried through another tool. The
+  `system_name_resolution` capability is native (L0) and no longer depends on
+  `getent`.
 - **LUCP Phase 2b — portable headless installer.** `install.sh` now accepts
   `--headless` / `--profile=desktop|headless`. The headless profile installs
   only the Python core, skips GTK/NetworkManager/Polkit/helper and runs the

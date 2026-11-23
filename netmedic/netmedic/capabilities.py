@@ -140,14 +140,7 @@ _TOOL_CAPABILITIES: Tuple[Tuple[str, str, str, str, str], ...] = (
         "ip",
         "iproute2",
         "Read the current default route and gateway.",
-    ),
-    (
-        "system_name_resolution",
-        LEVEL_L0,
-        "getent",
-        "getent",
-        "Resolve names through the system NSS configuration.",
-    ),
+    ),  # closes default_route above
     (
         "tcp_connectivity",
         LEVEL_L0,
@@ -303,11 +296,40 @@ def _privileged_capability(
     return entry(AVAILABLE)
 
 
+_NATIVE_CAPABILITIES: Tuple[Tuple[str, str, str, str], ...] = (
+    (
+        "system_name_resolution",
+        LEVEL_L0,
+        "native",
+        "Resolve names through socket.getaddrinfo and the system NSS configuration.",
+    ),
+)
+
+
+def _native_capability(
+    cap_id: str,
+    level: str,
+    backend: str,
+    summary: str,
+) -> Capability:
+    return Capability(
+        id=cap_id,
+        level=level,
+        availability=AVAILABLE,
+        backend=backend,
+        summary=summary,
+        details={"backend": backend},
+    )
+
+
 def collect_capabilities(ctx: DetectionContext) -> list[Capability]:
     """Build the capability list for the current build and detection context."""
     capabilities = [
         _tool_capability(ctx, *entry) for entry in _TOOL_CAPABILITIES
     ]
+    capabilities.extend(
+        _native_capability(*entry) for entry in _NATIVE_CAPABILITIES
+    )
     for spec in ACTIONS:
         if spec.ipc_action is None or spec.polkit_id is None:
             continue

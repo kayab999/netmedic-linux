@@ -1,9 +1,15 @@
 """R1: internet_ok is TCP/HTTPS only. ICMP is details, never overall_ok."""
+import socket
+import time
 from unittest.mock import MagicMock, patch
 
 from netmedic.models import ResultCode
 from netmedic.network import NetworkMedic
-from netmedic.probes import check_internet_access
+from netmedic.probes import (
+    check_dns_resolution,
+    check_dns_resolution_detailed,
+    check_internet_access,
+)
 
 
 def _cmd(success, stdout=""):
@@ -42,6 +48,7 @@ def test_http_success_is_internet_ok(mock_run):
     assert label == "1.1.1.1:80"
 
 
+@patch("netmedic.probes.check_dns_resolution", lambda: (True, {"google.com": True}, "google.com"))
 @patch("netmedic.system.CommandRunner.run")
 def test_diagnostics_tcp_blocked_icmp_ok_is_partial(mock_run):
     def _run(cmd, *a, **kw):
@@ -67,6 +74,7 @@ def test_diagnostics_tcp_blocked_icmp_ok_is_partial(mock_run):
     assert "TCP blocked" in res.message
 
 
+@patch("netmedic.probes.check_dns_resolution", lambda: (True, {"google.com": True}, "google.com"))
 @patch("netmedic.system.CommandRunner.run")
 def test_captive_hint_when_dns_ok_tcp_fail(mock_run):
     def _run(cmd, *a, **kw):
@@ -91,3 +99,60 @@ def test_captive_hint_when_dns_ok_tcp_fail(mock_run):
     assert res.data["internet_ok"] is False
     assert res.details.get("captive_portal_hint")
     assert "portal" in str(res.details.get("captive_portal_hint")).lower()
+
+
+def test_dns_resolution_native_success(monkeypatch):
+    def fake_getaddrinfo(host, port, *args, **kwargs):
+        return [(socket.AF_INET, socket.SOCK_STREAM, 0, "", ("93.184.216.34", 0))]
+
+    monkeypatch.setattr(socket, "getaddrinfo", fake_getaddrinfo)
+    ok, per, host = check_dns_resolution()
+    assert ok is True
+    assert all(per.values())
+    assert host in per
+
+
+def test_dns_resolution_detailed_reports_addresses_and_family(monkeypatch):
+    def fake_getaddrinfo(host, port, *args, **kwargs):
+        if host == "google.com":
+            return [(socket.AF_INET, socket.SOCK_STREAM, 0, "", ("142.250.0.1", 0))]
+        raise socket.gaierror(socket.EAI_NONAME, "Name or service not known")
+
+    monkeypatch.setattr(socket, "getaddrinfo", fake_getaddrinfo)
+    ok, detailed, host = check_dns_resolution_detailed()
+    assert ok is True
+    assert detailed["google.com"]["success"] is True
+    assert detailed["google.com"]["addresses"] == ["142.250.0.1"]
+    assert "ipv4" in detailed["google.com"]["families"]
+    assert detailed["cloudflare.com"]["success"] is False
+    assert detailed["cloudflare.com"]["reason_code"] == "eai_noname"
+    assert host == "google.com"
+
+
+def test_dns_resolution_reports_eai_again(monkeypatch):
+    def fake_getaddrinfo(host, port, *args, **kwargs):
+        raise socket.gaierror(socket.EAI_AGAIN, "Temporary failure")
+
+    monkeypatch.setattr(socket, "getaddrinfo", fake_getaddrinfo)
+    ok, per, host = check_dns_resolution()
+    assert ok is False
+    assert all(value is False for value in per.values())
+    assert host == ""
+
+
+def test_dns_resolution_timeout_is_bounded(monkeypatch):
+    import netmedic.probes as probes_mod
+
+    probes_mod._DNS_TIMEOUT = 0.05
+
+    def slow_getaddrinfo(host, port, *args, **kwargs):
+        time.sleep(1.0)
+        return []
+
+    monkeypatch.setattr(socket, "getaddrinfo", slow_getaddrinfo)
+    start = time.monotonic()
+    ok, per, host = check_dns_resolution()
+    elapsed = time.monotonic() - start
+    assert ok is False
+    assert elapsed < 1.0
+    assert all(value is False for value in per.values())
