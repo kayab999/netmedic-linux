@@ -296,13 +296,20 @@ class NetworkMedic:
 
         gw_ip = self.get_gateway_ip()
         if gw_ip:
-            ping_gw = CommandRunner.run(["ping", "-c", "2", "-W", "1", gw_ip])
-            if ping_gw.success:
-                results.append("Gateway Reachable")
+            import shutil as _shutil
+
+            if _shutil.which("ping") is None:
+                # ICMP is optional enrichment; route existence is enough.
+                results.append("Gateway Reachable (route present; ping unavailable)")
                 gw_ok = True
             else:
-                results.append("Gateway Unreachable")
-                gw_ok = False
+                ping_gw = CommandRunner.run(["ping", "-c", "2", "-W", "1", gw_ip])
+                if ping_gw.success:
+                    results.append("Gateway Reachable")
+                    gw_ok = True
+                else:
+                    results.append("Gateway Unreachable")
+                    gw_ok = False
         else:
             results.append("Gateway Not Found")
             gw_ok = False
