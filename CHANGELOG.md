@@ -4,6 +4,8 @@ All notable changes to NetMedic Linux are documented here.
 
 ## [Unreleased]
 
+## [1.10.0] - 2026-11-23
+
 ### Added
 
 - **LUCP Phase 3C — native HTTP/TLS and portal detection.** Captive portal
