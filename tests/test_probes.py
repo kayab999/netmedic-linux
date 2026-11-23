@@ -159,3 +159,245 @@ def test_dns_resolution_timeout_is_bounded(monkeypatch):
     assert ok is False
     assert elapsed < 1.0
     assert all(value is False for value in per.values())
+
+
+# --- Phase 3 hardening: native probe detail tests ---
+
+def test_http_probe_success_200_no_portal(monkeypatch):
+    import netmedic.probes as probes_mod
+
+    def fake_create_connection(address, timeout=None):
+        return MagicMock()
+
+    class FakeConn:
+        def __init__(self, *a, **k):
+            pass
+
+        def request(self, *a, **k):
+            pass
+
+        def getresponse(self):
+            resp = MagicMock()
+            resp.status = 200
+            resp.getheaders.return_value = []
+            resp.read.return_value = b"NetworkManager is online"
+            return resp
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr("socket.create_connection", fake_create_connection)
+    monkeypatch.setattr("http.client.HTTPConnection", FakeConn)
+    probe = probes_mod._http_probe("http://nmcheck.gnome.org/check_network_status.txt")
+    assert probe["tcp_ok"] is True
+    assert probe["http_ok"] is True
+    assert probe["status"] == 200
+    assert probe["reason_code"] == "ok"
+    assert "NetworkManager is online" in probe["body"]
+
+    ok, msg = probes_mod.check_portal_at_url("http://nmcheck.gnome.org/check_network_status.txt")
+    assert ok is False
+    assert "200" in msg
+
+
+def test_http_probe_redirect_is_portal(monkeypatch):
+    import netmedic.probes as probes_mod
+
+    def fake_create_connection(address, timeout=None):
+        return MagicMock()
+
+    class FakeConn:
+        def __init__(self, *a, **k):
+            pass
+
+        def request(self, *a, **k):
+            pass
+
+        def getresponse(self):
+            resp = MagicMock()
+            resp.status = 302
+            resp.getheaders.return_value = [("Location", "http://portal.local/")]
+            resp.read.return_value = b""
+            return resp
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr("socket.create_connection", fake_create_connection)
+    monkeypatch.setattr("http.client.HTTPConnection", FakeConn)
+    ok, msg = probes_mod.check_portal_at_url("http://example.com/")
+    assert ok is True
+    assert "redirect" in msg.lower()
+
+
+def test_http_probe_204_no_portal(monkeypatch):
+    import netmedic.probes as probes_mod
+
+    def fake_create_connection(address, timeout=None):
+        return MagicMock()
+
+    class FakeConn:
+        def __init__(self, *a, **k):
+            pass
+
+        def request(self, *a, **k):
+            pass
+
+        def getresponse(self):
+            resp = MagicMock()
+            resp.status = 204
+            resp.getheaders.return_value = []
+            resp.read.return_value = b""
+            return resp
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr("socket.create_connection", fake_create_connection)
+    monkeypatch.setattr("http.client.HTTPConnection", FakeConn)
+    ok, msg = probes_mod.check_portal_at_url("http://example.com/")
+    assert ok is False
+    assert "204" in msg
+
+
+def test_http_probe_timeout_is_unknown(monkeypatch):
+    import netmedic.probes as probes_mod
+
+    def fake_create_connection(address, timeout=None):
+        raise socket.timeout("timed out")
+
+    monkeypatch.setattr("socket.create_connection", fake_create_connection)
+    ok, msg = probes_mod.check_portal_at_url("http://example.com/")
+    assert ok is None
+    assert "unknown" in msg.lower()
+    assert "timeout" in msg.lower()
+
+
+def test_http_probe_tls_invalid_cert(monkeypatch):
+    import netmedic.probes as probes_mod
+    import ssl as _ssl
+
+    def fake_create_connection(address, timeout=None):
+        return MagicMock()
+
+    class FakeContext:
+        def wrap_socket(self, sock, server_hostname=None):
+            raise _ssl.SSLError("certificate verify failed")
+
+    monkeypatch.setattr("socket.create_connection", fake_create_connection)
+    monkeypatch.setattr("ssl.create_default_context", lambda: FakeContext())
+    probe = probes_mod._http_probe("https://example.com/")
+    assert probe["tcp_ok"] is True
+    assert probe["tls_ok"] is False
+    assert probe["http_ok"] is False
+    assert probe["reason_code"] == "tls_error"
+    assert "verify failed" in (probe["error"] or "")
+
+
+def test_http_probe_tls_valid(monkeypatch):
+    import netmedic.probes as probes_mod
+
+    def fake_create_connection(address, timeout=None):
+        return MagicMock()
+
+    class FakeWrapped:
+        def close(self):
+            pass
+
+    class FakeContext:
+        def wrap_socket(self, sock, server_hostname=None):
+            return FakeWrapped()
+
+    class FakeConn:
+        def __init__(self, *a, **k):
+            pass
+
+        def request(self, *a, **k):
+            pass
+
+        def getresponse(self):
+            resp = MagicMock()
+            resp.status = 200
+            resp.getheaders.return_value = []
+            resp.read.return_value = b"ok"
+            return resp
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr("socket.create_connection", fake_create_connection)
+    monkeypatch.setattr("ssl.create_default_context", lambda: FakeContext())
+    monkeypatch.setattr("http.client.HTTPConnection", FakeConn)
+    probe = probes_mod._http_probe("https://example.com/")
+    assert probe["tcp_ok"] is True
+    assert probe["tls_ok"] is True
+    assert probe["http_ok"] is True
+    assert probe["status"] == 200
+
+
+def test_tcp_connectivity_detailed_rtt_and_refused(monkeypatch):
+    import netmedic.probes as probes_mod
+
+    def fake_create_connection(address, timeout=None):
+        if address == ("1.1.1.1", 80):
+            return MagicMock()
+        raise ConnectionRefusedError("refused")
+
+    monkeypatch.setattr("socket.create_connection", fake_create_connection)
+    overall, detailed, successful = probes_mod.check_tcp_connectivity_detailed()
+    assert overall is True
+    assert detailed["1.1.1.1:80"]["success"] is True
+    assert isinstance(detailed["1.1.1.1:80"]["rtt_ms"], float)
+    assert detailed["8.8.8.8:80"]["success"] is False
+    assert detailed["8.8.8.8:80"]["error"] == "refused"
+    assert successful == "1.1.1.1:80"
+
+    ok, per, label = probes_mod.check_tcp_connectivity()
+    assert ok is True
+    assert per["1.1.1.1:80"] is True
+    assert label == "1.1.1.1:80"
+
+
+def test_tcp_connectivity_timeout(monkeypatch):
+    import netmedic.probes as probes_mod
+
+    def fake_create_connection(address, timeout=None):
+        raise socket.timeout("timed out")
+
+    monkeypatch.setattr("socket.create_connection", fake_create_connection)
+    overall, detailed, successful = probes_mod.check_tcp_connectivity_detailed()
+    assert overall is False
+    assert successful == ""
+    assert all(info["error"] == "timeout" for info in detailed.values())
+
+
+def test_dns_resolution_detailed_eai_and_ipv6(monkeypatch):
+    import netmedic.probes as probes_mod
+    import socket as _socket
+
+    def fake_getaddrinfo(host, port, *args, **kwargs):
+        if host == "google.com":
+            return [(_socket.AF_INET6, _socket.SOCK_STREAM, 0, "", ("2607:f8b0::", 0, 0, 0))]
+        if host == "cloudflare.com":
+            raise _socket.gaierror(_socket.EAI_AGAIN, "Temporary failure")
+        return []
+
+    monkeypatch.setattr(_socket, "getaddrinfo", fake_getaddrinfo)
+    ok, detailed, host = probes_mod.check_dns_resolution_detailed()
+    assert ok is True
+    assert detailed["google.com"]["success"] is True
+    assert "ipv6" in detailed["google.com"]["families"]
+    assert detailed["google.com"]["addresses"] == ["2607:f8b0::"]
+    assert detailed["cloudflare.com"]["success"] is False
+    assert detailed["cloudflare.com"]["reason_code"] == "eai_again"
+    assert host == "google.com"
+
+    # EAI_NONAME case
+    def fake_noname(host, port, *args, **kwargs):
+        raise _socket.gaierror(_socket.EAI_NONAME, "Name or service not known")
+
+    monkeypatch.setattr(_socket, "getaddrinfo", fake_noname)
+    ok2, detailed2, host2 = probes_mod.check_dns_resolution_detailed()
+    assert ok2 is False
+    assert all(info["reason_code"] == "eai_noname" for info in detailed2.values())
+    assert host2 == ""
