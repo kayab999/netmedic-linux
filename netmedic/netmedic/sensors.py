@@ -91,6 +91,7 @@ def get_network_snapshot() -> Dict[str, Any]:
         "firewall": "unknown",
         "wifi_blocked": False,
         "nm_connection": {},
+        "scope": {},
     }
 
     try:
@@ -154,6 +155,13 @@ def get_network_snapshot() -> Dict[str, Any]:
 
         snapshot["firewall"] = NetworkMedic.read_firewall_status()
     except Exception:  # noqa: S110 (best-effort firewall read; snapshot keeps other keys)
+        pass
+
+    try:
+        from netmedic.capabilities import collect_scope
+
+        snapshot["scope"] = collect_scope().to_dict()
+    except Exception:  # noqa: BLE001, S110 (best-effort scope read)
         pass
 
     return snapshot

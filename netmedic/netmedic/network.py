@@ -349,6 +349,12 @@ class NetworkMedic:
                 msg += " (Partial: TCP blocked, ICMP ok — firewall suspected)"
         # PR2: structured details dict, gateway_ok for skip_renew, no substring parsing
         details = {"gateway": gw_ip or "none", "gateway_ok": gw_ok, "dns_probe": dns_host or "none", "net_probe": net_label or "none", "per_probe": {"gw_ok": gw_ok, "dns_ok": dns_ok, "internet_ok": net_ok, "dns_per": dns_per, "net_per": net_per}, "nm": nm_details}
+        try:
+            from netmedic.capabilities import collect_scope
+
+            details["scope"] = collect_scope().to_dict()
+        except Exception:  # noqa: BLE001, S110
+            pass
         # Divergence: NM says full but probes say fail → report
         if nm_full is True and not success:
             details["nm_divergence"] = f"NM reports {nm_details} but probes report FAIL — divergence signal"
