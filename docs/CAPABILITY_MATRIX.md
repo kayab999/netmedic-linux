@@ -15,7 +15,7 @@ preserved in `CAPABILITY_MATRIX_1.9.0_BASELINE.md`.
 | Capability | Backend | Source | Notes |
 |---|---|---|---|
 | `interface_inventory` | iproute2 (enrichment) | `/sys/class/net` + `ip` | Native interface list from `/sys`; `ip` is enrichment |
-| `address_inventory` | iproute2 (enrichment) | `/sys` + `ip` | IPv6 from `/proc/net/if_inet6`; IPv4 pending rtnetlink |
+| `address_inventory` | native (rtnetlink) + iproute2 (enrichment) | `/sys` + rtnetlink + `ip` | IPv6 from `/proc/net/if_inet6`; IPv4 from rtnetlink (Phase 5); `ip` enrichment |
 | `default_route` | native | `/proc/net/route`, `/proc/net/ipv6_route`, rtnetlink | Native first; `ip` fallback |
 | `system_name_resolution` | native | `socket.getaddrinfo()` | NSS-aware; no `getent` dependency |
 | `tcp_connectivity` | native | `socket.create_connection()` | RTT measured; refused/timeout/unreachable classified |
@@ -58,8 +58,9 @@ available. `false` never degrades `core_ready`.
 ## Known limitations (1.10.0)
 
 - `interface_inventory` and `address_inventory` still rely on `ip` as
-  enrichment; native `/sys` collection is primary but IPv4 addresses are
-  pending rtnetlink (Phase 5).
+  enrichment; native `/sys` collection is primary and IPv4 addresses are now
+  available via rtnetlink (Phase 5), with `/proc` fallback where rtnetlink is
+  unavailable.
 - `icmp_latency` requires `ping`; absence only reduces detail.
 - L2 administration limited to the 12 supported verbs and the installed
   helper; no new backends in this release.
