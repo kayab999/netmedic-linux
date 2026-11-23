@@ -120,11 +120,6 @@ def check_dns_resolution() -> Tuple[bool, Dict[str, bool], str]:
     return overall, per, ok_host
 
 
-def _probe_target(cmd):
-    res = CommandRunner.run(cmd, timeout=5)
-    return res.success, res
-
-
 _TCP_TARGETS = (("1.1.1.1", 80), ("8.8.8.8", 80), ("1.1.1.1", 443))
 _TCP_TIMEOUT = 3.0
 
