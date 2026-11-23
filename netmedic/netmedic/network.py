@@ -186,6 +186,18 @@ class NetworkMedic:
         Riesgo: Bajo (Solo lectura).
         Tiempo: < 1s.
         """
+        # Native first (L0): /proc/net/route.
+        try:
+            from netmedic.topology import collect_default_gateways_v4
+
+            routes = collect_default_gateways_v4()
+            if routes:
+                gw = routes[0].get("gateway")
+                if gw:
+                    return gw
+        except Exception:  # noqa: BLE001, S110 (enrichment must not break diagnostics)
+            pass
+        # Enrichment/fallback: iproute2.
         res = CommandRunner.run(["ip", "route", "show", "default"])
         if res.success and res.stdout:
             parts = res.stdout.split()

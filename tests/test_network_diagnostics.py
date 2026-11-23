@@ -221,11 +221,16 @@ def test_get_default_interface_none(medic, monkeypatch):
 
 
 def test_get_gateway_ip(medic, monkeypatch):
+    monkeypatch.setattr(
+        "netmedic.topology.collect_default_gateways_v4",
+        lambda: [{"iface": "eth0", "gateway": "192.168.1.254", "metric": 100, "flags": 3}],
+    )
     _run_router(monkeypatch, {"ip": _cmd(True, "default via 192.168.1.254 dev eth0")})
     assert medic.get_gateway_ip() == "192.168.1.254"
 
 
 def test_get_gateway_ip_missing(medic, monkeypatch):
+    monkeypatch.setattr("netmedic.topology.collect_default_gateways_v4", lambda: [])
     _run_router(monkeypatch, {"ip": _cmd(True, "default dev eth0 scope link")})
     assert medic.get_gateway_ip() is None
     _run_router(monkeypatch, {"ip": _cmd(False, "")})

@@ -96,7 +96,7 @@ jobs:
       - name: Typecheck (strict, 13 modules)
         if: matrix.helper_mode == '0' && matrix.python-version == '3.12'
         run: |
-          mypy --config-file mypy.ini netmedic/netmedic/ipc_security.py netmedic/netmedic/helper_verbs.py netmedic/netmedic/action_catalog.py netmedic/netmedic/models.py netmedic/netmedic/ipc_bridge.py netmedic/netmedic/ipc_actions.py netmedic/netmedic/runtime.py netmedic/netmedic/lifecycle.py netmedic/netmedic/config.py netmedic/netmedic/polkit_auth.py netmedic/netmedic/helper_main.py netmedic/netmedic/system.py netmedic/netmedic/validators.py netmedic/netmedic/probes.py
+          mypy --config-file mypy.ini netmedic/netmedic/ipc_security.py netmedic/netmedic/helper_verbs.py netmedic/netmedic/action_catalog.py netmedic/netmedic/models.py netmedic/netmedic/ipc_bridge.py netmedic/netmedic/ipc_actions.py netmedic/netmedic/runtime.py netmedic/netmedic/lifecycle.py netmedic/netmedic/config.py netmedic/netmedic/polkit_auth.py netmedic/netmedic/helper_main.py netmedic/netmedic/system.py netmedic/netmedic/validators.py netmedic/netmedic/probes.py netmedic/netmedic/topology.py
 
       - name: pip-audit
         if: matrix.helper_mode == '0' && matrix.python-version == '3.12'
