@@ -141,4 +141,5 @@ def test_check_deps_supports_profiles():
         re.M,
     ).group(1)
 
-    assert app_version == package_version == helper_version == "1.9.0"
+    assert app_version == package_version == "1.10.0"
+    assert helper_version == "1.9.0"
