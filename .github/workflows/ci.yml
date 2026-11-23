@@ -144,8 +144,8 @@ jobs:
       - name: Install core without GTK/PyGObject
         # LUCP Phase 2: no apt GTK packages and no gui extra here.
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install --no-deps -e netmedic/
+          python -m pip install --upgrade pip wheel setuptools
+          python -m pip install --no-deps -e netmedic/ --config-settings editable_mode=strict
           python -m pip install pytest hypothesis
 
       - name: Core imports never load gi
