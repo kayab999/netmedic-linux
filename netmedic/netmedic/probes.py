@@ -6,6 +6,7 @@ from __future__ import annotations
 import concurrent.futures
 import socket
 import threading
+import time
 from typing import Any, Dict, Tuple
 
 from netmedic.system import CommandRunner
@@ -121,39 +122,58 @@ def _probe_target(cmd):
     return res.success, res
 
 
-def check_internet_access() -> Tuple[bool, Dict[str, bool], str]:
-    """Probe internet in parallel: two http + https fallback + icmp.
+_TCP_TARGETS = (("1.1.1.1", 80), ("8.8.8.8", 80), ("1.1.1.1", 443))
+_TCP_TIMEOUT = 3.0
 
-    overall_ok is TCP/HTTPS only (R1). ICMP is recorded in per_target for
-    PARTIAL diagnostics and must not count as internet_ok.
-    Returns (overall_ok, per_target dict, successful_label or details string).
-    """
-    targets = {
-        "1.1.1.1:80": ["curl", "-Is", "--connect-timeout", "3", "http://1.1.1.1"],
-        "8.8.8.8:80": ["curl", "-Is", "--connect-timeout", "3", "http://8.8.8.8"],
-    }
-    per: Dict[str, bool] = {}
+
+def _tcp_probe(host: str, port: int, timeout: float) -> Tuple[bool, float | None, str | None]:
+    """Native TCP connect probe with monotonic RTT measurement."""
+    start = time.monotonic()
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            rtt_ms = (time.monotonic() - start) * 1000.0
+            return True, rtt_ms, None
+    except (socket.timeout, TimeoutError):
+        return False, None, "timeout"
+    except ConnectionRefusedError:
+        return False, None, "refused"
+    except OSError as exc:
+        return False, None, f"unreachable:{exc.errno}" if exc.errno is not None else "unreachable"
+
+
+def check_tcp_connectivity_detailed() -> Tuple[bool, Dict[str, Dict[str, Any]], str]:
+    """Native TCP connectivity (no curl). Returns RTT and classification."""
+    per: Dict[str, Dict[str, Any]] = {}
     successful = ""
-    # Parallel http probes
-    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
-        futs = {pool.submit(_probe_target, cmd): label for label, cmd in targets.items()}
-        for fut in concurrent.futures.as_completed(futs):
-            label = futs[fut]
-            try:
-                ok, res = fut.result()
-            except Exception:
-                ok = False
-            per[label] = ok
-            if ok and not successful:
-                successful = label
+    for host, port in _TCP_TARGETS:
+        label = f"{host}:{port}"
+        ok, rtt_ms, error = _tcp_probe(host, port, _TCP_TIMEOUT)
+        per[label] = {"success": ok, "rtt_ms": rtt_ms, "error": error}
+        if ok and not successful:
+            successful = label
+    overall = bool(successful)
+    return overall, per, successful
+
+
+def check_tcp_connectivity() -> Tuple[bool, Dict[str, bool], str]:
+    overall, detailed, successful = check_tcp_connectivity_detailed()
+    per = {label: bool(info.get("success")) for label, info in detailed.items()}
+    return overall, per, successful
+
+
+def check_internet_access() -> Tuple[bool, Dict[str, bool], str]:
+    """Probe internet via native TCP connects (R1: TCP only, no HTTP claim).
+
+    overall_ok is TCP reachability only. ICMP is recorded in per_target for
+    PARTIAL diagnostics and must not count as internet_ok. RTT/detail live in
+    check_tcp_connectivity_detailed().
+    """
+    overall, detailed, successful = check_tcp_connectivity_detailed()
+    per: Dict[str, bool] = {
+        label: bool(info.get("success")) for label, info in detailed.items()
+    }
     if successful:
         return True, per, successful
-    # https fallback
-    https_cmd = ["curl", "-Is", "--connect-timeout", "3", "https://1.1.1.1"]
-    ok, _ = _probe_target(https_cmd)
-    per["1.1.1.1:443"] = ok
-    if ok:
-        return True, per, "1.1.1.1:443 (port 80 blocked hint)"
     # icmp: details only — a ping does not mean the user has internet (R1)
     ping = CommandRunner.run(["ping", "-c", "1", "-W", "2", "8.8.8.8"])
     per["8.8.8.8:icmp"] = ping.success

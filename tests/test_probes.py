@@ -17,10 +17,9 @@ def _cmd(success, stdout=""):
 
 
 @patch("netmedic.system.CommandRunner.run")
-def test_icmp_ok_tcp_fail_is_not_internet_ok(mock_run):
+@patch("socket.create_connection", side_effect=ConnectionRefusedError("refused"))
+def test_icmp_ok_tcp_fail_is_not_internet_ok(mock_connect, mock_run):
     def _run(cmd, *a, **kw):
-        if cmd and cmd[0] == "curl":
-            return _cmd(False)
         if cmd and cmd[0] == "ping":
             return _cmd(True)
         return _cmd(False)
@@ -34,23 +33,24 @@ def test_icmp_ok_tcp_fail_is_not_internet_ok(mock_run):
     assert per.get("8.8.8.8:icmp") is True
 
 
-@patch("netmedic.system.CommandRunner.run")
-def test_http_success_is_internet_ok(mock_run):
-    def _run(cmd, *a, **kw):
-        if cmd and cmd[0] == "curl" and "http://1.1.1.1" in cmd:
-            return _cmd(True, "HTTP/1.1 200 OK")
-        return _cmd(False)
+@patch("socket.create_connection")
+def test_http_success_is_internet_ok(mock_connect):
+    def _connect(address, timeout=None):
+        if address == ("1.1.1.1", 80):
+            return MagicMock()
+        raise ConnectionRefusedError("refused")
 
-    mock_run.side_effect = _run
+    mock_connect.side_effect = _connect
     ok, per, label = check_internet_access()
     assert ok is True
     assert per.get("1.1.1.1:80") is True
     assert label == "1.1.1.1:80"
 
 
+@patch("socket.create_connection", side_effect=ConnectionRefusedError("refused"))
 @patch("netmedic.probes.check_dns_resolution", lambda: (True, {"google.com": True}, "google.com"))
 @patch("netmedic.system.CommandRunner.run")
-def test_diagnostics_tcp_blocked_icmp_ok_is_partial(mock_run):
+def test_diagnostics_tcp_blocked_icmp_ok_is_partial(mock_run, mock_connect):
     def _run(cmd, *a, **kw):
         if cmd[0] == "ip" and "default" in cmd:
             return _cmd(True, "default via 192.168.1.1 dev eth0")
@@ -74,9 +74,10 @@ def test_diagnostics_tcp_blocked_icmp_ok_is_partial(mock_run):
     assert "TCP blocked" in res.message
 
 
+@patch("socket.create_connection", side_effect=ConnectionRefusedError("refused"))
 @patch("netmedic.probes.check_dns_resolution", lambda: (True, {"google.com": True}, "google.com"))
 @patch("netmedic.system.CommandRunner.run")
-def test_captive_hint_when_dns_ok_tcp_fail(mock_run):
+def test_captive_hint_when_dns_ok_tcp_fail(mock_run, mock_connect):
     def _run(cmd, *a, **kw):
         if cmd[0] == "ip" and "default" in cmd:
             return _cmd(True, "default via 192.168.1.1 dev eth0")

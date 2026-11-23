@@ -65,7 +65,6 @@ def test_missing_tools_are_unavailable_not_unknown():
     caps = {cap.id: cap for cap in collect_capabilities(_ctx())}
     for cap_id in (
         "interface_inventory",
-        "tcp_connectivity",
         "networkmanager",
         "firewall_admin",
     ):
@@ -80,7 +79,7 @@ def test_tools_present_are_available_with_backend():
     assert caps["networkmanager"].availability == AVAILABLE
     assert caps["networkmanager"].backend == "networkmanager"
     assert caps["tcp_connectivity"].availability == AVAILABLE
-    assert caps["tcp_connectivity"].backend == "curl"
+    assert caps["tcp_connectivity"].backend == "native"
 
 
 def test_privileged_capabilities_cover_every_polkit_action():

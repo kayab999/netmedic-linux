@@ -142,13 +142,6 @@ _TOOL_CAPABILITIES: Tuple[Tuple[str, str, str, str, str], ...] = (
         "Read the current default route and gateway.",
     ),  # closes default_route above
     (
-        "tcp_connectivity",
-        LEVEL_L0,
-        "curl",
-        "curl",
-        "Probe TCP reachability of fixed targets.",
-    ),
-    (
         "http_tls_access",
         LEVEL_L0,
         "curl",
@@ -302,6 +295,12 @@ _NATIVE_CAPABILITIES: Tuple[Tuple[str, str, str, str], ...] = (
         LEVEL_L0,
         "native",
         "Resolve names through socket.getaddrinfo and the system NSS configuration.",
+    ),
+    (
+        "tcp_connectivity",
+        LEVEL_L0,
+        "native",
+        "Probe TCP reachability of fixed targets with socket.create_connection.",
     ),
 )
 
