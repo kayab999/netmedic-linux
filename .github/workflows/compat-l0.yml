@@ -1,0 +1,83 @@
+name: compat-l0
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  l0-ubuntu:
+    runs-on: ubuntu-latest
+    container:
+      image: ubuntu:24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Install Python and core deps
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends python3 python3-pip iproute2
+      - name: Install core without GUI
+        run: |
+          python3 -m pip install --break-system-packages --no-deps -e netmedic/ --config-settings editable_mode=strict
+      - name: Core status
+        env:
+          XDG_STATE_HOME: /tmp/netmedic-state
+        run: |
+          python3 -m netmedic --status
+          python3 -m netmedic --status-json | python3 -c "import json,sys; r=json.load(sys.stdin); assert r['core_ready'] is True; print('core_ready OK', r['schema_version'])"
+      - name: L0 hermetic tests
+        run: |
+          python3 -m pip install --break-system-packages pytest
+          python3 -m pytest tests/test_tool_removal.py tests/test_capabilities.py tests/test_status.py tests/test_topology.py tests/test_rtnetlink.py tests/test_probes.py -q
+
+  l0-debian-slim:
+    runs-on: ubuntu-latest
+    container:
+      image: debian:bookworm-slim
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Install Python
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends python3 python3-pip
+      - name: Install core without GUI
+        run: |
+          python3 -m pip install --break-system-packages --no-deps -e netmedic/ --config-settings editable_mode=strict
+      - name: Core status
+        env:
+          XDG_STATE_HOME: /tmp/netmedic-state
+        run: |
+          python3 -m netmedic --status
+          python3 -m netmedic --status-json | python3 -c "import json,sys; r=json.load(sys.stdin); assert r['core_ready'] is True"
+      - name: L0 hermetic tests
+        run: |
+          python3 -m pip install --break-system-packages pytest
+          python3 -m pytest tests/test_tool_removal.py tests/test_capabilities.py tests/test_status.py -q
+
+  l0-alpine:
+    runs-on: ubuntu-latest
+    container:
+      image: alpine:3.20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Install Python
+        run: |
+          apk add --no-cache python3 py3-pip
+      - name: Install core without GUI
+        run: |
+          python3 -m pip install --break-system-packages --no-deps -e netmedic/ --config-settings editable_mode=strict
+      - name: Core status
+        env:
+          XDG_STATE_HOME: /tmp/netmedic-state
+        run: |
+          python3 -m netmedic --status
+          python3 -m netmedic --status-json | python3 -c "import json,sys; r=json.load(sys.stdin); assert r['core_ready'] is True"
+      - name: L0 hermetic tests
+        run: |
+          python3 -m pip install --break-system-packages pytest
+          python3 -m pytest tests/test_tool_removal.py tests/test_capabilities.py tests/test_status.py -q
