@@ -175,3 +175,33 @@ These four items do not change the security contract verified above (helper
 version gate, fixed pkexec path, integrity check, per-verb authorization,
 journal attribution). They can be completed in a follow-up VM pass without
 reopening the release.
+
+---
+
+## 1.10.0 verification status (2026-11-23)
+
+The four items that were deliberately left unchecked in the 1.9.0 pass remain
+covered by automated tests in CI; none of them changes the security contract
+verified above (helper version gate, fixed pkexec path, integrity check,
+per-verb authorization, native L0 probes).
+
+- **VPN install/add/revoke end-to-end (Fase 3):** the tamper block already
+  exercises the `vpn-install` verb and its integrity check; a full successful
+  install was not run to avoid modifying the VM's OpenVPN state beyond the test.
+  Status: deferred — covered by `tests/test_angristan_operator.py` and the
+  helper verb dry-run evidence above.
+- **Fase 3b initial profile location:** not inspected manually.
+  Status: deferred — no runtime contract depends on it; location is reported by
+  the helper's `--json` output.
+- **Forced `change-dns` rollback and timeout budget (F6.1):** not exercised
+  manually; the rollback code path is covered by
+  `tests/test_network_diagnostics.py` (rollback + timeout budget).
+- **Daemon-level `restart-adapter` non-execution (F6.2):** covered by
+  `tests/test_network_diagnostics.py` and the netns golden suite in CI; the
+  helper-level evidence above confirms the literal message and
+  `iff_up=...; carrier=...` details.
+
+No new security contract was introduced in 1.10.0 that requires interactive VM
+verification beyond what is already recorded above; the native L0 probes
+(DNS/TCP/HTTP/TLS/topology/rtnetlink) are hermetic and run in CI on Ubuntu,
+Debian slim and Alpine.

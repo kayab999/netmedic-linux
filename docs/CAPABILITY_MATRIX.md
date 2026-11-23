@@ -1,64 +1,76 @@
-# Capability and action inventory (baseline 1.9.0)
+# Capability inventory (1.10.0)
 
-Baseline commit: `2a240ee` (tag `v1.9.0`). This inventory captures the 1.9.0
-diagnostic sources before the LUCP runtime changes; the Readiness section
-reflects the Phase 1 split.
+Current as of tag `v1.10.0`. This is the authoritative inventory of NetMedic's
+capabilities, backends, levels and limitations. The historical 1.9.0 baseline is
+preserved in `CAPABILITY_MATRIX_1.9.0_BASELINE.md`.
 
-## Diagnostic capabilities (L0 candidates)
+## Levels
 
-| Capability | Current source | Level | Notes |
+- **L0** — universal diagnostics: native, stdlib/kernel sources, no privileges.
+- **L1** — adaptive integration: optional tools and services.
+- **L2** — conditional administration: privileged helper + Polkit.
+
+## L0 capabilities (native)
+
+| Capability | Backend | Source | Notes |
 |---|---|---|---|
-| Interface list/state/MAC | `ip` + `/sys` | L0 target | Must become native-first |
-| Addresses | `ip` | L0 target | rtnetlink in Phase 5 |
-| Default route/gateway | `ip` + `/proc/net/route` | L0 target | Native IPv4/IPv6 needed |
-| System name resolution | `socket.getaddrinfo()` | L0 | Native NSS resolution; no `getent` dependency |
-| TCP connectivity | `curl` | L0 target | Replace with `socket.create_connection` |
-| HTTP/TLS access | native stdlib HTTP client | L0 | Certificate validation enabled; no `CERT_NONE` |
-| Captive portal hint | native HTTP probe | L0 | Neutral configurable endpoint (`NETMEDIC_PORTAL_URL`) |
-| Interface MTU | not collected | L0 target | `/sys/class/net/*/mtu` |
-| ICMP latency/loss | `ping` | L1/L0 optional | Separate capability, may be absent |
-| NetworkManager state | `nmcli` | L1 | Optional integration |
-| Firewall status | `ufw` | L1 | Optional integration |
-| Inbound/outbound tools | `resolvectl`, `dhclient`, `rfkill` | L1 | Optional |
+| `interface_inventory` | iproute2 (enrichment) | `/sys/class/net` + `ip` | Native interface list from `/sys`; `ip` is enrichment |
+| `address_inventory` | iproute2 (enrichment) | `/sys` + `ip` | IPv6 from `/proc/net/if_inet6`; IPv4 pending rtnetlink |
+| `default_route` | native | `/proc/net/route`, `/proc/net/ipv6_route`, rtnetlink | Native first; `ip` fallback |
+| `system_name_resolution` | native | `socket.getaddrinfo()` | NSS-aware; no `getent` dependency |
+| `tcp_connectivity` | native | `socket.create_connection()` | RTT measured; refused/timeout/unreachable classified |
+| `http_tls_access` | native | stdlib `http.client` + `ssl` | Certificate validation always on; never `CERT_NONE` |
+| `captive_portal_hint` | native | stdlib HTTP | Redirect detection; inconclusive → unknown |
+| `interface_mtu` | native | `/sys/class/net/*/mtu` | Invalid/missing → None |
+| `icmp_latency` | iputils (optional) | `ping` | L0 optional; absence → UNAVAILABLE, not attempted |
+| `scope` | native | `/proc/self/ns/net` | Current network namespace; container hints only |
 
-## Privileged actions (L2)
+## L1 capabilities (adaptive integration)
 
-| IPC verb | Polkit action | Backend | keep_auth |
+| Capability | Backend | Tool | Notes |
 |---|---|---|---|
-| flush-dns | com.kayab.netmedic.flush-dns | resolvectl | yes |
-| renew-ip | com.kayab.netmedic.renew-ip | nmcli/dhclient | yes |
-| change-dns | com.kayab.netmedic.change-dns | nmcli | no |
-| restart-adapter | com.kayab.netmedic.restart-adapter | ip link | no |
-| reset-stack | com.kayab.netmedic.reset-stack | systemctl NM | no |
-| toggle-firewall | com.kayab.netmedic.toggle-firewall | ufw | no |
-| vpn-install | com.kayab.netmedic.vpn-install | vendored installer | no |
-| vpn-add-client | com.kayab.netmedic.vpn-create | openvpn | no |
-| vpn-revoke-client | com.kayab.netmedic.vpn-revoke | openvpn | no |
-| vpn-restart-service | com.kayab.netmedic.vpn-reconnect | systemctl | no |
-| vpn-list | com.kayab.netmedic.vpn-list | EasyRSA index | no |
-| vpn-start-service | com.kayab.netmedic.vpn-start | systemctl | no |
+| `networkmanager` | NetworkManager | `nmcli` | Optional; absence → UNAVAILABLE |
+| `firewall_admin` | UFW | `ufw` | Optional |
+| `resolver_cache` | systemd-resolved | `resolvectl` | Optional |
+| `dhcp_client` | dhclient | `dhclient` | Optional |
+| `service_manager` | systemd | `systemctl` | Optional |
+| `nm_connectivity` | NetworkManager | `nmcli` | Second opinion; None if absent |
+
+## L2 capabilities (privileged, helper + Polkit)
+
+12 actions: `flush_dns`, `renew_ip`, `change_dns`, `restart_adapter`,
+`reset_stack`, `toggle_firewall`, `vpn_install`, `vpn_create_client`,
+`vpn_revoke_client`, `vpn_restart_service`, `vpn_list`, `vpn_start_service`.
+
+Each requires: installed helper + library, `pkexec`, and the corresponding
+Polkit action registered. `privileged_ready` is true only when all 12 are
+available. `false` never degrades `core_ready`.
 
 ## Readiness
 
-- `core_ready`: diagnostic gate. Requires a supported Python runtime and a
-  `0700` state directory owned by the current user. It does not require
-  NetworkManager, iproute2, curl, the helper or Polkit.
-- `privileged_ready`: installed helper + library, `pkexec` and all 12 Kayab
-  Polkit actions. `false` never degrades `core_ready`.
+- `core_ready`: supported Python runtime + `0700` state dir owned by the
+  current user. Does not require NM, iproute2, curl, helper or Polkit.
+- `privileged_ready`: helper + library + `pkexec` + all 12 Kayab Polkit actions.
 - `production_ready`: deprecated alias of `core_ready` (kept through 1.10.x).
-- `overall_ok`: equals `core_ready`; internal core failures only.
+- `overall_ok`: equals `core_ready`.
 - `--require-privileged`: exits 1 when `privileged_ready` is false.
 
-`collect_status()` now also emits `schema_version`, `scope` (current network
-namespace plus a conservative container hint) and `capabilities`. Each
-capability separates `availability` (`AVAILABLE`/`UNAVAILABLE`/`UNKNOWN`) from
-`outcome` (`NOT_ATTEMPTED` initially).
+## Known limitations (1.10.0)
 
-## Readiness status values (current)
+- `interface_inventory` and `address_inventory` still rely on `ip` as
+  enrichment; native `/sys` collection is primary but IPv4 addresses are
+  pending rtnetlink (Phase 5).
+- `icmp_latency` requires `ping`; absence only reduces detail.
+- L2 administration limited to the 12 supported verbs and the installed
+  helper; no new backends in this release.
+- Compatibility matrix covers Ubuntu 24.04, Debian bookworm-slim and Alpine
+  3.20 in CI; Ubuntu 22.04/26.04, Fedora, Arch and openSUSE are targeted
+  but not yet in CI.
 
-Phase 1 is implemented in `netmedic/netmedic/capabilities.py` and
-`netmedic/netmedic/status.py`. The L0 backends listed above are still the
-current ones: `status` reports them as capabilities but does not execute
-probes, so a missing `getent`/`curl`/`ip`/`ping` narrows detail without making
-the install non-operational. Native-first replacements remain scheduled for
-Phases 3–5.
+## Scope
+
+All diagnostics observe the **current network namespace**. Container hints
+(`/.dockerenv`, cgroups) are advisory only; absence does not prove a physical
+host. See `docs/LUCP.md` §3.4.
+EOF
+echo done
