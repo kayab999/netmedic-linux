@@ -17,7 +17,7 @@ def test_network_medic_diagnostics_integration(mock_run):
     assert "Gateway Reachable" in res.message
     assert "DNS Resolution OK" in res.message
     assert "Internet Access OK" in res.message
-    assert mock_run.call_count >= 3
+    assert mock_run.call_count >= 2
 
 
 @patch("netmedic.system.CommandRunner.is_service_active", return_value=True)

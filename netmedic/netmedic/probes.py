@@ -4,10 +4,13 @@ Used by network.py diagnostics and sensors.get_network_snapshot().
 from __future__ import annotations
 
 import concurrent.futures
+import http.client
 import socket
+import ssl
 import threading
 import time
-from typing import Any, Dict, Tuple
+import urllib.parse
+from typing import Any, Dict, Optional, Tuple
 
 from netmedic.system import CommandRunner
 
@@ -203,29 +206,143 @@ def check_nm_connectivity() -> Tuple[bool | None, str]:
     return None, f"nm: {out or 'unknown'}"
 
 
-def check_captive_portal() -> Tuple[bool, str]:
-    """If gateway OK but WAN fail, check connectivity-check.ubuntu.com for redirect."""
+def check_http_access(url: str, timeout: float = 5.0) -> Dict[str, Any]:
+    """Native HTTP/HTTPS probe with TLS validation (never CERT_NONE)."""
+    return _http_probe(url, timeout=timeout)
+
+
+def check_http_tls_access(url: str, timeout: float = 5.0) -> Dict[str, Any]:
+    """Alias for :func:`check_http_access` (HTTP/TLS capability)."""
+    return _http_probe(url, timeout=timeout)
+
+
+def _http_probe(url: str, timeout: float = 5.0) -> Dict[str, Any]:
+    """Bounded stdlib HTTP probe. Does not follow redirects automatically."""
+    result: Dict[str, Any] = {
+        "tcp_ok": False,
+        "http_ok": False,
+        "tls_ok": None,
+        "status": None,
+        "headers": {},
+        "body": "",
+        "error": None,
+        "reason_code": None,
+    }
+    try:
+        parsed = urllib.parse.urlsplit(url)
+    except ValueError as exc:
+        result["error"] = str(exc)
+        result["reason_code"] = "invalid_url"
+        return result
+    scheme = (parsed.scheme or "http").lower()
+    host = parsed.hostname
+    if not host:
+        result["error"] = "missing host"
+        result["reason_code"] = "invalid_url"
+        return result
+    port = parsed.port or (443 if scheme == "https" else 80)
+    path = parsed.path or "/"
+    if parsed.query:
+        path = f"{path}?{parsed.query}"
+    use_tls = scheme == "https"
+    if use_tls:
+        result["tls_ok"] = False
+
+    sock = None
+    try:
+        sock = socket.create_connection((host, port), timeout=timeout)
+    except (socket.timeout, TimeoutError):
+        result["error"] = "timeout"
+        result["reason_code"] = "timeout"
+        return result
+    except OSError as exc:
+        result["error"] = str(exc)
+        result["reason_code"] = "tcp_error"
+        return result
+
+    result["tcp_ok"] = True
+    wrapped = sock
+    if use_tls:
+        try:
+            context = ssl.create_default_context()
+            wrapped = context.wrap_socket(sock, server_hostname=host)
+            result["tls_ok"] = True
+        except (ssl.SSLError, OSError) as exc:
+            result["error"] = str(exc)
+            result["reason_code"] = "tls_error"
+            try:
+                sock.close()
+            except OSError:
+                pass
+            return result
+
+    conn = http.client.HTTPConnection(host, port, timeout=timeout)
+    conn.sock = wrapped
+    try:
+        conn.request(
+            "GET",
+            path,
+            headers={"Host": host, "Connection": "close", "User-Agent": "NetMedic"},
+        )
+        response = conn.getresponse()
+        body = response.read(4096)
+        result["status"] = response.status
+        result["headers"] = {k: v for k, v in response.getheaders()}
+        try:
+            result["body"] = body.decode("utf-8", errors="replace")
+        except Exception:  # noqa: BLE001
+            result["body"] = ""
+        result["http_ok"] = True
+        result["reason_code"] = "ok"
+    except (http.client.HTTPException, OSError, TimeoutError) as exc:
+        result["error"] = str(exc)
+        result["reason_code"] = "http_error"
+    finally:
+        try:
+            conn.close()
+        except Exception:  # noqa: BLE001
+            pass
+        if wrapped is not sock:
+            try:
+                wrapped.close()
+            except OSError:
+                pass
+        else:
+            try:
+                sock.close()
+            except OSError:
+                pass
+    return result
+
+
+def check_captive_portal() -> Tuple[Optional[bool], str]:
+    """Return (portal_detected, detail). None means the probe was inconclusive."""
     return check_portal_at_url(_portal_url())
 
 
 def _portal_url() -> str:
-    """Captive-portal 204 endpoint; overridable (privacy) via NETMEDIC_PORTAL_URL."""
+    """Captive-portal endpoint; overridable (privacy) via NETMEDIC_PORTAL_URL."""
     import os
 
     return os.environ.get(
-        "NETMEDIC_PORTAL_URL", "http://connectivity-check.ubuntu.com"
+        "NETMEDIC_PORTAL_URL", "http://nmcheck.gnome.org/check_network_status.txt"
     )
 
 
-def check_portal_at_url(url: str) -> Tuple[bool, str]:
-    """True when `url` answers like a captive portal (redirect/200 instead of 204)."""
-    res = CommandRunner.run(["curl", "-Is", "--connect-timeout", "3", url], timeout=5)
-    if not res.success:
-        return False, "portal probe failed"
-    out = (res.stdout or "") + "\n" + (res.stderr or "")
-    # Ubuntu check returns 204 when not captive, 302/200 when captive
-    if "204" in out or "No Content" in out:
-        return False, "no portal (204)"
-    if "302" in out or "Location:" in out:
+def check_portal_at_url(url: str) -> Tuple[Optional[bool], str]:
+    """Native captive-portal detection. Redirects are not followed."""
+    probe = _http_probe(url, timeout=5.0)
+    if probe["status"] is None:
+        return None, f"unknown: {probe['error'] or 'no response'}"
+    status = probe["status"]
+    headers = {str(k).lower(): str(v) for k, v in (probe["headers"] or {}).items()}
+    body = probe["body"] or ""
+    if "location" in headers or status in (301, 302, 303, 307, 308):
         return True, "possible captive portal (redirect detected)"
-    return False, "portal check ambiguous"
+    if status == 204:
+        return False, "no portal (204)"
+    if status == 200 and "NetworkManager is online" in body:
+        return False, "no portal (200)"
+    if status == 200:
+        return None, "unknown: unexpected 200 body"
+    return None, f"unknown: HTTP {status}"

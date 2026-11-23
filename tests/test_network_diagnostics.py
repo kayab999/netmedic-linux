@@ -911,17 +911,26 @@ def test_portal_url_override(monkeypatch):
     from netmedic import probes as probes_mod
 
     monkeypatch.delenv("NETMEDIC_PORTAL_URL", raising=False)
-    assert "connectivity-check.ubuntu.com" in probes_mod._portal_url()
+    assert "nmcheck.gnome.org" in probes_mod._portal_url()
     monkeypatch.setenv("NETMEDIC_PORTAL_URL", "http://portal.corp.example/generate_204")
     assert probes_mod._portal_url() == "http://portal.corp.example/generate_204"
 
     seen = {}
 
-    def fake_run(cmd, timeout=None, **kwargs):
-        seen["url"] = cmd[-1]
-        return _cmd(True, "HTTP/1.1 204 No Content")
+    def fake_probe(url, timeout=5.0):
+        seen["url"] = url
+        return {
+            "status": 204,
+            "headers": {},
+            "body": "",
+            "error": None,
+            "tcp_ok": True,
+            "http_ok": True,
+            "tls_ok": None,
+            "reason_code": "ok",
+        }
 
-    monkeypatch.setattr(probes_mod.CommandRunner, "run", staticmethod(fake_run))
+    monkeypatch.setattr(probes_mod, "_http_probe", fake_probe)
     ok, msg = probes_mod.check_captive_portal()
     assert seen["url"] == "http://portal.corp.example/generate_204"
     assert ok is False

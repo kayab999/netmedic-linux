@@ -6,6 +6,13 @@ All notable changes to NetMedic Linux are documented here.
 
 ### Added
 
+- **LUCP Phase 3C — native HTTP/TLS and portal detection.** Captive portal
+  detection now uses a bounded stdlib HTTP client with default TLS certificate
+  validation (never `CERT_NONE`); redirects are not followed automatically.
+  Inconclusive probes return an unknown state instead of "no portal". The default
+  endpoint moved to `http://nmcheck.gnome.org/check_network_status.txt`
+  (configurable via `NETMEDIC_PORTAL_URL`). `http_tls_access` and
+  `captive_portal_hint` are native (L0) capabilities.
 - **LUCP Phase 3B — native TCP connectivity.** `check_internet_access` now uses
   `socket.create_connection()` instead of curl, with monotonic RTT measurement
   and refused/timeout/unreachable classification. `tcp_connectivity` is a native

@@ -142,20 +142,6 @@ _TOOL_CAPABILITIES: Tuple[Tuple[str, str, str, str, str], ...] = (
         "Read the current default route and gateway.",
     ),  # closes default_route above
     (
-        "http_tls_access",
-        LEVEL_L0,
-        "curl",
-        "curl",
-        "Probe HTTP status and TLS access of fixed targets.",
-    ),
-    (
-        "captive_portal_hint",
-        LEVEL_L0,
-        "curl",
-        "curl",
-        "Detect a captive portal through a redirect/204 check.",
-    ),
-    (
         "icmp_latency",
         LEVEL_L0,
         "ping",
@@ -301,6 +287,18 @@ _NATIVE_CAPABILITIES: Tuple[Tuple[str, str, str, str], ...] = (
         LEVEL_L0,
         "native",
         "Probe TCP reachability of fixed targets with socket.create_connection.",
+    ),
+    (
+        "http_tls_access",
+        LEVEL_L0,
+        "native",
+        "Probe HTTP status and TLS access with the stdlib HTTP client.",
+    ),
+    (
+        "captive_portal_hint",
+        LEVEL_L0,
+        "native",
+        "Detect a captive portal through a bounded HTTP probe.",
     ),
 )
 

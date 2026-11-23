@@ -2,10 +2,11 @@ from unittest.mock import patch, MagicMock
 from netmedic.models import ResultCode
 from netmedic.network import NetworkMedic
 
+@patch("netmedic.probes._http_probe", return_value={"status": 200, "headers": {}, "body": "NetworkManager is online", "error": None, "tcp_ok": True, "http_ok": True, "tls_ok": None, "reason_code": "ok"})
 @patch("socket.create_connection", return_value=MagicMock())
 @patch("netmedic.probes.check_dns_resolution", lambda: (True, {"google.com": True}, "google.com"))
 @patch('netmedic.system.CommandRunner.run')
-def test_diagnostics_success(mock_run, mock_connect):
+def test_diagnostics_success(mock_run, mock_connect, mock_http):
     def _run(cmd, *a, **kw):
         if cmd[0] == "ip" and "default" in cmd:
             return MagicMock(success=True, stdout="default via 192.168.1.1 dev eth0")

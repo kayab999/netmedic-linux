@@ -13,8 +13,8 @@ reflects the Phase 1 split.
 | Default route/gateway | `ip` + `/proc/net/route` | L0 target | Native IPv4/IPv6 needed |
 | System name resolution | `socket.getaddrinfo()` | L0 | Native NSS resolution; no `getent` dependency |
 | TCP connectivity | `curl` | L0 target | Replace with `socket.create_connection` |
-| HTTP/TLS access | `curl` | L0 target | stdlib HTTP client |
-| Captive portal hint | Ubuntu-specific endpoint | L0 target | Neutral configurable endpoint |
+| HTTP/TLS access | native stdlib HTTP client | L0 | Certificate validation enabled; no `CERT_NONE` |
+| Captive portal hint | native HTTP probe | L0 | Neutral configurable endpoint (`NETMEDIC_PORTAL_URL`) |
 | Interface MTU | not collected | L0 target | `/sys/class/net/*/mtu` |
 | ICMP latency/loss | `ping` | L1/L0 optional | Separate capability, may be absent |
 | NetworkManager state | `nmcli` | L1 | Optional integration |
