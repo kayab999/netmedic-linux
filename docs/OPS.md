@@ -9,7 +9,7 @@ git clone https://github.com/kayab999/netmedic-linux.git
 cd netmedic-linux
 ./install.sh
 ./scripts/install-polkit-policy.sh
-netmedic --status   # want production_ready:true, helper /usr/libexec/netmedic/helper
+netmedic --status   # want core_ready:true; privileged_ready is separate
 ```
 
 `install.sh` creates `venv/`, strict-editable `netmedic/`, desktop entry, `~/.config/systemd/user/netmedic-headless.service`.
@@ -17,11 +17,24 @@ netmedic --status   # want production_ready:true, helper /usr/libexec/netmedic/h
 ## 2. Health
 
 ```bash
-netmedic --status
+netmedic --status   # core diagnostics gate; privileged readiness is separate
+netmedic --status --require-privileged   # automation that needs L2
 netmedic --status-json | python3 -m json.tool
 ```
 
-Gate: `production_ready:true` = helper present + policy (`pkaction com.kayab.netmedic.flush-dns`) + bins (`nmcli/ip/resolvectl`) + state dir `0700`.
+Gate:
+
+- `core_ready:true` = supported Python runtime + state dir `0700` owned by the
+  current user. It does **not** require `nmcli`, `ip`, `curl`, the helper or
+  Polkit.
+- `privileged_ready:true` = installed helper + library, `pkexec` and all 12
+  Kayab Polkit actions registered.
+- `production_ready` is a deprecated alias of `core_ready`.
+- `--require-privileged` exits 1 when `privileged_ready` is false.
+
+The JSON also carries `schema_version`, `scope` (current network namespace,
+with a conservative container hint) and `capabilities` (L0/L1/L2 with separate
+`availability` and `outcome`).
 
 ## 3. Run modes
 

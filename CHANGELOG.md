@@ -4,6 +4,18 @@ All notable changes to NetMedic Linux are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **LUCP Phase 1 — capability registry and readiness split.** `--status` and
+  `--status-json` now expose `schema_version`, `scope` (current network
+  namespace plus a conservative container hint) and `capabilities` with
+  separate `availability` (`AVAILABLE`/`UNAVAILABLE`/`UNKNOWN`) and `outcome`.
+  `core_ready` depends only on a supported Python runtime and a `0700` state
+  directory; `privileged_ready` covers helper, `pkexec` and all Kayab Polkit
+  actions. `production_ready` is a deprecated alias of `core_ready`.
+  `--require-privileged` exits 1 when L2 is unavailable. `nmcli`, `ip`, `curl`
+  and the other tools are reported as capabilities, not core failures.
+
 ### Fixed
 
 - **Polkit per-verb wrappers (post-1.9.0).** Ubuntu 22.04/24.04 ship polkit

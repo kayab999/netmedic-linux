@@ -53,7 +53,7 @@
 | `helper_verbs.py` / `helper_main.py` | Fixed-verb validation + privileged `netmedic-helper` CLI |
 | `polkit_auth.py` | Polkit GI/`pkcheck` authorization, fail-closed skip |
 | `audit_log.py` | Structured JSONL audit log with redaction |
-| `status.py` | `netmedic --status/--status-json` health CLI |
+| `status.py` | `netmedic --status/--status-json` readiness + capability report |
 | `lifecycle.py` | PID/lock/socket cleanup, stale lock recovery |
 | `ipc_bridge.py` | Unix socket IPC server |
 | `ipc_security.py` | Session tokens and peer identity for privileged IPC |

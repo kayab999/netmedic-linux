@@ -58,9 +58,15 @@ systemctl --user enable --now netmedic-headless.service
 ### Health check
 
 ```bash
-netmedic --status          # human-readable
-netmedic --status-json     # machine-readable
+netmedic --status                          # core + privileged readiness
+netmedic --status-json                     # machine-readable capability report
+netmedic --status --require-privileged     # exit 1 unless L2 is usable
 ```
+
+`core_ready` is the diagnostic gate and does not require NetworkManager, the
+helper or Polkit. `privileged_ready` covers the helper/pkexec/Polkit path and
+never degrades `core_ready`. `production_ready` is a deprecated alias of
+`core_ready`.
 
 ### Polkit policy + privileged helper
 

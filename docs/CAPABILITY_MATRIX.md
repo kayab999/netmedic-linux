@@ -1,7 +1,8 @@
 # Capability and action inventory (baseline 1.9.0)
 
-Baseline commit: `2a240ee` (tag `v1.9.0`). This inventory captures the current
-state before LUCP changes; it is the reference for Phase 0 characterisation.
+Baseline commit: `2a240ee` (tag `v1.9.0`). This inventory captures the 1.9.0
+diagnostic sources before the LUCP runtime changes; the Readiness section
+reflects the Phase 1 split.
 
 ## Diagnostic capabilities (L0 candidates)
 
@@ -39,11 +40,25 @@ state before LUCP changes; it is the reference for Phase 0 characterisation.
 
 ## Readiness
 
-- `production_ready`: currently requires nmcli, ip, curl, helper, polkit, etc.
-  (to be split into `core_ready` / `privileged_ready` in Phase 1).
-- `overall_ok`: aggregates almost all checks (to be narrowed to core health).
+- `core_ready`: diagnostic gate. Requires a supported Python runtime and a
+  `0700` state directory owned by the current user. It does not require
+  NetworkManager, iproute2, curl, the helper or Polkit.
+- `privileged_ready`: installed helper + library, `pkexec` and all 12 Kayab
+  Polkit actions. `false` never degrades `core_ready`.
+- `production_ready`: deprecated alias of `core_ready` (kept through 1.10.x).
+- `overall_ok`: equals `core_ready`; internal core failures only.
+- `--require-privileged`: exits 1 when `privileged_ready` is false.
+
+`collect_status()` now also emits `schema_version`, `scope` (current network
+namespace plus a conservative container hint) and `capabilities`. Each
+capability separates `availability` (`AVAILABLE`/`UNAVAILABLE`/`UNKNOWN`) from
+`outcome` (`NOT_ATTEMPTED` initially).
 
 ## Readiness status values (current)
 
-See `netmedic/netmedic/status.py` for the full check list. No change in this
-phase.
+Phase 1 is implemented in `netmedic/netmedic/capabilities.py` and
+`netmedic/netmedic/status.py`. The L0 backends listed above are still the
+current ones: `status` reports them as capabilities but does not execute
+probes, so a missing `getent`/`curl`/`ip`/`ping` narrows detail without making
+the install non-operational. Native-first replacements remain scheduled for
+Phases 3–5.

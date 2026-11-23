@@ -202,22 +202,22 @@ class MainWindow(Gtk.Window):
         GLib.idle_add(self._report_install_health)
 
     def _report_install_health(self):
-        """Append one log line if privileged path is not production-ready."""
+        """Append one log line about the privileged path (core works without it)."""
         try:
             from netmedic.status import collect_status
 
             report = collect_status()
-            if report.get("production_ready"):
+            if report.get("privileged_ready"):
                 self.append_log(
-                    f"Install health: OK (helper={'on' if report.get('helper_mode') else 'off'})"
+                    f"Install health: privileged path OK (helper={'on' if report.get('helper_mode') else 'off'})"
                 )
-            else:
-                self.append_log(
-                    "Install health: incomplete — run `netmedic --status` "
-                    "and ./scripts/install-polkit-policy.sh if needed."
-                )
-                for hint in report.get("hints") or []:
-                    self.append_log(f"  hint: {hint}")
+                return False
+            self.append_log(
+                "Privileged features unavailable — core diagnostics still work. "
+                "Run `netmedic --status` and ./scripts/install-polkit-policy.sh if needed."
+            )
+            for hint in report.get("hints") or []:
+                self.append_log(f"  hint: {hint}")
         except Exception as exc:
             logging.debug("Install health check skipped: %s", exc)
         return False
