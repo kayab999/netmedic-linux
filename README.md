@@ -49,13 +49,18 @@ chmod +x install.sh
 
 ### Headless mode (IPC daemon, no GUI)
 
-The diagnostic core and headless mode do not import GTK/PyGObject. To install
-without the GUI extra:
+Install only the diagnostic core, without GTK, NetworkManager or PolicyKit:
 
 ```bash
-python3 -m venv venv
-./venv/bin/pip install --no-deps -e netmedic/ --config-settings editable_mode=strict
+./install.sh --headless
 ./venv/bin/netmedic --headless
+```
+
+Desktop profile (default) keeps the full GTK installer:
+
+```bash
+./install.sh
+./venv/bin/netmedic
 ```
 
 After `install.sh` (desktop profile), the systemd unit is available:
