@@ -911,7 +911,7 @@ def test_portal_url_override(monkeypatch):
     from netmedic import probes as probes_mod
 
     monkeypatch.delenv("NETMEDIC_PORTAL_URL", raising=False)
-    assert "nmcheck.gnome.org" in probes_mod._portal_url()
+    assert probes_mod._portal_url().startswith("http://nmcheck.gnome.org/")
     monkeypatch.setenv("NETMEDIC_PORTAL_URL", "http://portal.corp.example/generate_204")
     assert probes_mod._portal_url() == "http://portal.corp.example/generate_204"
 

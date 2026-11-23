@@ -265,6 +265,7 @@ def _http_probe(url: str, timeout: float = 5.0) -> Dict[str, Any]:
     if use_tls:
         try:
             context = ssl.create_default_context()
+            context.minimum_version = ssl.TLSVersion.TLSv1_2
             wrapped = context.wrap_socket(sock, server_hostname=host)
             result["tls_ok"] = True
         except (ssl.SSLError, OSError) as exc:
