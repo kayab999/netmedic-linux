@@ -2,9 +2,10 @@ from unittest.mock import patch, MagicMock
 from netmedic.models import ResultCode
 from netmedic.network import NetworkMedic
 
+@patch("socket.create_connection", return_value=MagicMock())
 @patch("netmedic.probes.check_dns_resolution", lambda: (True, {"google.com": True}, "google.com"))
 @patch('netmedic.system.CommandRunner.run')
-def test_diagnostics_success(mock_run):
+def test_diagnostics_success(mock_run, mock_connect):
     def _run(cmd, *a, **kw):
         if cmd[0] == "ip" and "default" in cmd:
             return MagicMock(success=True, stdout="default via 192.168.1.1 dev eth0")
@@ -24,9 +25,10 @@ def test_diagnostics_success(mock_run):
     assert "Gateway Reachable" in res.message
     assert "DNS Resolution OK" in res.message
 
+@patch("socket.create_connection", side_effect=ConnectionRefusedError("refused"))
 @patch("netmedic.probes.check_dns_resolution", lambda: (False, {"google.com": False}, ""))
 @patch('netmedic.system.CommandRunner.run')
-def test_diagnostics_fail_dns(mock_run):
+def test_diagnostics_fail_dns(mock_run, mock_connect):
     def _run(cmd, *a, **kw):
         if cmd[0] == "ip" and "default" in cmd:
             return MagicMock(success=True, stdout="default via 192.168.1.1 dev eth0")

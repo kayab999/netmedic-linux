@@ -6,6 +6,11 @@ All notable changes to NetMedic Linux are documented here.
 
 ### Added
 
+- **LUCP Phase 3B — native TCP connectivity.** `check_internet_access` now uses
+  `socket.create_connection()` instead of curl, with monotonic RTT measurement
+  and refused/timeout/unreachable classification. `tcp_connectivity` is a native
+  (L0) capability. The public `(overall, per_target, label)` shape is
+  unchanged; RTT/details are available via `check_tcp_connectivity_detailed()`.
 - **LUCP Phase 3A — native system name resolution.** `check_dns_resolution` now
   uses `socket.getaddrinfo()` instead of `getent hosts`, with bounded per-host
   timeouts and explicit `eai_*` reason codes. `EAI_NONAME`/`EAI_AGAIN` are
