@@ -1,7 +1,7 @@
 """G3: diagnostic facts must be invariant when optional tools are removed."""
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
