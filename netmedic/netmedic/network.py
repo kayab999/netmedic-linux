@@ -186,7 +186,17 @@ class NetworkMedic:
         Riesgo: Bajo (Solo lectura).
         Tiempo: < 1s.
         """
-        # Native first (L0): /proc/net/route.
+        # Native first (L0): rtnetlink, then /proc/net/route, then iproute2.
+        try:
+            from netmedic.rtnetlink import collect_default_routes
+
+            routes = collect_default_routes()
+            if routes:
+                for r in routes:
+                    if r.get("family") == "ipv4" and r.get("gateway"):
+                        return r["gateway"]
+        except Exception:  # noqa: BLE001, S110 (enrichment must not break diagnostics)
+            pass
         try:
             from netmedic.topology import collect_default_gateways_v4
 
