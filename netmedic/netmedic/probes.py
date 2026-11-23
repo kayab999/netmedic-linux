@@ -300,7 +300,7 @@ def _http_probe(url: str, timeout: float = 5.0) -> Dict[str, Any]:
     finally:
         try:
             conn.close()
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001, S110
             pass
         if wrapped is not sock:
             try:
