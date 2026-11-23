@@ -2,6 +2,24 @@
 
 All notable changes to NetMedic Linux are documented here.
 
+## [Unreleased]
+
+### Fixed
+
+- **Polkit per-verb wrappers (post-1.9.0).** Ubuntu 22.04/24.04 ship polkit
+  0.105, whose `pkexec` selects the action by `org.freedesktop.policykit.exec.path`
+  only and ignores `exec.argv1`. With one shared helper path, every action
+  collapsed into the first enumerated one (`renew-ip`), so `change-dns` and
+  `restart-adapter` inherited `auth_admin_keep` instead of re-prompting.
+  `install-polkit-policy.sh` now installs one root-owned `helper-<verb>`
+  wrapper per action and the generated policy annotates each action with that
+  unique path; `exec.argv1` is gone. Reinstall helper and policy after
+  updating. Documentation in `docs/IPC_API.md`, `docs/PRIVILEGED_HELPER.md`,
+  `docs/THREAT_MODEL.md` and `docs/VPN_CONTRACT.md` reflects the new contract.
+- **Release build no longer pins an unavailable package.** Removed the
+  `cyclonedx-bom==8.6.2` pin (the version does not exist on PyPI); the SBOM
+  step was already best-effort and guarded by a module probe.
+
 ## [1.9.0] — 2026-11-18
 
 Release lines up the application, package and privileged helper at **1.9.0**.

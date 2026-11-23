@@ -168,7 +168,7 @@ openvpn-install client revoke bob --force
 ## Consequences for Fase 3
 
 - `VPN_ALLOWED_ENV_KEYS` and `_validate_vpn_script_env` are removed; no caller env dict crosses IPC.
-- Three typed verbs: `vpn-install`, `vpn-add-client`, `vpn-revoke-client`, each with its own `exec.argv1`.
+- Three typed verbs: `vpn-install`, `vpn-add-client`, `vpn-revoke-client`, each with its own per-verb wrapper (`helper-vpn-install`, `helper-vpn-add-client`, `helper-vpn-revoke-client`); `exec.argv1` is not used.
 - Helper builds `/bin/bash <staged> <subcommand> <flags>` with validated parameters.
 - `vpn-install` defaults: `--port 1194 --protocol udp --dns cloudflare --no-client-ipv6 --client client`.
 - `validate_client_name` stays (charset). Port 1-65535, protocol `udp`/`tcp`, dns in the closed enum above.
